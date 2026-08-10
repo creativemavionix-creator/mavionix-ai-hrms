@@ -26,21 +26,11 @@ import {
   Calendar,
   AreaChart,
   Settings,
-  X,
-  Volume2,
   Sun,
   Moon,
-  UserCheck,
-  ClipboardCheck,
-  Clock,
-  CheckSquare,
-  Award,
-  DollarSign,
-  Folder,
-  GraduationCap,
 } from "lucide-react"
 
-// Import views
+// Import core recruitment views
 import DashboardView from "@/components/recruitment/DashboardView"
 import JobManagementView from "@/components/recruitment/JobManagementView"
 import CandidateManagementView from "@/components/recruitment/CandidateManagementView"
@@ -51,17 +41,6 @@ import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
 import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
 import { useTheme } from "@/lib/theme"
-
-// Import New HRMS Extension Views
-import EmployeeManagementView from "@/components/recruitment/EmployeeManagementView"
-import OnboardingView from "@/components/recruitment/OnboardingView"
-import AttendanceView from "@/components/recruitment/AttendanceView"
-import LeaveManagementView from "@/components/recruitment/LeaveManagementView"
-import TaskManagementView from "@/components/recruitment/TaskManagementView"
-import PerformanceView from "@/components/recruitment/PerformanceView"
-import PayrollView from "@/components/recruitment/PayrollView"
-import DocumentVaultView from "@/components/recruitment/DocumentVaultView"
-import TrainingView from "@/components/recruitment/TrainingView"
 
 export default function RecruitmentDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -74,12 +53,6 @@ export default function RecruitmentDashboard() {
   const [interviews, setInterviews] = useState<Interview[]>(initialInterviews)
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(initialActivityLogs)
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
-  const [aiWeights, setAiWeights] = useState<AIWeights>({
-    skills: 40,
-    experience: 30,
-    education: 15,
-    projects: 15,
-  })
 
   // Notifications bell alerts state
   const [notifications, setNotifications] = useState<string[]>([
@@ -90,7 +63,7 @@ export default function RecruitmentDashboard() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string>("07/08/2026 16:48:58")
 
-  // Uptime state (starts at 156:42:18 and ticks)
+  // Uptime state
   const [uptime, setUptime] = useState({ h: 156, m: 42, s: 18 })
 
   useEffect(() => {
@@ -143,20 +116,11 @@ export default function RecruitmentDashboard() {
   const activeJobsCount = jobs.filter((j) => j.status === "active").length
   const inProgressAppsCount = candidates.filter((c) => c.stage !== "Hired" && c.stage !== "Rejected").length
 
-  // Nav configuration
+  // Nav configuration (Core HireMind AI)
   const navItems = [
     { id: "dashboard", icon: BarChart3, label: "DASHBOARD" },
-    { id: "employees", icon: UserCheck, label: "EMPLOYEES" },
     { id: "jobs", icon: Briefcase, label: "JOB MANAGEMENT" },
     { id: "candidates", icon: Users, label: "CANDIDATES" },
-    { id: "onboarding", icon: ClipboardCheck, label: "ONBOARDING" },
-    { id: "attendance", icon: Clock, label: "ATTENDANCE" },
-    { id: "leave", icon: Calendar, label: "LEAVE MANAGEMENT" },
-    { id: "tasks", icon: CheckSquare, label: "TASKS & KANBAN" },
-    { id: "performance", icon: Award, label: "PERFORMANCE" },
-    { id: "payroll", icon: DollarSign, label: "PAYROLL" },
-    { id: "documents", icon: Folder, label: "DOCUMENT VAULT" },
-    { id: "training", icon: GraduationCap, label: "TRAINING & SKILLS" },
     { id: "ai", icon: Brain, label: "AI INTELLIGENCE" },
     { id: "interviews", icon: Calendar, label: "INTERVIEW CENTER" },
     { id: "analytics", icon: AreaChart, label: "ANALYTICS" },
@@ -174,28 +138,10 @@ export default function RecruitmentDashboard() {
     switch (activeTab) {
       case "dashboard":
         return <DashboardView onNavigate={(tab) => setActiveTab(tab)} />
-      case "employees":
-        return <EmployeeManagementView />
       case "jobs":
         return <JobManagementView />
       case "candidates":
         return <CandidateManagementView sidebarCollapsed={sidebarCollapsed} />
-      case "onboarding":
-        return <OnboardingView />
-      case "attendance":
-        return <AttendanceView />
-      case "leave":
-        return <LeaveManagementView />
-      case "tasks":
-        return <TaskManagementView />
-      case "performance":
-        return <PerformanceView />
-      case "payroll":
-        return <PayrollView />
-      case "documents":
-        return <DocumentVaultView />
-      case "training":
-        return <TrainingView />
       case "ai":
         return <AiIntelligenceView />
       case "interviews":
@@ -213,7 +159,7 @@ export default function RecruitmentDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
-      {/* Background ambient lighting - MaVionix style glows */}
+      {/* Background ambient lighting */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/8 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
       <div className="absolute top-[30%] left-[40%] w-[30%] h-[30%] bg-fuchsia-600/5 blur-[120px] rounded-full pointer-events-none dark:opacity-75 opacity-20 z-0" />
@@ -224,7 +170,6 @@ export default function RecruitmentDashboard() {
           sidebarCollapsed ? "w-20" : "w-68"
         } glass-panel rounded-2xl flex flex-col justify-between transition-all duration-300 z-50 shrink-0 shadow-2xl relative overflow-hidden`}
       >
-        {/* Glow border overlay */}
         <div className="absolute inset-0 border border-white/[0.04] rounded-2xl pointer-events-none" />
 
         <div className="p-5 flex flex-col h-full overflow-hidden relative z-10">
@@ -233,10 +178,10 @@ export default function RecruitmentDashboard() {
             {!sidebarCollapsed && (
               <div>
                 <h1 className="text-sm font-extrabold tracking-widest bg-gradient-to-r from-violet-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent">
-                  MAVIONIX AI-HRMS
+                  HIREMIND AI
                 </h1>
                 <p className="text-[8px] text-neutral-500 font-medium tracking-widest uppercase mt-0.5">
-                  Unified Enterprise Platform
+                  Recruitment Intelligence
                 </p>
               </div>
             )}
@@ -269,11 +214,9 @@ export default function RecruitmentDashboard() {
                       : "text-neutral-400 hover:text-neutral-200 border border-transparent"
                   }`}
                 >
-                  {/* Active background gradient */}
                   {isActive && (
                     <div className="absolute inset-0 bg-gradient-to-r from-violet-600/90 to-indigo-600/90" />
                   )}
-                  {/* Hover capsule indicator */}
                   {!isActive && (
                     <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.04] transition-all duration-200 ease-out" />
                   )}
@@ -284,7 +227,6 @@ export default function RecruitmentDashboard() {
                       {item.label}
                     </span>
                   )}
-                  {/* active side accent marker */}
                   {isActive && (
                     <div className="absolute left-0 top-1/4 bottom-1/4 w-[3px] bg-white rounded-r-full z-20" />
                   )}
@@ -298,11 +240,12 @@ export default function RecruitmentDashboard() {
             <div className="mt-4 p-3 bg-white/[0.01] dark:bg-black/25 border border-white/[0.05] rounded-xl space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping shrink-0"></span>
-                <span>MAVIONIX ENGINE ONLINE</span>
+                <span>SYSTEM ONLINE</span>
               </div>
               <div className="text-[10px] text-neutral-400 space-y-1">
                 <div className="flex justify-between"><span>Uptime:</span> <span className="font-mono text-neutral-300">{formatUptime()}</span></div>
-                <div className="flex justify-between"><span>Active Modules:</span> <span className="font-semibold text-emerald-400">16 Deployed</span></div>
+                <div className="flex justify-between"><span>Active Jobs:</span> <span className="font-semibold text-neutral-300">{activeJobsCount}</span></div>
+                <div className="flex justify-between"><span>In Progress:</span> <span className="font-semibold text-neutral-300">{inProgressAppsCount}</span></div>
               </div>
             </div>
           )}
@@ -314,26 +257,24 @@ export default function RecruitmentDashboard() {
         {/* Top bar toolbar */}
         <div className="h-20 border-b border-white/[0.05] flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-2.5 text-xs">
-            <span className="text-neutral-500 font-medium tracking-wider uppercase">MAVIONIX AI-HRMS</span>
+            <span className="text-neutral-500 font-medium tracking-wider uppercase">RECRUITMENT</span>
             <span className="text-neutral-600">/</span>
             <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent font-bold tracking-wider uppercase">
               {getBreadcrumbLabel()}
             </span>
           </div>
 
-          {/* Global Search and Command Palette */}
           <div onClick={() => setActiveTab("candidates")} className="hidden md:flex items-center gap-2 px-3.5 py-2 bg-white/[0.01] hover:bg-white/[0.03] border border-white/[0.06] rounded-radius-full text-neutral-400 cursor-pointer w-64 max-w-sm transition-all duration-200">
             <span className="text-[10px] tracking-wide font-bold uppercase font-sans">Search Command...</span>
             <kbd className="ml-auto text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-neutral-300 font-mono">Ctrl+K</kbd>
           </div>
 
           <div className="flex items-center gap-4 text-xs">
-            {/* Quick action trigger */}
             <button
-              onClick={() => setActiveTab("employees")}
+              onClick={() => setActiveTab("candidates")}
               className="px-3.5 py-1.5 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:from-[#7c3aed] hover:to-[#c026d3] text-white rounded-full text-[9px] font-bold tracking-wider uppercase transition-all duration-200 shrink-0 shadow-md shadow-violet-500/10"
             >
-              + Register Employee
+              + Add Candidate
             </button>
 
             <button
@@ -344,7 +285,6 @@ export default function RecruitmentDashboard() {
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
 
-            {/* Theme toggle */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -353,7 +293,6 @@ export default function RecruitmentDashboard() {
               {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
 
-            {/* Notification bell */}
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
