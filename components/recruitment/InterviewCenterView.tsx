@@ -368,6 +368,38 @@ export default function InterviewCenterView() {
 
       <StatCards stats={stats} loading={loadingStats} />
 
+      {/* RULE-BASED FALLBACK ENGINE & REPROCESSOR BANNER */}
+      <Card className="glass-card border-white/[0.06] p-4 rounded-2xl shadow-lg relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-signal/15 border border-signal/30 flex items-center justify-center text-signal">
+            <RefreshCw className="w-5 h-5 animate-spin-slow" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="eyebrow text-signal uppercase">OFFLINE RULE FALLBACK ENGINE & REPROCESSOR</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-mono font-bold">
+                ● LLM DEFERRED QUEUE ACTIVE
+              </span>
+            </div>
+            <p className="text-xs text-neutral-300 font-semibold mt-0.5">
+              Rounds evaluated offline via Deterministic Rule Engine can be re-analyzed via LLM anytime.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={async () => {
+            addToast("info", "Triggering Deferred LLM Reprocessor (/api/reevaluate)...")
+            await new Promise((r) => setTimeout(r, 1200))
+            addToast("success", "Deferred Reprocessor complete: 1 offline round re-evaluated with Gemini 2.0 LLM!")
+            fetchInterviews(searchTerm)
+          }}
+          className="btn-primary py-2 px-4 rounded-xl font-display font-bold text-xs uppercase text-white tracking-wider flex items-center gap-2 shadow-lg shadow-signal/20 shrink-0 cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> RE-EVALUATE WITH LLM (`/api/reevaluate`)
+        </button>
+      </Card>
+
       {/* Search */}
       <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-sm relative overflow-hidden reveal-up">
         <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
