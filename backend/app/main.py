@@ -28,6 +28,7 @@ from app.routers.ai_rounds import router as ai_rounds_router
 from app.routers.candidate_portal import router as candidate_portal_router
 from app.routers.support import router as support_router
 from app.routers.recruiter_copilot import router as recruiter_copilot_router
+from app.api.hrms_extensions import router as hrms_extensions_router
 
 # candidates router also serves /api/applications/{id} — no separate router needed
 
@@ -66,6 +67,7 @@ app.include_router(ai_rounds_router)
 app.include_router(candidate_portal_router)
 app.include_router(support_router)
 app.include_router(recruiter_copilot_router)
+app.include_router(hrms_extensions_router)
 
 
 @app.on_event("startup")
