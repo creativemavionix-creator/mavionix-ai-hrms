@@ -302,20 +302,8 @@ export default function AiIntelligenceView() {
         </button>
       </div>
 
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="eyebrow text-neutral-400">ACTIVE DATA SOURCES</p>
-              <p className="stat-number text-2xl mt-1.5 text-emerald-400 tracking-tight">
-                {stats?.active_sources ?? 4}
-              </p>
-            </div>
-            <div className="w-10 h-10 rounded-radius-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shadow-md">
-              <Activity className="w-5 h-5 text-emerald-400" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <StatCards stats={stats} loading={loadingStats} />
+
 
       {/* Summary insights panel */}
       {!loadingStats && stats && (
