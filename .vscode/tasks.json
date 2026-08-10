@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start All Services",
+      "dependsOn": [
+        "Start Frontend (hr-dashboard)",
+        "Start Candidate Portal",
+        "Start Backend"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Frontend (hr-dashboard)",
+      "type": "shell",
+      "command": "npm run dev",
+      "isBackground": true,
+      "problemMatcher": ["$nextc"],
+      "presentation": {
+        "group": "servers",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Start Candidate Portal",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/candidate-portal"
+      },
+      "isBackground": true,
+      "problemMatcher": ["$nextc"],
+      "presentation": {
+        "group": "servers",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Start Backend",
+      "type": "shell",
+      "command": ".venv\\Scripts\\activate && uvicorn app.main:app --reload --port 8000",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "servers",
+        "panel": "shared"
+      }
+    }
+  ]
+}

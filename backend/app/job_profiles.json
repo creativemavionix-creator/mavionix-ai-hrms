@@ -1,0 +1,128 @@
+{
+  "senior backend engineer": {
+    "target_experience_years": 5,
+    "required_skills": ["Python", "Go", "PostgreSQL", "Redis", "Docker", "Kubernetes", "AWS", "FastAPI", "Django", "Rest API"],
+    "questions": {
+      "easy": [
+        "Welcome to the technical round. Let's start with the basics: Can you describe the difference between a relational database like PostgreSQL and a key-value store like Redis, and when you would use each?",
+        "How do you design and structure RESTful API endpoints for resources, and what HTTP status codes do you typically use for success and errors?"
+      ],
+      "intermediate": [
+        "Great. When handling high-concurrency requests, how do you manage database connection pooling, and what are the trade-offs of asynchronous task queues (like Celery)?",
+        "How do you approach securing backend APIs? Specifically, talk about JWT authentication, token expiration/refresh, and input sanitization."
+      ],
+      "advanced": [
+        "Excellent. Suppose your system faces a 10x surge in traffic tomorrow. How do you identify bottlenecks, and what architectural strategies (like caching, read replicas, or sharding) would you apply?",
+        "How do you ensure zero-downtime database migrations in a production environment when schema changes are required?"
+      ]
+    }
+  },
+  "frontend developer": {
+    "target_experience_years": 2,
+    "required_skills": ["JavaScript", "TypeScript", "React", "Angular", "Vue", "Next.js", "Tailwind", "HTML", "CSS", "GraphQL"],
+    "questions": {
+      "easy": [
+        "Welcome to the technical round. Let's start: Can you explain the difference between state and props in React, and when you would use context or a state management library?",
+        "How do you enforce type safety in component hierarchies using TypeScript, and what are the benefits over vanilla JavaScript?"
+      ],
+      "intermediate": [
+        "Nice. How do you optimize React component rendering performance and minimize unnecessary re-renders?",
+        "When fetching asynchronous data in React, how do you handle loading/error states, race conditions, and client-side caching?"
+      ],
+      "advanced": [
+        "Excellent. What strategies do you use for web accessibility (A11y) compliance, responsive CSS layouts, and cross-browser compatibility?",
+        "How do you approach Core Web Vitals optimization (like LCP, FID, CLS) in a Next.js application?"
+      ]
+    }
+  },
+  "ux designer": {
+    "target_experience_years": 3,
+    "required_skills": ["Figma", "Sketch", "Adobe XD", "Wireframing", "Prototyping", "User Research", "Design Systems", "Usability Testing", "HTML", "CSS"],
+    "questions": {
+      "easy": [
+        "Welcome to the interview round. Can you walk me through your design process when starting a new project from scratch?",
+        "What wireframing and prototyping tools (like Figma or Sketch) do you prefer, and how do you structure your project workspace?"
+      ],
+      "intermediate": [
+        "Great. How do you approach creating and maintaining a reusable design system across multiple product lines?",
+        "Can you describe how you plan, conduct, and synthesize user research and usability testing to validate your designs?"
+      ],
+      "advanced": [
+        "Excellent. How do you collaborate with frontend developers to ensure design handoff accuracy and handle CSS/HTML layout constraints?",
+        "Can you share a time when user feedback conflicted with business requirements or stakeholder opinions? How did you resolve it?"
+      ]
+    }
+  },
+  "data analyst": {
+    "target_experience_years": 2,
+    "required_skills": ["SQL", "Excel", "Tableau", "Power BI", "Python", "R", "ETL", "Data Warehousing", "Statistics", "Pandas"],
+    "questions": {
+      "easy": [
+        "Welcome to the technical round. Let's start with SQL: Can you explain the difference between a LEFT JOIN, an INNER JOIN, and a GROUP BY clause?",
+        "What data visualization tools (like Tableau or Power BI) do you use, and how do you choose the right chart type for a specific metric?"
+      ],
+      "intermediate": [
+        "Great. Can you describe how you clean and preprocess messy or missing data using Python (Pandas) or SQL before analysis?",
+        "How do you design an ETL pipeline to move data from transactional databases to a data warehouse? What scheduling strategies do you use?"
+      ],
+      "advanced": [
+        "Excellent. How do you use SQL window functions (like ROW_NUMBER, RANK, LEAD, LAG) for cohort or time-series analysis?",
+        "Can you describe a statistical test (like A/B testing) you performed, how you calculated significance, and how you communicated the results to business stakeholders?"
+      ]
+    }
+  },
+  "product manager": {
+    "target_experience_years": 3,
+    "required_skills": ["Product Roadmap", "Agile", "Scrum", "Jira", "User Stories", "Prioritization", "Market Research", "Wireframing"],
+    "questions": {
+      "easy": [
+        "Welcome to the interview. To start, how do you define a product roadmap and balance short-term feature requests against long-term strategy?",
+        "How do you write effective user stories and acceptance criteria in Jira for your development team?"
+      ],
+      "intermediate": [
+        "Great. What frameworks (like RICE or MoSCoW) do you use to prioritize feature backlogs under tight resource constraints?",
+        "How do you conduct market research and competitor analysis to identify new product opportunities or gaps?"
+      ],
+      "advanced": [
+        "Excellent. Can you walk me through the lifecycle of a major feature you launched, from concept to analytics-driven optimization post-launch?",
+        "How do you handle alignment and resolve conflicts when engineering, sales, and design teams have competing priorities?"
+      ]
+    }
+  },
+  "ml engineer": {
+    "target_experience_years": 3,
+    "required_skills": ["Python", "PyTorch", "TensorFlow", "Scikit-Learn", "Pandas", "Numpy", "NLP", "Deep Learning", "Data Modeling", "Vector Search"],
+    "questions": {
+      "easy": [
+        "Welcome to the technical round. To begin: What are the differences between supervised and unsupervised learning, and how do you evaluate a model's performance?",
+        "How do you handle data preprocessing, feature engineering, and class imbalance in classification datasets?"
+      ],
+      "intermediate": [
+        "Great. Can you explain the difference between train/val/test splits, overfitting, and regularization techniques like L1/L2 or dropout?",
+        "What deep learning frameworks (like PyTorch or TensorFlow) do you prefer, and how do you implement custom neural network layers or loss functions?"
+      ],
+      "advanced": [
+        "Excellent. How do you design and optimize NLP pipelines, specifically transformer-based architectures, for high-throughput inference?",
+        "Can you describe the architecture of a vector database search engine, indexing mechanisms (like HNSW), and how you scale similarity searches?"
+      ]
+    }
+  },
+  "default": {
+    "target_experience_years": 2,
+    "required_skills": ["Python", "JavaScript", "Java", "SQL", "Git", "Docker", "Rest API"],
+    "questions": {
+      "easy": [
+        "Welcome to the technical round. Can you walk me through a challenging project you worked on recently and the technical decisions you made?",
+        "How do you use Git for version control, and how do you resolve merge conflicts or manage feature branches in a team?"
+      ],
+      "intermediate": [
+        "Great. How do you design clean, modular code, and what software design principles (like SOLID) do you apply?",
+        "Describe your approach to writing automated unit and integration tests for your code. What frameworks do you use?"
+      ],
+      "advanced": [
+        "Excellent. How do you evaluate performance bottlenecks in your code, and what tools or profiling techniques do you use?",
+        "How do you approach containerizing an application with Docker and configuring it for a local or cloud deployment?"
+      ]
+    }
+  }
+}

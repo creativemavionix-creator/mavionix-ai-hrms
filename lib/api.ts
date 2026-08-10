@@ -1,0 +1,903 @@
+/**
+ * Thin fetch wrapper for the HireMind FastAPI backend.
+ *
+ * All requests include the Supabase JWT stored in localStorage under the key
+ * "hiremind_token".  Replace the storage key / mechanism to match however
+ * your auth flow stores the access token (e.g. from supabase-js session).
+ *
+ * Base URL is read from NEXT_PUBLIC_API_URL (defaults to http://localhost:8000).
+ */
+
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
+
+function getToken(): string | null {
+  if (typeof window === "undefined") return null
+  // In demo mode the backend doesn't check tokens, but we still send one if present
+  return localStorage.getItem("hiremind_token") || "demo-token"
+}
+
+type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
+
+async function request<T>(
+  method: HttpMethod,
+  path: string,
+  body?: unknown
+): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("Backend request timed out. Please check your network connection.")
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
+
+  if (res.status === 204) return undefined as T
+
+  const data = await res.json().catch(() => ({ detail: res.statusText }))
+  if (!res.ok) {
+    const message =
+      typeof data?.detail === "string"
+        ? data.detail
+        : Array.isArray(data?.detail)
+        ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
+        : "An unexpected error occurred."
+    throw new Error(message)
+  }
+  return data as T
+}
+
+// ── Convenience wrappers ───────────────────────────────────────────────────
+
+export const api = {
+  get:    <T>(path: string)                  => request<T>("GET",    path),
+  post:   <T>(path: string, body: unknown)   => request<T>("POST",   path, body),
+  patch:  <T>(path: string, body: unknown)   => request<T>("PATCH",  path, body),
+  put:    <T>(path: string, body: unknown)   => request<T>("PUT",    path, body),
+  delete: <T>(path: string)                  => request<T>("DELETE", path),
+}
+
+// ── Jobs API ──────────────────────────────────────────────────────────────
+
+export interface ApiJob {
+  id:              string
+  job_code:        string
+  title:           string
+  department:      string
+  location:        string
+  status:          "active" | "onhold" | "draft" | "closed"
+  priority:        "low" | "medium" | "high"
+  posted_date:     string
+  description:     string | null
+  created_by:      string | null
+  created_at:      string
+  blueprint_version?: number
+  round_blueprints?:  Record<string, any>
+  applicant_count: number
+}
+
+export interface JobStats {
+  active_roles:  number
+  high_priority: number
+  draft_roles:   number
+}
+
+export interface CreateJobPayload {
+  title:       string
+  department:  string
+  location:    string
+  status:      ApiJob["status"]
+  priority:    ApiJob["priority"]
+  description?: string
+  posted_date?: string
+  round_blueprints?: Record<string, any>
+}
+
+export interface UpdateJobPayload {
+  title?:      string
+  department?: string
+  location?:   string
+  status?:     ApiJob["status"]
+  priority?:   ApiJob["priority"]
+  description?: string
+  round_blueprints?: Record<string, any>
+}
+
+export const jobsApi = {
+  list: (params?: { status?: string; search?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.status && params.status !== "all") qs.set("status", params.status)
+    if (params?.search) qs.set("search", params.search)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return api.get<ApiJob[]>(`/api/jobs${query}`)
+  },
+
+  stats: () => api.get<JobStats>("/api/jobs/stats"),
+
+  get: (id: string) => api.get<ApiJob>(`/api/jobs/${id}`),
+
+  create: (payload: CreateJobPayload) =>
+    api.post<ApiJob>("/api/jobs", payload),
+
+  update: (id: string, payload: UpdateJobPayload) =>
+    api.patch<ApiJob>(`/api/jobs/${id}`, payload),
+
+  delete: (id: string) => api.delete<void>(`/api/jobs/${id}`),
+}
+
+// ── Candidates API ────────────────────────────────────────────────────────────
+
+export type AppStage =
+  | "applied" | "screened" | "shortlisted"
+  | "assignment_sent" | "assignment_submitted" | "assignment_reviewed"
+  | "tech_round" | "tech_round_completed"
+  | "interview_round" | "interview_round_completed"
+  | "hr_round" | "hr_round_completed"
+  | "offered" | "hired" | "rejected" | "waitlisted"
+  // Legacy alias (migration 001 used "interview" as a stage name)
+  | "interview"
+
+export type MatchQuality = "excellent" | "strong" | "good" | "fair" | "low"
+
+export interface ApiCandidate {
+  // candidate core
+  id:              string
+  name:            string
+  email:           string
+  phone:           string | null
+  initials:        string
+  resume_url:      string | null
+  parsed_data:     Record<string, unknown> | null
+  created_at:      string
+  // application
+  application_id:  string | null
+  job_id:          string | null
+  job_title:       string | null
+  stage:           AppStage | null
+  ai_score:        number | null
+  match_quality:   MatchQuality | null
+  flagged:         boolean
+  applied_date:    string | null
+  // AI report
+  skill_score:     number | null
+  exp_score:       number | null
+  edu_score:       number | null
+  proj_score:      number | null
+  confidence:      number | null
+  sentiment_score: number | null
+  insights:        string | null
+  tags:            string[]
+  verification_status: string | null
+}
+
+export interface CandidateStats {
+  total:        number
+  shortlisted:  number
+  in_interview: number
+  rejected:     number
+}
+
+export interface UpdateApplicationPayload {
+  stage?:  AppStage
+  flagged?: boolean
+}
+
+/** POST /api/candidates uses multipart/form-data — handled separately */
+async function uploadCandidate(payload: {
+  name:    string
+  email:   string
+  phone:   string
+  job_id:  string
+  resume:  File
+}): Promise<ApiCandidate> {
+  const token = getToken()
+  const form  = new FormData()
+  form.append("name",    payload.name)
+  form.append("email",   payload.email)
+  form.append("phone",   payload.phone)
+  form.append("job_id",  payload.job_id)
+  form.append("resume",  payload.resume)
+
+  const headers: Record<string, string> = {}
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE_URL}/api/candidates`, {
+    method:  "POST",
+    headers,  // no Content-Type — browser sets multipart boundary automatically
+    body:    form,
+  })
+
+  const data = await res.json().catch(() => ({ detail: res.statusText }))
+  if (!res.ok) {
+    const message =
+      typeof data?.detail === "string"
+        ? data.detail
+        : Array.isArray(data?.detail)
+        ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
+        : "Failed to upload candidate."
+    throw new Error(message)
+  }
+  return data as ApiCandidate
+}
+
+export const candidatesApi = {
+  list: (params?: { stage?: string; search?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.stage  && params.stage  !== "all") qs.set("stage",  params.stage)
+    if (params?.search)                             qs.set("search", params.search)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return api.get<ApiCandidate[]>(`/api/candidates${query}`)
+  },
+
+  stats:  () => api.get<CandidateStats>("/api/candidates/stats"),
+
+  get:    (id: string) => api.get<ApiCandidate>(`/api/candidates/${id}`),
+
+  create: uploadCandidate,
+
+  updateApplication: (applicationId: string, payload: UpdateApplicationPayload) =>
+    api.patch<{ id: string; stage: string; flagged: boolean }>(
+      `/api/applications/${applicationId}`,
+      payload,
+    ),
+
+  delete: (id: string) => api.delete<void>(`/api/candidates/${id}`),
+}
+
+// ── AI Reports API ────────────────────────────────────────────────────────────
+
+export type VerificationStatus = "verified" | "revoked" | "pending" | "unverified"
+
+export interface ApiAIReport {
+  id:                  string
+  application_id:      string
+  verification_status: VerificationStatus
+  sentiment_score:     number | null
+  match_ranking:       string | null
+  skill_score:         number | null
+  exp_score:           number | null
+  edu_score:           number | null
+  proj_score:          number | null
+  confidence:          number | null
+  insights:            string | null
+  tags:                string[] | null
+  flagged:             boolean
+  created_at:          string
+  // denormalised joins
+  candidate_name:      string | null
+  candidate_email:     string | null
+  candidate_initials:  string | null
+  job_title:           string | null
+  ai_score:            number | null
+}
+
+export interface AIReportStats {
+  total_reports:  number
+  flagged_count:  number
+  active_sources: number
+}
+
+export type AIReportFilter = "all" | "flagged" | "verified"
+
+export interface UpdateAIReportPayload {
+  verification_status?: VerificationStatus
+  flagged?:             boolean
+  insights?:            string
+}
+
+export const aiReportsApi = {
+  stats: () => api.get<AIReportStats>("/api/ai-reports/stats"),
+
+  list: (filter?: AIReportFilter) => {
+    const qs = filter && filter !== "all" ? `?filter=${filter}` : ""
+    return api.get<ApiAIReport[]>(`/api/ai-reports${qs}`)
+  },
+
+  get: (id: string) => api.get<ApiAIReport>(`/api/ai-reports/${id}`),
+
+  update: (id: string, payload: UpdateAIReportPayload) =>
+    api.patch<ApiAIReport>(`/api/ai-reports/${id}`, payload),
+}
+
+// ── Interviews API ────────────────────────────────────────────────────────────
+
+export type SessionType     = "ai_screening" | "technical" | "final"
+export type InterviewStatus = "scheduled" | "completed" | "cancelled" | "no_show"
+
+export interface ApiInterview {
+  id:               string
+  application_id:   string
+  interviewer_name: string
+  session_type:     SessionType
+  scheduled_at:     string        // ISO datetime
+  status:           InterviewStatus
+  score:            number | null
+  created_at:       string
+  // denormalised joins
+  candidate_name:   string | null
+  candidate_id:     string | null
+  job_title:        string | null
+}
+
+export interface InterviewStats {
+  scheduled:  number
+  completed:  number
+  avg_score:  number
+  no_shows:   number
+}
+
+export interface CreateInterviewPayload {
+  application_id:   string
+  interviewer_name: string
+  session_type:     SessionType
+  scheduled_at:     string        // ISO datetime string
+  status?:          InterviewStatus
+  score?:           number | null
+}
+
+export interface UpdateInterviewPayload {
+  status?:          InterviewStatus
+  score?:           number
+  interviewer_name?: string
+  session_type?:    SessionType
+  scheduled_at?:    string
+}
+
+export const interviewsApi = {
+  stats: () => api.get<InterviewStats>("/api/interviews/stats"),
+
+  list: (params?: { search?: string; status?: InterviewStatus }) => {
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set("search", params.search)
+    if (params?.status) qs.set("status_filter", params.status)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return api.get<ApiInterview[]>(`/api/interviews${query}`)
+  },
+
+  get: (id: string) => api.get<ApiInterview>(`/api/interviews/${id}`),
+
+  create: (payload: CreateInterviewPayload) =>
+    api.post<ApiInterview>("/api/interviews", payload),
+
+  update: (id: string, payload: UpdateInterviewPayload) =>
+    api.patch<ApiInterview>(`/api/interviews/${id}`, payload),
+
+  delete: (id: string) => api.delete<void>(`/api/interviews/${id}`),
+}
+
+// ── Communications API ────────────────────────────────────────────────────────
+
+export type ChannelStatus = "active" | "warning" | "inactive" | "standby" | "critical"
+export type MessageStatus = "sent" | "pending" | "failed"
+
+export interface ApiChannel {
+  id:              string
+  name:            string
+  type:            string
+  channel_id_code: string
+  status:          ChannelStatus
+  sent_volume:     number
+  delivered_pct:   number
+}
+
+export interface ApiMessage {
+  id:             string
+  candidate_id:   string
+  channel_id:     string
+  subject:        string | null
+  body:           string
+  status:         MessageStatus
+  sent_at:        string | null
+  candidate_name: string | null
+}
+
+export interface MessageStats {
+  sent_today:      number
+  pending_count:   number
+  response_rate:   number
+  scheduled_sends: number
+}
+
+export interface SendMessagePayload {
+  candidate_id: string
+  channel_id:   string
+  subject?:     string
+  body:         string
+}
+
+export const communicationsApi = {
+  listChannels: () => api.get<ApiChannel[]>("/api/communications/channels"),
+
+  messageStats: () => api.get<MessageStats>("/api/communications/messages/stats"),
+
+  listMessages: (params?: { candidate_id?: string; channel_id?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.candidate_id) qs.set("candidate_id", params.candidate_id)
+    if (params?.channel_id)   qs.set("channel_id",   params.channel_id)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return api.get<ApiMessage[]>(`/api/communications/messages${query}`)
+  },
+
+  sendMessage: (payload: SendMessagePayload) =>
+    api.post<ApiMessage>("/api/communications/messages", payload),
+
+  generateDraft: (candidate_id: string, channel_id: string) =>
+    api.post<{ subject: string; body: string }>("/api/communications/messages/generate-draft", { candidate_id, channel_id }),
+}
+
+// ── Analytics API ─────────────────────────────────────────────────────────────
+
+export interface TimeToHirePoint {
+  month:    string
+  avg_days: number
+}
+
+export interface SourceHire {
+  name:       string
+  count:      number
+  percentage: number
+  color:      string
+}
+
+export interface DeptRow {
+  department:  string
+  applied:     number
+  interviewed: number
+  hired:       number
+  conversion:  number
+}
+
+export interface ScoreBucket {
+  label:     string
+  rank:      string
+  count:     number
+  range_min: number
+  range_max: number
+}
+
+export interface AnalyticsSummary {
+  time_to_hire:       TimeToHirePoint[]
+  source_of_hire:     SourceHire[]
+  dept_pipeline:      DeptRow[]
+  score_distribution: ScoreBucket[]
+}
+
+export const analyticsApi = {
+  summary: () => api.get<AnalyticsSummary>("/api/analytics/summary"),
+}
+
+// ── Settings API ──────────────────────────────────────────────────────────────
+
+export interface ApiAIWeights {
+  skills:     number
+  experience: number
+  education:  number
+  projects:   number
+}
+
+export interface ApiShortlistThreshold {
+  value:            number  // score >= this → auto-shortlist
+  borderline_floor: number  // score < this → auto-reject
+}
+
+export interface ApiNotificationPrefs {
+  email:   boolean
+  slack:   boolean
+  push:    boolean
+  ai_flag: boolean
+}
+
+export interface ApiIntegrations {
+  linkedin: boolean
+  naukri:   boolean
+  indeed:   boolean
+  slack:    boolean
+  email:    boolean
+}
+
+export const settingsApi = {
+  getWeights:         () => api.get<{ id: string; key: string; value: ApiAIWeights }>("/api/settings/ai_weights").then(r => r.value),
+  updateWeights:      (p: ApiAIWeights) => api.put<{ id: string; key: string; value: any }>("/api/settings/ai_weights", { value: p }).then(() => p),
+
+  getThreshold:       () => api.get<{ id: string; key: string; value: ApiShortlistThreshold }>("/api/settings/shortlist_threshold").then(r => r.value),
+  updateThreshold:    (p: ApiShortlistThreshold) => api.put<{ id: string; key: string; value: any }>("/api/settings/shortlist_threshold", { value: p }).then(() => p),
+
+  getNotifications:   () => api.get<{ id: string; key: string; value: ApiNotificationPrefs }>("/api/settings/notification_prefs").then(r => r.value),
+  updateNotifications:(p: ApiNotificationPrefs) => api.put<{ id: string; key: string; value: any }>("/api/settings/notification_prefs", { value: p }).then(() => p),
+
+  getIntegrations:    () => api.get<{ id: string; key: string; value: ApiIntegrations }>("/api/settings/integrations").then(r => r.value),
+  updateIntegrations: (p: ApiIntegrations) => api.put<{ id: string; key: string; value: any }>("/api/settings/integrations", { value: p }).then(() => p),
+}
+
+// ── Assignments API ───────────────────────────────────────────────────────────
+
+export interface ApiAssignment {
+  id:               string
+  application_id:   string
+  title:            string
+  description:      string
+  requirements:     string | null
+  submission_url:   string | null
+  submission_text:  string | null
+  submission_type?: string
+  status:           "pending" | "submitted" | "reviewed" | "approved" | "rejected"
+  ai_evaluation:    {
+    score:           number
+    overall_score?:  number
+    criteria?:       {
+      architecture?: number
+      correctness?:  number
+      code_quality?: number
+      documentation?:number
+    }
+    confidence?:     number
+    strengths:       string[]
+    weaknesses:      string[]
+    concerns?:       string[]
+    missing_requirements?: string[]
+    recommendation:  string
+    technical_depth?: number
+    creativity?:     number
+    completeness?:   number
+    communication?:  number
+  } | null
+  score:            number | null
+  deadline:         string | null
+  created_at:       string
+}
+
+export interface AssignmentEvalResult {
+  assignment_id:         string
+  score:                 number
+  evaluation:            ApiAssignment["ai_evaluation"]
+  advanced_to_tech_round: boolean
+}
+
+export const assignmentsApi = {
+  generate: (applicationId: string) =>
+    api.post<{ assignment: ApiAssignment; message: string; deadline: string }>(
+      `/api/applications/${applicationId}/generate-assignment`, {}
+    ),
+
+  manualShortlistAndAssign: (applicationId: string) =>
+    api.post<{ message: string; assignment?: ApiAssignment; already_exists: boolean }>(
+      `/api/applications/${applicationId}/manual-shortlist-and-assign`, {}
+    ),
+
+  getByApplication: (applicationId: string) =>
+    api.get<ApiAssignment>(`/api/applications/${applicationId}/assignment`),
+
+  get: (id: string) =>
+    api.get<ApiAssignment>(`/api/assignments/${id}`),
+
+  submit: (id: string, payload: { submission_text?: string; submission_url?: string }) =>
+    api.post<{ status: string; assignment_id: string }>(`/api/assignments/${id}/submit`, payload),
+
+  evaluate: (id: string) =>
+    api.post<AssignmentEvalResult>(`/api/assignments/${id}/evaluate`, {}),
+}
+
+// ── Pipeline API ──────────────────────────────────────────────────────────────
+
+export interface PipelineHistory {
+  application_id:      string
+  candidate_name:      string
+  job_title:           string
+  current_stage:       string
+  ai_score:            number | null
+  match_quality:       string | null
+  flagged:             boolean
+  applied_date:        string | null
+  stages:              { stage: string; index: number; status: string }[]
+  activity_history:    { actor_name: string; action: string; context_label: string; log_type: string; created_at: string }[]
+  assignments:         ApiAssignment[]
+  ai_interview_rounds: unknown[]
+  final_recommendation: unknown | null
+}
+
+export const pipelineApi = {
+  stages: () => api.get<{ stages: string[]; terminal: string[] }>("/api/pipeline/stages"),
+
+  advance: (applicationId: string, newStage: string, reason?: string) =>
+    api.post<{ application_id: string; previous_stage: string; new_stage: string; valid: boolean }>(
+      `/api/pipeline/${applicationId}/advance`,
+      { new_stage: newStage, reason }
+    ),
+
+  history: (applicationId: string) =>
+    api.get<PipelineHistory>(`/api/pipeline/${applicationId}/history`),
+
+  nextStage: (applicationId: string) =>
+    api.get<{ current_stage: string; next_stage: string | null; reachable_stages: string[] }>(
+      `/api/pipeline/${applicationId}/next-stage`
+    ),
+}
+
+// ── AI Interview Rounds API ───────────────────────────────────────────────────
+
+export type RoundType = "tech" | "interview" | "speaking" | "hr"
+export type RoundStatus = "not_started" | "in_progress" | "completed"
+
+export interface TranscriptEntry {
+  role:         "ai" | "candidate"
+  message:      string
+  timestamp:    string
+  answer_score?: number
+  suspected_copy_paste?: boolean
+  copy_paste_risk_score?: number
+  copy_paste_reasons?: string[]
+  speaking_metrics?: {
+    audio_duration?: number;
+    words_per_minute?: number;
+    filler_words_count?: number;
+    microphone_fallback?: boolean;
+  }
+}
+
+export interface ApiAIRound {
+  id:              string
+  application_id:  string
+  round_type:      RoundType
+  transcript:      TranscriptEntry[]
+  status:          RoundStatus
+  ai_score:        number | null
+  ai_summary:      string | null
+  strengths:       string[] | null
+  concerns:        string[] | null
+  started_at:      string | null
+  completed_at:    string | null
+  created_at:      string
+  // Reprocessing tracking fields
+  requires_ai_reprocessing?: boolean
+  ai_review_completed?:     boolean
+  evaluation_status?:       string
+  evaluation_engine?:       string
+  evaluation_model?:        string
+  evaluation_version?:      number
+  retry_count?:             number
+  last_retry_at?:           string | null
+  reviewed_at?:             string | null
+  resume_integrity_score?:  number | null
+  probe_questions?:         string[] | null
+  compact_offline_data?:    any
+  browser_strike_count?:    number
+  speaking_eval?: {
+    structure?: number;
+    confidence?: number;
+    conciseness?: number;
+    pace?: number;
+    vocabulary?: number;
+    fillers?: number;
+    avg_answer_length?: number;
+  }
+}
+
+export interface StartRoundResponse {
+  round:          ApiAIRound
+  first_question: string
+  message:        string
+  resumed:        boolean
+}
+
+export interface RespondResponse {
+  type:                      "question" | "complete"
+  message:                   string
+  answer_score:              number
+  exchange_number?:          number
+  round_complete:            boolean
+  summary?:                  { ai_score: number; ai_summary: string; strengths: string[]; concerns: string[] }
+  auto_started_next_round?:  RoundType | null
+}
+
+export const aiRoundsApi = {
+  startRound: (applicationId: string, roundType: RoundType) =>
+    api.post<StartRoundResponse>(`/api/applications/${applicationId}/start-round/${roundType}`, {}),
+
+  respond: (applicationId: string, roundId: string, message: string) =>
+    api.post<RespondResponse>(`/api/applications/${applicationId}/round/${roundId}/respond`, { message }),
+
+  listRounds: (applicationId: string) =>
+    api.get<ApiAIRound[]>(`/api/applications/${applicationId}/rounds`),
+
+  getRound: (roundId: string) =>
+    api.get<ApiAIRound>(`/api/rounds/${roundId}`),
+
+  resetRound: (applicationId: string, roundType: RoundType) =>
+    api.post<{ message: string }>(`/api/applications/${applicationId}/round/${roundType}/reset`, {}),
+}
+
+// ── Final Recommendation API ──────────────────────────────────────────────────
+
+export type RecommendationLevel = "strongly_recommended" | "recommended" | "consider" | "not_recommended"
+
+export interface ApiFinalRecommendation {
+  id:               string
+  application_id:   string
+  resume_score:     number | null
+  assignment_score: number | null
+  tech_score:       number | null
+  interview_score:  number | null
+  hr_score:         number | null
+  final_score:      number | null
+  recommendation:   RecommendationLevel
+  reasoning:        string | null
+  created_at:       string
+}
+
+export const recommendationApi = {
+  get: (applicationId: string) =>
+    api.get<ApiFinalRecommendation>(`/api/applications/${applicationId}/recommendation`),
+
+  generate: (applicationId: string) =>
+    api.post<ApiFinalRecommendation>(`/api/applications/${applicationId}/generate-recommendation`, {}),
+
+  approveOffer: (applicationId: string) =>
+    api.post<{ status: string }>(`/api/applications/${applicationId}/approve-offer`, {}),
+
+  reject: (applicationId: string) =>
+    api.post<{ status: string }>(`/api/applications/${applicationId}/reject-final`, {}),
+}
+
+// ── Dashboard API ─────────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  total_jobs:       number
+  active_jobs:      number
+  total_candidates: number
+  shortlisted:      number
+  in_interview:     number
+  offers_sent:      number
+  hired:            number
+  funnel: {
+    applied:   number
+    screened:  number
+    interview: number
+    offered:   number
+    hired:     number
+    rejected:  number
+  }
+}
+
+export interface ActivityLogEntry {
+  id:            string
+  actor_name:    string
+  action:        string
+  context_label: string | null
+  log_type:      "info" | "success" | "warning" | "error"
+  created_at:    string
+}
+
+export const dashboardApi = {
+  stats: () => api.get<DashboardStats>("/api/dashboard/stats"),
+  activityLogs: (limit = 20) => api.get<ActivityLogEntry[]>(`/api/dashboard/activity-logs?limit=${limit}`),
+}
+
+
+// ── Candidate Portal Token API ────────────────────────────────────────────────
+
+export interface PortalTokenResponse {
+  token:      string
+  url:        string
+  expires_at: string
+  token_id:   string
+}
+
+export interface PortalToken {
+  id:             string
+  candidate_id:   string
+  application_id: string
+  token:          string
+  round_type:     RoundType
+  used:           boolean
+  expires_at:     string
+  created_at:     string
+}
+
+export const portalApi = {
+  generateToken: (payload: {
+    candidate_id: string
+    application_id: string
+    round_type: RoundType
+    expires_in_hours?: number
+  }) => api.post<PortalTokenResponse>("/api/portal/generate-token", payload),
+
+  listTokens: (applicationId: string) =>
+    api.get<PortalToken[]>(`/api/portal/tokens/${applicationId}`),
+}
+
+// ── Recruiter Copilot API ───────────────────────────────────────────────────
+
+export interface CopilotCard {
+  candidate_id?: string
+  application_id?: string
+  name: string
+  job_title: string
+  ai_score: number
+  stage: string
+  match_quality?: string
+  flagged?: boolean
+  skills?: string[]
+  copy_risk?: string
+  resume_verified?: boolean
+}
+
+export interface CopilotMatrixRow {
+  metric: string
+  values: Record<string, string>
+}
+
+export interface CopilotActionButton {
+  label: string
+  action: string
+  candidate_id?: string
+}
+
+export interface RecruiterCopilotResponse {
+  message: string
+  intent: string
+  skill_data: any
+  candidate_cards?: CopilotCard[]
+  comparison_matrix?: CopilotMatrixRow[]
+  follow_up_chips?: string[]
+  action_buttons?: CopilotActionButton[]
+  confidence_score: number
+  confidence_reason: string
+  sources: string[]
+  metadata_badge?: {
+    source: string
+    confidence_score: number
+    last_updated: string
+    version: string
+  }
+  context_filters?: Record<string, any>
+}
+
+export interface RecruiterDailyBrief {
+  skill: string
+  summary: {
+    total_candidates: number
+    new_applicants_today: number
+    interviews_scheduled: number
+    flagged_anomalies: number
+    high_scorers_count: number
+    suggested_priorities: string[]
+  }
+  sources: string[]
+  confidence_score: number
+  confidence_reason: string
+}
+
+export const recruiterCopilotApi = {
+  dailyBrief: () => api.get<RecruiterDailyBrief>("/api/recruiter-copilot/daily-brief"),
+
+  chat: (payload: {
+    message: string
+    history?: { role: string; content: string }[]
+    context_filters?: Record<string, any>
+    page_context?: {
+      active_tab?: string
+      current_candidate_id?: string
+      current_candidate_name?: string
+      active_job_id?: string
+    }
+  }) => api.post<RecruiterCopilotResponse>("/api/recruiter-copilot/chat", payload),
+}
+

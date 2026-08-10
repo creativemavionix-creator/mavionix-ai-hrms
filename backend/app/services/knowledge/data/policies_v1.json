@@ -1,0 +1,28 @@
+{
+  "version": "1.1",
+  "last_updated": "2026-07-29",
+  "policies": {
+    "anti_cheating_3_strike_rule": {
+      "policy_name": "3-Strike Tab Switch & WebCam Camera Presence Policy",
+      "summary": "Candidates are provided a live PIP WebCam Self-Preview in the bottom-right corner and allowed 2 warnings before lockout.",
+      "enforcement": "A 3-second grace period is allowed. At 3s absence, a soft yellow warning banner & Web Audio chime alert the candidate. At 15s, a red strike warning is issued. 3 strikes terminate the session.",
+      "evidence_logging": "Exact timestamp, out-of-frame duration, audio chime triggers, and face presence confidence levels are logged in the Security Timeline."
+    },
+    "plagiarism_detection_thresholds": {
+      "policy_name": "Code & Transcript Plagiarism Policy",
+      "similarity_threshold_pct": 75,
+      "summary": "Take-home code submissions and interview transcripts are cross-checked against GitHub and historical candidates.",
+      "enforcement": "Submissions exceeding 75% similarity trigger an automatic 'Copy Risk' tag and hold stage advancement."
+    },
+    "speaking_audio_environment": {
+      "policy_name": "Speech Audio & Microphone Environment Policy",
+      "summary": "Candidates must enable microphone access and maintain a quiet background during AI interview rounds.",
+      "enforcement": "If speech recognition fails after 2 retries, the candidate is switched to Speech Fallback mode with zero penalty."
+    },
+    "candidate_termination_policy": {
+      "policy_name": "Assessment Termination & Integrity Policy",
+      "summary": "Candidates are terminated from an assessment if 3 tab-switch strikes or 3 camera out-of-frame strikes occur.",
+      "enforcement": "Terminated assessments receive a 0 score and generate a recruiter risk notification badge."
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-07-29",
+  "guides": {
+    "add_candidate": {
+      "title": "How to Add a Candidate",
+      "steps": [
+        "1. Open the Candidate Management view from the left sidebar.",
+        "2. Click the orange '[+ Add Candidate]' button at the top right.",
+        "3. Enter the candidate's Full Name, Email, and Target Role.",
+        "4. Upload candidate's resume (PDF/DOCX) or paste resume text for automatic skill parsing.",
+        "5. Click 'Save & Parse Profile' to generate AI match scores."
+      ],
+      "quick_action": { "label": "Go to Candidate Management", "action": "open_tab", "target_tab": "candidates" }
+    },
+    "generate_portal_link": {
+      "title": "How to Generate Candidate Portal Interview Link",
+      "steps": [
+        "1. Go to Candidate Management and click on a candidate's card to open their Candidate Dossier.",
+        "2. Click the orange '[GENERATE CANDIDATE PORTAL LINK]' button in the Dossier header.",
+        "3. Copy the secure 1-click URL (e.g. http://localhost:3001/interview?token=...).",
+        "4. Email or message the link directly to the candidate for seamless access."
+      ],
+      "quick_action": { "label": "Open Candidates View", "action": "open_tab", "target_tab": "candidates" }
+    },
+    "shortlist_override": {
+      "title": "How to Shortlist a Candidate or Override AI Threshold",
+      "steps": [
+        "1. Open the Candidate Dossier or Pipeline View.",
+        "2. Locate the Stage Control stepper.",
+        "3. Click '[Shortlist Candidate]' or '[Advance to Take-Home Assignment]'.",
+        "4. Confirm the manual override note when prompted by the system."
+      ],
+      "quick_action": { "label": "View Hiring Pipeline", "action": "open_tab", "target_tab": "dashboard" }
+    },
+    "adjust_ai_weights": {
+      "title": "How to Adjust AI Scoring Weights",
+      "steps": [
+        "1. Click 'Settings' in the left sidebar menu.",
+        "2. Navigate to 'AI Evaluation & Calibration' tab.",
+        "3. Adjust sliders for Skills, Experience, Education, and Projects (must sum to 100%).",
+        "4. Click 'Save Calibration Matrix' to recalculate future candidate match scores."
+      ],
+      "quick_action": { "label": "Open Settings View", "action": "open_tab", "target_tab": "settings" }
+    }
+  }
+}

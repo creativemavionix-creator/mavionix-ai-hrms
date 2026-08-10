@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-07-29",
+  "scoring_weights": {
+    "technical_skills": {
+      "weight_pct": 40,
+      "description": "Evaluates required role skills, Framework proficiency, and code syntax accuracy."
+    },
+    "relevant_experience": {
+      "weight_pct": 30,
+      "description": "Evaluates years of relevant experience, past role seniority, and domain relevance."
+    },
+    "education_and_certifications": {
+      "weight_pct": 15,
+      "description": "Evaluates degree relevance, university accreditation, and professional certifications."
+    },
+    "projects_and_achievements": {
+      "weight_pct": 15,
+      "description": "Evaluates complexity of personal repositories, GitHub contributions, and tangible achievements."
+    }
+  },
+  "score_tiers": {
+    "top_tier": { "min_score": 85, "label": "Strong Match", "recommended_action": "Fast-track to Technical Interview" },
+    "qualified": { "min_score": 70, "label": "Qualified Candidate", "recommended_action": "Proceed to Take-Home Assignment" },
+    "under_review": { "min_score": 50, "label": "Borderline", "recommended_action": "Manual Recruiter Review Required" },
+    "rejected": { "min_score": 0, "label": "Not Qualified", "recommended_action": "Send Rejection Email" }
+  }
+}

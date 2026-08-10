@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "policy_name": "Standard Assessment Integrity Policy",
+  "camera": {
+    "grace_seconds": 1,
+    "warning_after": 1,
+    "strike_after": 5,
+    "max_strikes": 3,
+    "deduction_per_warning": 5,
+    "deduction_per_strike": 20
+  },
+  "browser": {
+    "grace_seconds": 0,
+    "warning_after": 0,
+    "strike_after": 0,
+    "max_strikes": 3,
+    "deduction_per_tab_switch": 15
+  },
+  "microphone": {
+    "grace_seconds": 2,
+    "deduction_per_disconnect": 10
+  },
+  "network": {
+    "grace_seconds": 5,
+    "deduction_per_disconnect": 10
+  },
+  "fullscreen": {
+    "grace_seconds": 0,
+    "deduction_per_exit": 10
+  }
+}

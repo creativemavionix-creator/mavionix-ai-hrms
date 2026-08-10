@@ -1,0 +1,87 @@
+[
+  {
+    "intent": "interview_terminated",
+    "priority": 110,
+    "patterns": ["terminated", "terminate", "interview terminated", "cancelled", "canceled", "ended early", "session terminated", "tab limit"]
+  },
+  {
+    "intent": "link_expired_invalid",
+    "priority": 105,
+    "patterns": ["invalid link", "expired link", "link not working", "access denied", "link expired", "cannot open link", "token"]
+  },
+  {
+    "intent": "browser_compatibility",
+    "priority": 100,
+    "patterns": ["phone", "mobile", "browser", "safari", "chrome", "device", "ipad", "android", "iphone"]
+  },
+  {
+    "intent": "code_editor_issues",
+    "priority": 95,
+    "patterns": ["code editor", "compiler", "syntax error", "run code", "technical round", "ide", "test cases"]
+  },
+  {
+    "intent": "hr_round_salary",
+    "priority": 85,
+    "patterns": ["salary", "compensation", "notice period", "hr round", "expected salary", "start date", "pay"]
+  },
+  {
+    "intent": "post_interview_feedback",
+    "priority": 85,
+    "patterns": ["score", "feedback", "see my result", "transcript", "report card", "results"]
+  },
+  {
+    "intent": "re-evaluation_appeal",
+    "priority": 90,
+    "patterns": ["appeal", "re-evaluate", "retake", "try again", "dispute", "re-assessment"]
+  },
+  {
+    "intent": "technical_microphone",
+    "priority": 100,
+    "patterns": ["microphone", "mic", "audio", "voice", "can't hear", "cant hear"]
+  },
+  {
+    "intent": "technical_camera",
+    "priority": 100,
+    "patterns": ["camera", "webcam", "video", "permission denied", "blocked"]
+  },
+  {
+    "intent": "technical_crash",
+    "priority": 100,
+    "patterns": ["crash", "frozen", "freeze", "internet", "disconnected", "offline", "technical issues", "persist"]
+  },
+  {
+    "intent": "interview_speaking_round",
+    "priority": 80,
+    "patterns": ["speaking round", "speaking"]
+  },
+  {
+    "intent": "interview_process",
+    "priority": 80,
+    "patterns": ["how many rounds", "interview rounds", "skip", "pause", "time runs out", "retry"]
+  },
+  {
+    "intent": "rules_cheating",
+    "priority": 90,
+    "patterns": ["google", "chatgpt", "copy", "leave the tab", "leave browser", "switch tab", "tab switch", "thrice", "3 times", "someone enters", "cheating", "cheat", "external help", "rules"]
+  },
+  {
+    "intent": "privacy_data",
+    "priority": 90,
+    "patterns": ["recorded", "stored", "delete my interview", "who reviews", "privacy"]
+  },
+  {
+    "intent": "recruitment_process",
+    "priority": 70,
+    "patterns": ["hear back", "what happens next", "update my resume", "withdraw", "contact my recruiter", "recruiter"]
+  },
+  {
+    "intent": "company_culture",
+    "priority": 70,
+    "patterns": ["culture", "benefits", "remote", "tech stack", "office", "values"]
+  },
+  {
+    "intent": "accessibility",
+    "priority": 95,
+    "patterns": ["hearing impairment", "visual impairment", "more time", "keyboard", "screen reader"]
+  }
+]
