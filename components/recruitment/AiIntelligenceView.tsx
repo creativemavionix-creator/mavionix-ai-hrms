@@ -302,43 +302,6 @@ export default function AiIntelligenceView() {
         </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-lg relative overflow-hidden reveal-up reveal-delay-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="eyebrow text-neutral-400">REPORTS GENERATED</p>
-              {loadingStats ? (
-                <Loader2 className="w-4 h-4 animate-spin text-neutral-500 mt-2" />
-              ) : (
-                <p className="stat-number text-2xl mt-1.5 text-neutral-900 dark:text-white tracking-tight">{stats?.total_reports ?? "—"}</p>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-radius-md bg-signal/10 border border-signal/25 flex items-center justify-center shadow-md">
-              <Cpu className="w-5 h-5 text-signal" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-lg relative overflow-hidden reveal-up reveal-delay-2">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="eyebrow text-neutral-400">FLAGGED ANOMALIES</p>
-              {loadingStats ? (
-                <Loader2 className="w-4 h-4 animate-spin text-neutral-500 mt-2" />
-              ) : (
-                <p className="stat-number text-2xl mt-1.5 text-red-400 tracking-tight">{stats?.flagged_count ?? "—"}</p>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-radius-md bg-red-500/10 border border-red-500/25 flex items-center justify-center shadow-md">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-lg relative overflow-hidden reveal-up reveal-delay-3">
           <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
           <CardContent className="p-5 flex items-center justify-between">
             <div>
