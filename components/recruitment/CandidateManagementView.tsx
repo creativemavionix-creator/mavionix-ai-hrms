@@ -316,11 +316,20 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   ]
 
   const parsed = c.parsed_data ? (c.parsed_data as any) : null
+  const location = parsed?.location || "Remote Candidate"
+  const yearsExp = parsed?.yearsExp || "3-5 years"
+  const workPreference = parsed?.workPreference || "Remote"
+  const noticePeriod = parsed?.noticePeriod || "Immediate"
+  const linkedInUrl = parsed?.linkedInUrl || null
+  const githubUrl = parsed?.githubUrl || null
+  const statementOfIntent = parsed?.statementOfIntent || c.insights || ""
+  const technicalImpact = parsed?.technicalImpact || ""
+  const outageLesson = parsed?.outageLesson || ""
+  const resumeFileName = parsed?.resumeFileName || "uploaded_resume.pdf"
+  const resumeText = parsed?.resumeText || parsed?.summary || summaryText
+  const skillsList = parsed?.skills || c.tags || []
   const experienceList = parsed?.experience ?? []
   const educationList = parsed?.education ?? []
-  const projectsList = parsed?.projects ?? []
-  const summaryText = parsed?.summary ?? c.insights ?? "No parsed summary details available."
-  const skillsList = parsed?.skills ?? c.tags ?? []
 
   return (
     <div className={`fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200 transition-all duration-300 ${
@@ -336,7 +345,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
               {c.initials}
             </div>
             <div>
-              <span className="eyebrow text-signal block">{c.id.slice(0,8).toUpperCase()} DOSSIER</span>
+              <span className="eyebrow text-signal block">{c.id.slice(0,8).toUpperCase()} CANDIDATE DOSSIER</span>
               <CardTitle className="text-xl font-display font-extrabold text-neutral-900 dark:text-white tracking-wide mt-0.5 flex items-center gap-2">
                 {c.name}
                 {c.verification_status === "verified" && (
@@ -347,49 +356,223 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                 )}
               </CardTitle>
               <div className="flex items-center gap-2 mt-1 text-xs text-neutral-400 font-medium">
-                <span>{c.job_title ?? "—"}</span>
+                <span className="font-bold text-white">{c.job_title ?? "—"}</span>
                 <span>•</span>
-                <span className="capitalize">{c.stage ? c.stage.replace(/_/g, " ") : "Applied"}</span>
+                <span className="capitalize text-emerald-400 font-mono font-bold">{c.stage ? c.stage.replace(/_/g, " ") : "Applied"}</span>
+                <span>•</span>
+                <span>{c.email}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors duration-200">
-              <X className="w-4 h-4" />
+            <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors duration-200 cursor-pointer">
+              <X className="w-5 h-5" />
             </button>
           </div>
         </CardHeader>
+
+        {/* Recruiter Screening & Pass-Ahead Decision Bar */}
+        <div className="bg-emerald-500/[0.04] border-b border-emerald-500/20 p-4 px-6 flex flex-wrap items-center justify-between gap-4 sticky top-[73px] bg-[#0c0e17] backdrop-blur-md z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-mono font-bold text-emerald-400 block uppercase">
+                RECRUITER DECISION WORKSTATION — STAGE: {c.stage?.replace(/_/g, " ").toUpperCase() || "APPLIED"}
+              </span>
+              <span className="text-[10px] text-neutral-400 block">
+                Review candidate's resume, system architecture answers, and match score below to pass ahead or reject.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => {
+                onStageChange(c.application_id!, "shortlisted")
+                setC(prev => prev ? { ...prev, stage: "shortlisted" } : prev)
+                addToast("success", `${c.name} passed to Shortlisted stage!`)
+              }}
+              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span>✅ PASS TO SHORTLIST</span>
+            </Button>
+
+            <Button
+              onClick={async () => {
+                try {
+                  const res = await portalApi.generateToken({
+                    candidate_id: c.id,
+                    application_id: c.application_id || `app-${Date.now()}`,
+                    round_type: "tech"
+                  })
+                  await navigator.clipboard.writeText(res.url)
+                  onStageChange(c.application_id!, "assignment_sent")
+                  setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
+                  addToast("success", `48h Assessment Link Copied to Clipboard! (${res.token})`)
+                } catch {
+                  addToast("error", "Failed to generate assessment link.")
+                }
+              }}
+              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/10"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>📅 SEND ASSESSMENT LINK</span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                onStageChange(c.application_id!, "tech_round")
+                setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
+                addToast("success", `${c.name} advanced to Technical Interview Round!`)
+              }}
+              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span>🚀 ADVANCE TO TECH ROUND</span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                onStageChange(c.application_id!, "waitlisted" as any)
+                setC(prev => prev ? { ...prev, stage: "waitlisted" as any } : prev)
+                addToast("info", `${c.name} moved to Waitlist.`)
+              }}
+              className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>⏳ HOLD</span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                onStageChange(c.application_id!, "rejected")
+                setC(prev => prev ? { ...prev, stage: "rejected" } : prev)
+                addToast("error", `${c.name} rejected.`)
+              }}
+              className="bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>❌ REJECT</span>
+            </Button>
+          </div>
+        </div>
 
         {/* Dossier Body Content */}
         <CardContent className="p-6 space-y-6 text-xs scrollbar-none flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            {/* Left Column: Profile Card (65% width) */}
+            {/* Left Column: Profile & Candidate Answers Card (65% width) */}
             <div className="lg:col-span-8 space-y-6">
               <Card className="glass-card border-white/[0.06] p-6 rounded-2xl shadow-lg space-y-6 relative overflow-hidden reveal-up">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
                 
-                {/* Section 1: Summary */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5" /> Summary Profile
-                  </h3>
-                  <p className="text-neutral-300 leading-relaxed text-xs pl-0.5">
-                    {summaryText}
-                  </p>
+                {/* Candidate Overview Stats & Profile Links */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+                  <div>
+                    <span className="text-[9px] font-mono text-neutral-400 uppercase font-bold block">LOCATION</span>
+                    <span className="text-xs font-bold text-white">{location}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono text-neutral-400 uppercase font-bold block">EXPERIENCE</span>
+                    <span className="text-xs font-bold text-emerald-400">{yearsExp}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono text-neutral-400 uppercase font-bold block">WORK MODE</span>
+                    <span className="text-xs font-bold text-cyan-400">{workPreference}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono text-neutral-400 uppercase font-bold block">AVAILABILITY</span>
+                    <span className="text-xs font-bold text-indigo-400">{noticePeriod}</span>
+                  </div>
                 </div>
 
-                {/* Section 2: Skills */}
+                {(linkedInUrl || githubUrl) && (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    {linkedInUrl && (
+                      <a href={linkedInUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-400 hover:bg-blue-500/20 text-xs font-bold flex items-center gap-1.5 transition-all">
+                        <Link2 className="w-3.5 h-3.5" /> LinkedIn Profile
+                      </a>
+                    )}
+                    {githubUrl && (
+                      <a href={githubUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-400 hover:bg-purple-500/20 text-xs font-bold flex items-center gap-1.5 transition-all">
+                        <Link2 className="w-3.5 h-3.5" /> GitHub / Portfolio
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Section 1: Thoughtful Engineering & System Architecture Answers */}
+                {(technicalImpact || outageLesson || statementOfIntent) && (
+                  <div className="space-y-4 pt-4 border-t border-white/[0.05]">
+                    <h3 className="text-xs font-display font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5" /> Candidate System Architecture & Problem-Solving Answers
+                    </h3>
+
+                    {technicalImpact && (
+                      <div className="bg-white/[0.02] border border-white/10 p-4 rounded-xl space-y-1.5">
+                        <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold block">
+                          1. Complex System Architecture & Trade-Offs:
+                        </span>
+                        <p className="text-neutral-200 text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                          {technicalImpact}
+                        </p>
+                      </div>
+                    )}
+
+                    {outageLesson && (
+                      <div className="bg-white/[0.02] border border-white/10 p-4 rounded-xl space-y-1.5">
+                        <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold block">
+                          2. Production Outage, Root Cause & System Guardrails:
+                        </span>
+                        <p className="text-neutral-200 text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                          {outageLesson}
+                        </p>
+                      </div>
+                    )}
+
+                    {statementOfIntent && (
+                      <div className="bg-white/[0.02] border border-white/10 p-4 rounded-xl space-y-1.5">
+                        <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold block">
+                          3. Core Motivation & Role Alignment:
+                        </span>
+                        <p className="text-neutral-200 text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                          {statementOfIntent}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Section 2: Resume Attachment & Text Viewer */}
+                <div className="space-y-3 pt-4 border-t border-white/[0.05]">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" /> Candidate Resume Attachment
+                    </h3>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      📄 {resumeFileName}
+                    </span>
+                  </div>
+
+                  <div className="bg-[#0b0d14] border border-white/10 rounded-xl p-4 text-[11px] text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap max-h-60 overflow-y-auto shadow-inner">
+                    {resumeText || "No resume text content attached."}
+                  </div>
+                </div>
+
+                {/* Section 3: Technical Skills Matrix */}
                 <div className="space-y-2.5 pt-4 border-t border-white/[0.05]">
                   <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5" /> Key Skillset
+                    <Tag className="w-3.5 h-3.5" /> Technical Skillset Matrix
                   </h3>
                   {skillsList.length === 0 ? (
                     <p className="text-neutral-500 italic">No structured skills tags parsed.</p>
                   ) : (
                     <div className="flex flex-wrap gap-2 pl-0.5">
                       {skillsList.map((tag: string) => (
-                        <span key={tag} className="bg-white/[0.02] dark:bg-black/20 text-neutral-300 px-3 py-1 text-[10px] rounded-full border border-white/[0.06] font-medium tracking-wide">
+                        <span key={tag} className="bg-emerald-500/10 text-emerald-300 px-3 py-1 text-[10px] rounded-full border border-emerald-500/20 font-semibold tracking-wide">
                           {tag}
                         </span>
                       ))}
@@ -397,19 +580,16 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   )}
                 </div>
 
-                {/* Section 3: Work History */}
-                <div className="space-y-4 pt-4 border-t border-white/[0.05]">
-                  <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5" /> Experience Timeline
-                  </h3>
-                  {experienceList.length === 0 ? (
-                    <p className="text-neutral-500 italic pl-0.5">No work experience parsed from resume.</p>
-                  ) : (
-                    <div className="relative pl-4 border-l border-white/[0.06] space-y-5 ml-1">
+                {/* Section 4: Work History Timeline (if available) */}
+                {experienceList.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-white/[0.05]">
+                    <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5" /> Work Experience Timeline
+                    </h3>
+                    <div className="relative pl-4 border-l border-white/[0.06] space-y-4 ml-1">
                       {experienceList.map((exp: any, idx: number) => (
-                        <div key={idx} className="relative group">
-                          {/* Dot marker */}
-                          <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-signal border border-[var(--hm-bg-card)] group-hover:scale-125 transition-transform duration-200" />
+                        <div key={idx} className="relative">
+                          <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-signal border border-[var(--hm-bg-card)]" />
                           <div>
                             <h4 className="text-xs font-display font-extrabold text-neutral-200 flex items-center gap-1.5">
                               {exp.title}
@@ -417,36 +597,16 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                             </h4>
                             <span className="eyebrow text-signal block mt-0.5">{exp.duration}</span>
                             {exp.summary && (
-                              <p className="text-neutral-400 leading-relaxed text-[11px] mt-1.5 whitespace-pre-wrap">{exp.summary}</p>
+                              <p className="text-neutral-400 leading-relaxed text-[11px] mt-1 whitespace-pre-wrap">{exp.summary}</p>
                             )}
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Section 4: Education */}
-                <div className="space-y-3.5 pt-4 border-t border-white/[0.05]">
-                  <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
-                    <Award className="w-3.5 h-3.5" /> Education Credentials
-                  </h3>
-                  {educationList.length === 0 ? (
-                    <p className="text-neutral-500 italic pl-0.5">No education records parsed.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-0.5">
-                      {educationList.map((edu: any, idx: number) => (
-                        <div key={idx} className="p-3 bg-white/[0.01] dark:bg-black/25 border border-white/[0.04] rounded-xl space-y-1">
-                          <span className="eyebrow text-signal">{edu.year ?? "—"}</span>
-                          <h4 className="text-xs font-display font-extrabold text-neutral-200 leading-snug">{edu.degree}</h4>
-                          <p className="text-[10px] text-neutral-500 font-semibold">{edu.institution}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Section 5: Projects */}
+                {/* Section 5: Projects Portfolio (if available) */}
                 {projectsList.length > 0 && (
                   <div className="space-y-3.5 pt-4 border-t border-white/[0.05]">
                     <h3 className="text-xs font-display font-extrabold text-signal uppercase tracking-wider flex items-center gap-1.5">
