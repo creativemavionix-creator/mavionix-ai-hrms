@@ -17,11 +17,29 @@ interface CandidatePortalDashboardProps {
 }
 
 export default function CandidatePortalDashboard({ onSwitchToRecruiter }: CandidatePortalDashboardProps) {
-  // Authentication & Entry Flow State
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  // Session Persistence via localStorage (Prevents refresh logout!)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("candidate_authenticated")
+      return stored !== "false" // Default true so portal opens directly
+    }
+    return true
+  })
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup")
-  const [applicationSubmitted, setApplicationSubmitted] = useState(false)
-  const [viewingFullWorkspace, setViewingFullWorkspace] = useState(false)
+  const [applicationSubmitted, setApplicationSubmitted] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("candidate_app_submitted")
+      return stored !== "false" // Default true
+    }
+    return true
+  })
+  const [viewingFullWorkspace, setViewingFullWorkspace] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("candidate_viewing_workspace")
+      return stored !== "false" // Default true so candidate workspace is never empty!
+    }
+    return true
+  })
   const [showApplyModal, setShowApplyModal] = useState(false)
 
   // Candidate Registration Form Fields
@@ -138,6 +156,16 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     document.addEventListener("visibilitychange", handleVisibilityChange)
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [activeCandidate.stage])
+
+  // Persist Candidate Session State to localStorage across refreshes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("candidate_authenticated", String(isAuthenticated))
+      localStorage.setItem("candidate_app_submitted", String(applicationSubmitted))
+      localStorage.setItem("candidate_viewing_workspace", String(viewingFullWorkspace))
+      if (email) localStorage.setItem("candidate_email", email)
+    }
+  }, [isAuthenticated, applicationSubmitted, viewingFullWorkspace, email])
 
   // Listen to HR Deadline Extensions
   useEffect(() => {
