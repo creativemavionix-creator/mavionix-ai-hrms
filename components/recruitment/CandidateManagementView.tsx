@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { candidatesApi, jobsApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
+import { candidatesApi, jobsApi, portalApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
 import {
   Search, UserPlus, Flag, ShieldCheck, Mail, Phone, Tag,
   Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock, X, RefreshCw, Upload,
@@ -19,7 +19,7 @@ import { AiConfidenceCard, AiRiskWarning, AiProvenanceChip, AiSummaryPanel } fro
 type MatchQuality = "excellent" | "strong" | "good" | "fair" | "low"
 
 // ─── Toast ─────────────────────────────────────────────────────────────────
-interface Toast { id: number; type: "success" | "error"; message: string }
+interface Toast { id: number; type: "success" | "error" | "info"; message: string }
 function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const add = useCallback((type: Toast["type"], message: string) => {
@@ -36,9 +36,11 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
       {toasts.map(t => (
         <div key={t.id} className={`flex items-center gap-2 px-4 py-2.5 rounded-sm font-mono text-xs border shadow-lg
           ${t.type === "success" ? "bg-green-500/10 border-green-500/25 text-green-400"
-                                  : "bg-red-500/10 border-red-500/25 text-red-400"}`}>
+          : t.type === "info" ? "bg-blue-500/10 border-blue-500/25 text-blue-400"
+          : "bg-red-500/10 border-red-500/25 text-red-400"}`}>
           {t.type === "success" ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                                : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+          : t.type === "info" ? <Clock className="w-3.5 h-3.5 shrink-0" />
+          : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
           {t.message}
         </div>
       ))}

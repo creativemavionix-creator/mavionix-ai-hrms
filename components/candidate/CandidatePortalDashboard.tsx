@@ -1557,10 +1557,10 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               <div className="space-y-1">
                 <label className="eyebrow text-neutral-400">RESUME PDF (DEMO ATTACHMENT)</label>
                 <label className="flex items-center gap-3 border border-dashed border-white/[0.1] bg-white/[0.01] p-3.5 rounded-xl cursor-pointer hover:border-emerald-500/40 transition-all">
-                  <input type="file" accept=".pdf" onChange={e => setFile(e.target.files?.[0] || null)} className="hidden" />
+                  <input type="file" accept=".pdf" onChange={e => setUploadedFile(e.target.files?.[0] || null)} className="hidden" />
                   <Upload className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="text-xs text-neutral-300 font-medium truncate">
-                    {file ? file.name : "Click to select sample resume PDF..."}
+                    {uploadedFile ? uploadedFile.name : "Click to select sample resume PDF..."}
                   </span>
                 </label>
               </div>
