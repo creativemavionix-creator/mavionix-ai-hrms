@@ -43,9 +43,14 @@ import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWid
 import { useTheme } from "@/lib/theme"
 
 export default function RecruitmentDashboard() {
+  const [mounted, setMounted] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("dashboard")
   const { resolved: theme, setMode: setTheme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // App States
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
@@ -156,6 +161,8 @@ export default function RecruitmentDashboard() {
         return <DashboardView onNavigate={setActiveTab} />
     }
   }
+
+  if (!mounted) return null
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">

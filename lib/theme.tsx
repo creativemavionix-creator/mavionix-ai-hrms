@@ -15,11 +15,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme() {
   const { theme, setTheme, resolvedTheme } = useNextTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return {
-    mode: (theme as ThemeMode) || "dark",
-    resolved: (resolvedTheme as "light" | "dark") || "dark",
+    mode: (mounted ? (theme as ThemeMode) : "dark") || "dark",
+    resolved: (mounted ? (resolvedTheme as "light" | "dark") : "dark") || "dark",
     setMode: (newMode: ThemeMode) => setTheme(newMode),
+    mounted,
   }
 }
 
