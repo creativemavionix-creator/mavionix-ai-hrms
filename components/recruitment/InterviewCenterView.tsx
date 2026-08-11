@@ -495,6 +495,22 @@ export default function InterviewCenterView() {
                                 <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
                               ) : (
                                 <>
+                                  <Button onClick={async () => {
+                                    try {
+                                      const res = await portalApi.generateToken({
+                                        candidate_id: i.application_id || "cand-1",
+                                        application_id: i.application_id || "app-101",
+                                        round_type: i.session_type === "technical" ? "tech" : "interview"
+                                      })
+                                      await navigator.clipboard.writeText(res.url)
+                                      addToast("success", `Assessment Session Link Copied: ${res.token}`)
+                                    } catch {
+                                      addToast("error", "Failed to generate session link.")
+                                    }
+                                  }}
+                                    className="h-7 px-3 bg-signal/15 border border-signal/30 text-signal hover:bg-signal/25 rounded-radius-md text-[10px] font-extrabold uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1">
+                                    LINK
+                                  </Button>
                                   <Button onClick={() => setCompletingId(i.id)}
                                     className="h-7 px-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 rounded-radius-md text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95">
                                     RESOLVE
