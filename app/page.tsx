@@ -41,6 +41,7 @@ import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
 import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
 import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
+import { useTheme } from "@/lib/theme"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
