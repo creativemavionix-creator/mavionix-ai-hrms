@@ -408,32 +408,44 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   const res = await portalApi.generateToken({
                     candidate_id: c.id,
                     application_id: c.application_id || `app-${Date.now()}`,
-                    round_type: "tech"
+                    round_type: "project"
                   })
-                  await navigator.clipboard.writeText(res.url)
+                  const projectUrl = `${window.location.origin}/candidate?token=${res.token}&type=project`
+                  await navigator.clipboard.writeText(projectUrl)
                   onStageChange(c.application_id!, "assignment_sent")
                   setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
-                  addToast("success", `48h Assessment Link Copied to Clipboard! (${res.token})`)
+                  addToast("success", `📁 3-Day Project Task Link Copied to Clipboard! (${res.token})`)
                 } catch {
-                  addToast("error", "Failed to generate assessment link.")
+                  addToast("error", "Failed to generate project task link.")
                 }
               }}
               className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/10"
             >
-              <Link2 className="w-3.5 h-3.5" />
-              <span>📅 SEND ASSESSMENT LINK</span>
+              <FileText className="w-3.5 h-3.5" />
+              <span>📁 SEND 3-DAY PROJECT TASK LINK</span>
             </Button>
 
             <Button
-              onClick={() => {
-                onStageChange(c.application_id!, "tech_round")
-                setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
-                addToast("success", `${c.name} advanced to Technical Interview Round!`)
+              onClick={async () => {
+                try {
+                  const res = await portalApi.generateToken({
+                    candidate_id: c.id,
+                    application_id: c.application_id || `app-${Date.now()}`,
+                    round_type: "tech"
+                  })
+                  const interviewUrl = `${window.location.origin}/candidate?token=${res.token}&type=interview`
+                  await navigator.clipboard.writeText(interviewUrl)
+                  onStageChange(c.application_id!, "tech_round")
+                  setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
+                  addToast("success", `🎙️ Proctored AI Interview Link Copied to Clipboard! (${res.token})`)
+                } catch {
+                  addToast("error", "Failed to generate interview link.")
+                }
               }}
-              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
+              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-500/10"
             >
               <Brain className="w-3.5 h-3.5" />
-              <span>🚀 ADVANCE TO TECH ROUND</span>
+              <span>🎙️ SEND LIVE AI INTERVIEW LINK</span>
             </Button>
 
             <Button

@@ -818,24 +818,96 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               </div>
             </div>
 
+            {/* Ground Rules Card for Shortlisted Candidates */}
+            {isShortlisted && (
+              <div className="bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-left space-y-3">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold text-violet-400 border-b border-white/5 pb-2">
+                  <ShieldCheck className="w-4 h-4 text-violet-400" />
+                  <span>EVALUATION GROUND RULES & SUBMISSION POLICIES</span>
+                </div>
+                <div className="space-y-2 text-xs text-neutral-300">
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold font-mono">1. 72-HOUR DEADLINE:</span>
+                    <span className="text-neutral-400">Take-home project assignments have a strict 72-hour (3 days) submission window. The submission link will automatically lock after the deadline.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-cyan-400 font-bold font-mono">2. NEURAL PROCTORING:</span>
+                    <span className="text-neutral-400">Camera vision and browser tab switch detection are active during the live AI video interview. Maximum 3 tab switch strikes allowed before automatic termination.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-indigo-400 font-bold font-mono">3. CODE INTEGRITY:</span>
+                    <span className="text-neutral-400">All submissions are processed through static AST code analysis and plagiarist detection engines.</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Action Control */}
             {isShortlisted ? (
-              <div className="pt-4 space-y-4 bg-emerald-500/10 border border-emerald-500/25 p-6 rounded-2xl text-center">
-                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider block font-mono">
-                  WOULD YOU LIKE TO GO TO YOUR DASHBOARD?
-                </span>
-                <p className="text-xs text-neutral-300 max-w-md mx-auto">
-                  Your assessment workspace is ready. Click below to enter your candidate dashboard and complete your technical evaluation.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                  <Button
-                    onClick={() => setViewingFullWorkspace(true)}
-                    className="w-full sm:w-auto btn-primary py-3.5 px-8 rounded-2xl text-xs font-extrabold uppercase tracking-wider text-white shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
-                  >
-                    <Sparkles className="w-4 h-4 text-emerald-300" />
-                    <span>🚀 Go to Your Candidate Dashboard →</span>
-                  </Button>
-                </div>
+              <div className="pt-2 space-y-4 bg-emerald-500/10 border border-emerald-500/25 p-6 rounded-2xl text-center">
+                {activeCandidate.stage === "assignment_sent" ? (
+                  <>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-bold font-mono uppercase">
+                      <Clock className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+                      <span>📁 3-DAY PROJECT TASK UNLOCKED — DEADLINE: 72 HOURS</span>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider block font-mono">
+                      WOULD YOU LIKE TO OPEN YOUR PROJECT TASK WORKSPACE?
+                    </span>
+                    <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                      Your take-home project task is assigned. Click below to view requirements and submit your solution.
+                    </p>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <Button
+                        onClick={() => setViewingFullWorkspace(true)}
+                        className="w-full sm:w-auto btn-primary py-3.5 px-8 rounded-2xl text-xs font-extrabold uppercase tracking-wider text-white shadow-xl shadow-cyan-500/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                      >
+                        <FileText className="w-4 h-4 text-cyan-300" />
+                        <span>📁 Open Project Task & Submission Workspace →</span>
+                      </Button>
+                    </div>
+                  </>
+                ) : activeCandidate.stage === "tech_round" ? (
+                  <>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-bold font-mono uppercase">
+                      <Video className="w-3.5 h-3.5 animate-pulse text-indigo-400" />
+                      <span>🎙️ LIVE AI VIDEO INTERVIEW UNLOCKED</span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block font-mono">
+                      WOULD YOU LIKE TO ENTER YOUR PROCTORED INTERVIEW ROOM?
+                    </span>
+                    <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                      Your live 1-on-1 AI video interview room is ready. Ensure your camera and microphone are connected.
+                    </p>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <Button
+                        onClick={() => setViewingFullWorkspace(true)}
+                        className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 py-3.5 px-8 rounded-2xl text-xs font-extrabold uppercase tracking-wider text-white shadow-xl shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                      >
+                        <Brain className="w-4 h-4 text-indigo-200" />
+                        <span>🎙️ Enter Proctored AI Interview Room →</span>
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider block font-mono">
+                      WOULD YOU LIKE TO GO TO YOUR DASHBOARD?
+                    </span>
+                    <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                      Your assessment workspace is ready. Click below to enter your candidate dashboard and complete your technical evaluation.
+                    </p>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <Button
+                        onClick={() => setViewingFullWorkspace(true)}
+                        className="w-full sm:w-auto btn-primary py-3.5 px-8 rounded-2xl text-xs font-extrabold uppercase tracking-wider text-white shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                      >
+                        <Sparkles className="w-4 h-4 text-emerald-300" />
+                        <span>🚀 Go to Your Candidate Dashboard →</span>
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div className="pt-4 space-y-4 bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-center">
@@ -843,7 +915,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                   ⏳ RECRUITER REVIEW IN PROGRESS
                 </span>
                 <p className="text-xs text-neutral-400 max-w-md mx-auto">
-                  Your application is queued in the recruiter workstation. Once the recruiter shortlists your profile, your candidate dashboard button will unlock here automatically.
+                  Your application is queued in the recruiter workstation. Once the recruiter shortlists your profile or assigns a task, your task link will unlock here automatically.
                 </p>
                 <button
                   onClick={() => setIsAuthenticated(false)}
