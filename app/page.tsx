@@ -168,16 +168,46 @@ export default function RecruitmentDashboard() {
 
   if (!mounted) return null
 
-  if (portalViewMode === "landing") {
-    return <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
-  }
-
-  if (portalViewMode === "candidate") {
-    return <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("recruiter")} />
-  }
-
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
+    <>
+      {/* GLOBAL FLOATING PORTAL SWITCHER */}
+      <div className="fixed top-3 right-4 z-50 flex items-center gap-2 bg-[#0d0f17]/90 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl shadow-2xl">
+        <button
+          onClick={() => setPortalViewMode("landing")}
+          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
+            portalViewMode === "landing" ? "bg-violet-600 text-white shadow-md shadow-violet-500/25" : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          🏠 Landing
+        </button>
+        <button
+          onClick={() => setPortalViewMode("recruiter")}
+          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
+            portalViewMode === "recruiter" ? "bg-violet-600 text-white shadow-md shadow-violet-500/25" : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          💼 Recruiter
+        </button>
+        <button
+          onClick={() => setPortalViewMode("candidate")}
+          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
+            portalViewMode === "candidate" ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/25" : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          🚀 Candidate
+        </button>
+      </div>
+
+      {portalViewMode === "landing" && (
+        <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
+      )}
+
+      {portalViewMode === "candidate" && (
+        <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("recruiter")} />
+      )}
+
+      {portalViewMode === "recruiter" && (
+        <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/8 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
@@ -379,5 +409,7 @@ export default function RecruitmentDashboard() {
         }}
       />
     </div>
+  )}
+  </>
   )
 }

@@ -61,16 +61,16 @@ export default function PortalChoiceLanding({ onSelectRole }: PortalChoiceLandin
         </div>
 
         {/* Two Choice Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left relative z-30">
           
           {/* Card 1: RECRUITER PORTAL */}
           <div 
             onClick={() => onSelectRole("recruiter")}
-            className="group glass-card border border-white/[0.08] hover:border-violet-500/50 p-8 rounded-3xl relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 shadow-2xl cursor-pointer flex flex-col justify-between space-y-8 bg-gradient-to-b from-white/[0.02] to-transparent"
+            className="group glass-card border border-white/[0.08] hover:border-violet-500/50 p-8 rounded-3xl relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 shadow-2xl cursor-pointer flex flex-col justify-between space-y-8 bg-gradient-to-b from-white/[0.02] to-transparent z-30"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-indigo-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             
-            <div className="space-y-6">
+            <div className="space-y-6 relative z-30">
               <div className="flex items-center justify-between">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 p-0.5 shadow-xl shadow-violet-500/20 group-hover:scale-110 transition-transform duration-300">
                   <div className="w-full h-full bg-[#0d0f17] rounded-[14px] flex items-center justify-center text-violet-400 group-hover:text-white transition-colors">
@@ -108,8 +108,16 @@ export default function PortalChoiceLanding({ onSelectRole }: PortalChoiceLandin
               </div>
             </div>
 
-            <div className="pt-4 flex items-center justify-between text-xs font-bold text-violet-400 group-hover:text-white transition-colors border-t border-white/[0.05]">
-              <span className="uppercase tracking-wider">Launch Recruiter Workstation</span>
+            <div className="pt-4 flex items-center justify-between text-xs font-bold text-violet-400 group-hover:text-white transition-colors border-t border-white/[0.05] relative z-30">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectRole("recruiter")
+                }}
+                className="uppercase tracking-wider text-left bg-transparent border-none cursor-pointer flex items-center gap-2 text-violet-400 hover:text-white font-bold"
+              >
+                <span>Launch Recruiter Workstation</span>
+              </button>
               <div className="w-8 h-8 rounded-full bg-violet-500/20 group-hover:bg-violet-600 flex items-center justify-center text-white transition-all group-hover:translate-x-1">
                 <ArrowRight className="w-4 h-4" />
               </div>
@@ -119,11 +127,11 @@ export default function PortalChoiceLanding({ onSelectRole }: PortalChoiceLandin
           {/* Card 2: CANDIDATE PORTAL */}
           <div 
             onClick={() => onSelectRole("candidate")}
-            className="group glass-card border border-white/[0.08] hover:border-emerald-500/50 p-8 rounded-3xl relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 shadow-2xl cursor-pointer flex flex-col justify-between space-y-8 bg-gradient-to-b from-white/[0.02] to-transparent"
+            className="group glass-card border border-white/[0.08] hover:border-emerald-500/50 p-8 rounded-3xl relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 shadow-2xl cursor-pointer flex flex-col justify-between space-y-8 bg-gradient-to-b from-white/[0.02] to-transparent z-30"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 via-transparent to-cyan-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             
-            <div className="space-y-6">
+            <div className="space-y-6 relative z-30">
               <div className="flex items-center justify-between">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 p-0.5 shadow-xl shadow-emerald-500/20 group-hover:scale-110 transition-transform duration-300">
                   <div className="w-full h-full bg-[#0d0f17] rounded-[14px] flex items-center justify-center text-emerald-400 group-hover:text-white transition-colors">
@@ -161,8 +169,16 @@ export default function PortalChoiceLanding({ onSelectRole }: PortalChoiceLandin
               </div>
             </div>
 
-            <div className="pt-4 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:text-white transition-colors border-t border-white/[0.05]">
-              <span className="uppercase tracking-wider">Launch Candidate Portal</span>
+            <div className="pt-4 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:text-white transition-colors border-t border-white/[0.05] relative z-30">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectRole("candidate")
+                }}
+                className="uppercase tracking-wider text-left bg-transparent border-none cursor-pointer flex items-center gap-2 text-emerald-400 hover:text-white font-bold"
+              >
+                <span>Launch Candidate Portal</span>
+              </button>
               <div className="w-8 h-8 rounded-full bg-emerald-500/20 group-hover:bg-emerald-600 flex items-center justify-center text-white transition-all group-hover:translate-x-1">
                 <ArrowRight className="w-4 h-4" />
               </div>
