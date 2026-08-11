@@ -39,11 +39,12 @@ import InterviewCenterView from "@/components/recruitment/InterviewCenterView"
 import AnalyticsView from "@/components/recruitment/AnalyticsView"
 import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
-import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
-import { useTheme } from "@/lib/theme"
+import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
+import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
+  const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">("landing")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("dashboard")
   const { resolved: theme, setMode: setTheme } = useTheme()
@@ -164,6 +165,14 @@ export default function RecruitmentDashboard() {
 
   if (!mounted) return null
 
+  if (portalViewMode === "landing") {
+    return <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
+  }
+
+  if (portalViewMode === "candidate") {
+    return <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("recruiter")} />
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
       {/* Background ambient lighting */}
@@ -276,7 +285,21 @@ export default function RecruitmentDashboard() {
             <kbd className="ml-auto text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-neutral-300 font-mono">Ctrl+K</kbd>
           </div>
 
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              onClick={() => setPortalViewMode("candidate")}
+              className="px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 rounded-full text-[9px] font-extrabold tracking-wider uppercase transition-all shrink-0 shadow-md shadow-emerald-500/10 cursor-pointer"
+            >
+              Candidate Portal View
+            </button>
+
+            <button
+              onClick={() => setPortalViewMode("landing")}
+              className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[9px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer"
+            >
+              Landing Page
+            </button>
+
             <button
               onClick={() => setActiveTab("candidates")}
               className="px-3.5 py-1.5 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:from-[#7c3aed] hover:to-[#c026d3] text-white rounded-full text-[9px] font-bold tracking-wider uppercase transition-all duration-200 shrink-0 shadow-md shadow-violet-500/10"

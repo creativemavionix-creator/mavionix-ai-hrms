@@ -739,6 +739,18 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
   useEffect(() => { fetchStats(); fetchJobs() }, [fetchStats, fetchJobs])
   useEffect(() => { fetchCandidates(stageFilter, searchTerm) }, [stageFilter, fetchCandidates])
 
+  // Listen to live candidate applications from portal
+  useEffect(() => {
+    const handleNewApp = (e: any) => {
+      const newCand: ApiCandidate = e.detail
+      setCandidates(prev => [newCand, ...prev])
+      setStats(prev => prev ? { ...prev, total: prev.total + 1 } : prev)
+      addToast("success", `New Candidate Application Received: ${newCand.name} (${newCand.job_title})`)
+    }
+    window.addEventListener("new-candidate-applied", handleNewApp)
+    return () => window.removeEventListener("new-candidate-applied", handleNewApp)
+  }, [addToast])
+
   useEffect(() => {
     if (selectedId) {
       const c = candidates.find(cand => cand.id === selectedId)
