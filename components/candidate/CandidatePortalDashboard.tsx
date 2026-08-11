@@ -9,7 +9,8 @@ import {
   Upload, AlertTriangle, ShieldCheck, Video, Mic, Link2, Copy,
   Sparkles, Award, ArrowRight, RefreshCw, XCircle, Send, CheckCircle
 } from "lucide-react"
-import { candidatesApi, ApiCandidate, AppStage } from "@/lib/api"
+import { candidatesApi, ApiCandidate, AppStage, MatchQuality } from "@/lib/api"
+import { supabase } from "@/lib/supabaseClient"
 
 interface CandidatePortalDashboardProps {
   onSwitchToRecruiter: () => void
@@ -220,13 +221,63 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
   }
 
-  // Handle Candidate Sign In
-  const handleSignIn = (e: React.FormEvent) => {
+  // Handle Candidate Sign In with Supabase database lookup
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) {
-      showToast("error", "Please enter your candidate email address.")
+      showToast("error", "Please enter your registered candidate email address.")
       return
     }
+
+    try {
+      const { data: dbCand } = await supabase
+        .from("candidates")
+        .select(`
+          *,
+          applications (
+            id, job_id, stage, ai_score, match_quality, flagged, applied_date, jobs ( title )
+          )
+        `)
+        .eq("email", email.toLowerCase().trim())
+        .limit(1)
+        .single()
+
+      if (dbCand) {
+        const app = Array.isArray(dbCand.applications) && dbCand.applications.length > 0 ? dbCand.applications[0] : null
+        const parsed = dbCand.parsed_data || {}
+        
+        setActiveCandidate({
+          id: dbCand.id,
+          name: dbCand.name,
+          email: dbCand.email,
+          phone: dbCand.phone || phone || "+1 (555) 019-2834",
+          initials: dbCand.initials || "CN",
+          job_title: app?.jobs?.title || position,
+          stage: (app?.stage as AppStage) || "applied",
+          ai_score: app?.ai_score ?? 92,
+          match_quality: (app?.match_quality as MatchQuality) || "excellent",
+          flagged: app?.flagged || false,
+          applied_date: app?.applied_date || new Date().toLocaleDateString(),
+          skill_score: 94,
+          exp_score: 90,
+          edu_score: 88,
+          proj_score: 92,
+          confidence: 95,
+          sentiment_score: 90,
+          insights: parsed?.statementOfIntent || "Application loaded from database.",
+          tags: ["Submitted", "Under Review"],
+          verification_status: "verified"
+        })
+        setIsAuthenticated(true)
+        setApplicationSubmitted(true)
+        showToast("success", `Welcome back, ${dbCand.name}! Your profile is loaded from database.`)
+        return
+      }
+    } catch (err) {
+      console.warn("Supabase candidate sign in lookup notice:", err)
+    }
+
+    // Fallback sign in if email not found in DB
     const candName = name || email.split("@")[0].replace(".", " ")
     setActiveCandidate({
       id: `cand-${Date.now()}`,
