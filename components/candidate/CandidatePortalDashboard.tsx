@@ -148,6 +148,48 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
+  // Realtime Polling for Recruiter Shortlist Action
+  useEffect(() => {
+    if (!email || !applicationSubmitted) return
+
+    const checkLiveStage = async () => {
+      try {
+        const { data: cand } = await supabase
+          .from("candidates")
+          .select(`
+            id,
+            applications ( id, stage, ai_score, match_quality )
+          `)
+          .eq("email", email.toLowerCase().trim())
+          .limit(1)
+          .maybeSingle()
+
+        if (cand && Array.isArray(cand.applications) && cand.applications.length > 0) {
+          const app = cand.applications[0]
+          const liveStage = (app.stage as AppStage) || "applied"
+          if (liveStage && liveStage !== activeCandidate.stage) {
+            setActiveCandidate(prev => ({
+              ...prev,
+              stage: liveStage,
+              ai_score: app.ai_score ?? prev.ai_score,
+              match_quality: (app.match_quality as MatchQuality) || prev.match_quality
+            }))
+            if (["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
+              showToast("success", "🎉 You have been shortlisted by the recruiter!")
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Live candidate stage check notice:", err)
+      }
+    }
+
+    const interval = setInterval(checkLiveStage, 3000)
+    checkLiveStage()
+
+    return () => clearInterval(interval)
+  }, [email, applicationSubmitted, activeCandidate.stage])
+
   // Handle Application Submit via Server API Ingestion Route
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -514,67 +556,20 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                   </div>
                 </div>
 
-                {/* Section 3: Thoughtful Engineering & Problem Solving */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-indigo-400 border-b border-white/5 pb-1">
-                    <Brain className="w-4 h-4" />
-                    <span>SECTION 3: THOUGHTFUL ENGINEERING & SYSTEM ARCHITECTURE</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
-                      1. Complex Architecture Impact: Describe the most complex system or feature you personally designed and shipped. What architectural trade-offs did you make?
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Detail your system design, scalability choices, database selection, and trade-offs..."
-                      value={technicalImpact}
-                      onChange={(e) => setTechnicalImpact(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500 leading-relaxed"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
-                      2. Resilience & Lessons Learned: Share a major production outage, bug, or technical decision that failed. How did you resolve it and what system guardrails did you put in place?
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Share a real debugging scenario, root cause analysis (RCA), and preventative guardrails..."
-                      value={outageLesson}
-                      onChange={(e) => setOutageLesson(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500 leading-relaxed"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
-                      3. Statement of Motivation: Why do you want to join HireMind AI, and what technical challenges excite you most about autonomous recruitment AI?
-                    </label>
-                    <textarea
-                      rows={2}
-                      placeholder="Share your motivation and interest in autonomous AI hiring systems..."
-                      value={statementOfIntent}
-                      onChange={(e) => setStatementOfIntent(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Section 4: Resume File Attachment & Skills Matrix */}
+                {/* Section 3: Resume Attachment Zone */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <div className="flex items-center gap-2 text-xs font-mono font-bold text-violet-400">
                       <FileText className="w-4 h-4" />
-                      <span>SECTION 4: RESUME ATTACHMENT & SKILLS MATRIX</span>
+                      <span>SECTION 3: RESUME ATTACHMENT</span>
                     </div>
 
-                    <div className="flex items-center gap-1 text-[10px] font-mono font-bold">
+                    <div className="flex items-center gap-2 text-[10px] font-mono">
                       <button
                         type="button"
                         onClick={() => setResumeInputMode("upload")}
                         className={`px-2.5 py-1 rounded-lg transition-all ${
-                          resumeInputMode === "upload" ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-white"
+                          resumeInputMode === "upload" ? "bg-violet-500/20 text-violet-300 font-bold border border-violet-500/30" : "text-neutral-400 hover:text-white"
                         }`}
                       >
                         📁 File Upload
@@ -583,53 +578,48 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                         type="button"
                         onClick={() => setResumeInputMode("paste")}
                         className={`px-2.5 py-1 rounded-lg transition-all ${
-                          resumeInputMode === "paste" ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-white"
+                          resumeInputMode === "paste" ? "bg-violet-500/20 text-violet-300 font-bold border border-violet-500/30" : "text-neutral-400 hover:text-white"
                         }`}
                       >
-                        📋 Paste Text
+                        📝 Paste Text
                       </button>
                     </div>
                   </div>
 
-                  {/* Resume Drag & Drop Upload Zone */}
                   {resumeInputMode === "upload" && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Attach Resume (PDF, DOCX, TXT)</label>
-                      <div className="border-2 border-dashed border-white/15 hover:border-emerald-500/50 bg-white/[0.02] hover:bg-emerald-500/[0.02] transition-all p-5 rounded-2xl text-center relative group cursor-pointer flex flex-col items-center justify-center gap-2">
-                        <input
-                          type="file"
-                          accept=".pdf,.docx,.doc,.txt"
-                          onChange={handleFileChange}
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                        />
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                          <Upload className="w-6 h-6" />
-                        </div>
-                        {uploadedFile ? (
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-center">
-                              <CheckCircle className="w-4 h-4 text-emerald-400" />
-                              {uploadedFile.name}
-                            </span>
-                            <span className="block text-[10px] text-neutral-400 font-mono">
-                              File Size: {Math.round(uploadedFile.size / 1024)} KB · Click to replace file
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-white block">
-                              Click or Drag & Drop your Resume File Here
-                            </span>
-                            <span className="text-[10px] text-neutral-400 font-mono block">
-                              Supports PDF, DOCX, or TXT up to 10MB
-                            </span>
-                          </div>
-                        )}
+                    <div className="border-2 border-dashed border-white/15 hover:border-emerald-500/50 bg-white/[0.01] hover:bg-emerald-500/[0.02] transition-all p-6 rounded-2xl text-center relative group cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.doc,.txt"
+                        onChange={handleFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                      />
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto group-hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6" />
                       </div>
+                      {uploadedFile ? (
+                        <div className="space-y-1 mt-2">
+                          <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-center">
+                            <CheckCircle className="w-4 h-4 text-emerald-400" />
+                            {uploadedFile.name}
+                          </span>
+                          <span className="block text-[10px] text-neutral-400 font-mono">
+                            File Size: {Math.round(uploadedFile.size / 1024)} KB · Click to replace file
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1 mt-2">
+                          <span className="text-xs font-bold text-white block">
+                            Click or Drag & Drop your Resume File Here
+                          </span>
+                          <span className="text-[10px] text-neutral-400 font-mono block">
+                            Supports PDF, DOCX, or TXT up to 10MB
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Alternate Paste Resume Text Area */}
                   {resumeInputMode === "paste" && (
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Paste Resume Content / Work History</label>
@@ -642,16 +632,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                       />
                     </div>
                   )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Core Technical Skills & Framework Matrix</label>
-                    <Input
-                      placeholder="e.g. Python, FastAPI, PostgreSQL, Distributed Systems, Docker, Next.js"
-                      value={skillsText}
-                      onChange={(e) => setSkillsText(e.target.value)}
-                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
-                    />
-                  </div>
                 </div>
 
                 <Button
@@ -713,8 +693,10 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     )
   }
 
-  // ── 2. "PROFILE UNDER REVIEW" STATUS SCREEN (Displayed immediately after application submission) ──
+  // ── 2. DYNAMIC APPLICATION STATUS & SHORTLIST SCREEN ─────────────────────────
   if (applicationSubmitted && !viewingFullWorkspace) {
+    const isShortlisted = ["shortlisted", "assignment_sent", "assignment_submitted", "assignment_reviewed", "tech_round", "tech_round_completed", "hr_round", "hired"].includes(activeCandidate.stage)
+
     return (
       <div className="min-h-screen bg-[#090A10] text-white font-sans relative overflow-hidden flex flex-col justify-between p-4 sm:p-8">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
@@ -747,42 +729,58 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         <main className="relative z-10 max-w-3xl w-full mx-auto my-auto py-8">
           <Card className="glass-card border-white/[0.1] p-8 rounded-3xl shadow-2xl space-y-6 text-center">
             {/* Status Header Badge */}
-            <div className="space-y-3">
-              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/10">
-                <Clock className="w-8 h-8 animate-pulse text-emerald-400" />
+            {isShortlisted ? (
+              <div className="space-y-3">
+                <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/20 animate-bounce">
+                  <Sparkles className="w-8 h-8 text-emerald-400" />
+                </div>
+
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-extrabold font-mono uppercase tracking-wider">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  🎉 CONGRATULATIONS! YOU ARE SHORTLISTED
+                </div>
+
+                <h1 className="text-3xl font-display font-extrabold text-white">
+                  Congratulations, {activeCandidate.name}!
+                </h1>
+                <p className="text-sm text-neutral-300 max-w-lg mx-auto leading-relaxed">
+                  Great news! Our recruitment team has reviewed your profile and <span className="text-emerald-400 font-bold">shortlisted you for the next interview round</span> for <span className="text-white font-bold">{activeCandidate.job_title}</span>.
+                </p>
               </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 shadow-xl shadow-amber-500/10">
+                  <Clock className="w-8 h-8 animate-pulse text-amber-400" />
+                </div>
 
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold font-mono uppercase">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                APPLICATION UNDER REVIEW
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold font-mono uppercase">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  APPLICATION UNDER REVIEW
+                </div>
+
+                <h1 className="text-3xl font-display font-extrabold text-white">
+                  Thank You, {activeCandidate.name}!
+                </h1>
+                <p className="text-sm text-neutral-300 max-w-lg mx-auto leading-relaxed">
+                  Your application for <span className="text-emerald-400 font-bold">{activeCandidate.job_title}</span> has been received and is currently under review by our recruitment team.
+                </p>
               </div>
+            )}
 
-              <h1 className="text-3xl font-display font-extrabold text-white">
-                Thank You, {activeCandidate.name}!
-              </h1>
-              <p className="text-sm text-neutral-300 max-w-lg mx-auto">
-                Your application for <span className="text-emerald-400 font-bold">{activeCandidate.job_title}</span> has been received and is currently under review by our recruitment team.
-              </p>
-            </div>
-
-            {/* Candidate Submission Card Info */}
+            {/* Candidate Submission Info */}
             <div className="bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-left space-y-3">
               <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
                 <span className="text-neutral-400 font-mono">APPLICANT EMAIL:</span>
                 <span className="text-white font-bold">{activeCandidate.email}</span>
               </div>
               <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
-                <span className="text-neutral-400 font-mono">SUBMITTED DATE:</span>
-                <span className="text-white font-bold">{activeCandidate.applied_date}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
-                <span className="text-neutral-400 font-mono">AI MATCH VERIFICATION:</span>
-                <span className="text-emerald-400 font-bold uppercase font-mono">
-                  {activeCandidate.match_quality} ({activeCandidate.ai_score}/100)
+                <span className="text-neutral-400 font-mono">CURRENT STATUS:</span>
+                <span className={`font-mono font-extrabold uppercase ${isShortlisted ? "text-emerald-400" : "text-amber-400"}`}>
+                  {activeCandidate.stage ? activeCandidate.stage.replace(/_/g, " ") : "Under Review"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-neutral-400 font-mono">RECRUITER DASHBOARD SYNC:</span>
+                <span className="text-neutral-400 font-mono">RECRUITER WORKSTATION SYNC:</span>
                 <span className="text-emerald-400 font-bold font-mono flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   LIVE SYNCED
@@ -790,7 +788,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               </div>
             </div>
 
-            {/* Pipeline Stage Machine Tracker */}
+            {/* Pipeline Stage Tracker */}
             <div className="space-y-2 pt-2">
               <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest block font-bold">
                 APPLICATION LIFECYCLE PROGRESSION
@@ -802,31 +800,58 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
                   ⚡ AI PARSED
                 </div>
-                <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 animate-pulse">
-                  ⏳ HR REVIEW
+                <div className={`p-2.5 rounded-xl border ${
+                  isShortlisted 
+                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-extrabold" 
+                    : "bg-amber-500/20 border-amber-500/40 text-amber-400 animate-pulse"
+                }`}>
+                  {isShortlisted ? "✨ SHORTLISTED" : "⏳ HR REVIEW"}
                 </div>
-                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 text-neutral-500">
+                <div className={`p-2.5 rounded-xl border ${
+                  isShortlisted 
+                    ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-400 animate-pulse" 
+                    : "bg-white/[0.02] border-white/10 text-neutral-500"
+                }`}>
                   📅 TECH ROUND
                 </div>
               </div>
             </div>
 
             {/* Action Control */}
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Button
-                onClick={() => setViewingFullWorkspace(true)}
-                className="w-full sm:w-auto btn-primary py-3 px-6 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Enter Live Candidate Assessment Workspace</span>
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-              <button
-                onClick={() => setIsAuthenticated(false)}
-                className="text-xs text-neutral-400 hover:text-white underline font-mono py-2"
-              >
-                Sign Out / Apply For Another Role
-              </button>
-            </div>
+            {isShortlisted ? (
+              <div className="pt-4 space-y-4 bg-emerald-500/10 border border-emerald-500/25 p-6 rounded-2xl text-center">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider block font-mono">
+                  WOULD YOU LIKE TO GO TO YOUR DASHBOARD?
+                </span>
+                <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                  Your assessment workspace is ready. Click below to enter your candidate dashboard and complete your technical evaluation.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <Button
+                    onClick={() => setViewingFullWorkspace(true)}
+                    className="w-full sm:w-auto btn-primary py-3.5 px-8 rounded-2xl text-xs font-extrabold uppercase tracking-wider text-white shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                  >
+                    <Sparkles className="w-4 h-4 text-emerald-300" />
+                    <span>🚀 Go to Your Candidate Dashboard →</span>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-4 space-y-4 bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-center">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block font-mono">
+                  ⏳ RECRUITER REVIEW IN PROGRESS
+                </span>
+                <p className="text-xs text-neutral-400 max-w-md mx-auto">
+                  Your application is queued in the recruiter workstation. Once the recruiter shortlists your profile, your candidate dashboard button will unlock here automatically.
+                </p>
+                <button
+                  onClick={() => setIsAuthenticated(false)}
+                  className="text-xs text-neutral-500 hover:text-white underline font-mono pt-2 block mx-auto cursor-pointer"
+                >
+                  Sign Out / Apply For Another Role
+                </button>
+              </div>
+            )}
           </Card>
         </main>
       </div>
