@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { candidatesApi, jobsApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
 import {
   Search, UserPlus, Flag, ShieldCheck, Mail, Phone, Tag,
-  Loader2, AlertTriangle, CheckCircle, X, RefreshCw, Upload,
+  Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock, X, RefreshCw, Upload,
   FileText, Brain, Star, Users, Calendar, XCircle, Briefcase, Award, Sliders, Link2,
 } from "lucide-react"
 import PipelineView from "./PipelineView"
