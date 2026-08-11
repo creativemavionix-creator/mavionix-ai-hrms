@@ -281,6 +281,173 @@ function AddCandidateModal({ jobs, onClose, onCreated, addToast }: AddCandidateM
   )
 }
 
+// ─── Assign Project Task Modal ───────────────────────────────────────────────
+interface AssignProjectModalProps {
+  candidateName: string
+  candidateId: string
+  applicationId: string
+  onClose: () => void
+  onAssigned: (title: string, description: string, deadlineDays: number, tokenUrl: string) => void
+  addToast: (type: Toast["type"], msg: string) => void
+}
+
+function AssignProjectModal({ candidateName, candidateId, applicationId, onClose, onAssigned, addToast }: AssignProjectModalProps) {
+  const [projectTitle, setProjectTitle] = useState("Distributed Microservices Rate Limiter & Async Router")
+  const [projectDescription, setProjectDescription] = useState(
+    "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation."
+  )
+  const [deadlineDays, setDeadlineDays] = useState(3)
+  const [assigning, setAssigning] = useState(false)
+
+  const PRESET_PROJECTS = [
+    {
+      title: "Distributed Microservices Rate Limiter & Async Router",
+      desc: "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation."
+    },
+    {
+      title: "Zero-Trust OAuth2 & RBAC Auth Gateway",
+      desc: "Build a production-ready JWT OAuth2 authentication middleware in Go with Redis session blacklist and role-based access control (RBAC)."
+    },
+    {
+      title: "Real-Time Event Streaming & Data Pipeline Router",
+      desc: "Develop an async Apache Kafka stream processing pipeline in Python using Faust to aggregate and route 10k events/sec into PostgreSQL."
+    }
+  ]
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!projectTitle.trim() || !projectDescription.trim()) {
+      addToast("error", "Project Title and Description are required.")
+      return
+    }
+
+    setAssigning(true)
+    try {
+      const res = await portalApi.generateToken({
+        candidate_id: candidateId,
+        application_id: applicationId || `app-${Date.now()}`,
+        round_type: "project"
+      })
+      const projectUrl = `${window.location.origin}/candidate?token=${res.token}&type=project`
+
+      const assignedData = {
+        title: projectTitle,
+        description: projectDescription,
+        deadlineDays
+      }
+      if (typeof window !== "undefined") {
+        localStorage.setItem("assigned_project_task", JSON.stringify(assignedData))
+        window.dispatchEvent(new CustomEvent("recruiter-assigned-project", { detail: assignedData }))
+      }
+
+      await navigator.clipboard.writeText(projectUrl)
+      onAssigned(projectTitle, projectDescription, deadlineDays, projectUrl)
+    } catch {
+      addToast("error", "Failed to generate project task assignment link.")
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[150] p-4">
+      <Card className="glass-card border-cyan-500/30 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden bg-[#0d0f17] text-white">
+        <CardHeader className="p-6 border-b border-white/[0.08] flex flex-row items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-cyan-400 font-mono text-[10px] uppercase font-bold tracking-widest">
+              <FileText className="w-4 h-4 text-cyan-400" />
+              RECRUITER TASK ASSIGNMENT WORKSTATION
+            </div>
+            <CardTitle className="text-xl font-display font-extrabold text-white mt-1">
+              Assign 3-Day Project Task to {candidateName}
+            </CardTitle>
+          </div>
+          <button onClick={onClose} className="p-2 text-neutral-400 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+            <X className="w-5 h-5" />
+          </button>
+        </CardHeader>
+
+        <form onSubmit={handleAssign} className="p-6 space-y-5">
+          <div className="space-y-2">
+            <label className="eyebrow text-neutral-400">SELECT PRESET PROJECT TEMPLATE</label>
+            <div className="grid grid-cols-1 gap-2">
+              {PRESET_PROJECTS.map((tmpl, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => {
+                    setProjectTitle(tmpl.title)
+                    setProjectDescription(tmpl.desc)
+                  }}
+                  className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                    projectTitle === tmpl.title
+                      ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-semibold shadow-lg shadow-cyan-500/10"
+                      : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-white/5"
+                  }`}
+                >
+                  <span className="font-bold block text-white">{tmpl.title}</span>
+                  <span className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">{tmpl.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="eyebrow text-neutral-400">PROJECT ASSIGNMENT TITLE *</label>
+            <Input
+              required
+              value={projectTitle}
+              onChange={e => setProjectTitle(e.target.value)}
+              placeholder="e.g. Distributed Microservices Rate Limiter & Async Router"
+              className="bg-white/[0.03] border-white/10 text-white text-xs rounded-xl h-10 font-medium"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="eyebrow text-neutral-400">PROJECT SPECIFICATIONS & GROUND RULES *</label>
+            <textarea
+              required
+              rows={4}
+              value={projectDescription}
+              onChange={e => setProjectDescription(e.target.value)}
+              placeholder="Detail the technical requirements, architecture constraints, and expected deliverables..."
+              className="w-full bg-white/[0.03] border border-white/10 text-neutral-200 text-xs rounded-2xl p-3.5 outline-none focus:border-cyan-500 font-sans"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs">
+            <span className="text-neutral-400 font-mono">SUBMISSION DEADLINE:</span>
+            <span className="text-cyan-400 font-bold font-mono">3 DAYS (72 HOURS)</span>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              type="submit"
+              disabled={assigning}
+              className="flex-1 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-xl shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {assigning ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Assigning & Generating Link...</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  <span>🚀 ASSIGN TASK & COPY LINK TO CLIPBOARD</span>
+                </>
+              )}
+            </Button>
+            <Button type="button" onClick={onClose} className="bg-transparent hover:bg-white/5 border border-white/10 text-neutral-400 text-xs font-bold rounded-xl py-3 px-4">
+              CANCEL
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Candidate Dossier Modal ─────────────────────────────────────────────────
 function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addToast, sidebarCollapsed = false }: {
   candidateId: string
@@ -292,6 +459,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
 }) {
   const [c, setC]         = useState<ApiCandidate | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showAssignModal, setShowAssignModal] = useState(false)
 
   useEffect(() => {
     candidatesApi.get(candidateId)
@@ -405,27 +573,28 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
             </Button>
 
             <Button
-              onClick={async () => {
-                try {
-                  const res = await portalApi.generateToken({
-                    candidate_id: c.id,
-                    application_id: c.application_id || `app-${Date.now()}`,
-                    round_type: "project"
-                  })
-                  const projectUrl = `${window.location.origin}/candidate?token=${res.token}&type=project`
-                  await navigator.clipboard.writeText(projectUrl)
-                  onStageChange(c.application_id!, "assignment_sent")
-                  setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
-                  addToast("success", `📁 3-Day Project Task Link Copied to Clipboard! (${res.token})`)
-                } catch {
-                  addToast("error", "Failed to generate project task link.")
-                }
-              }}
+              onClick={() => setShowAssignModal(true)}
               className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/10"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>📁 SEND 3-DAY PROJECT TASK LINK</span>
             </Button>
+
+            {showAssignModal && (
+              <AssignProjectModal
+                candidateName={c.name}
+                candidateId={c.id}
+                applicationId={c.application_id || `app-${Date.now()}`}
+                onClose={() => setShowAssignModal(false)}
+                onAssigned={(title, desc, days, url) => {
+                  onStageChange(c.application_id!, "assignment_sent")
+                  setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
+                  setShowAssignModal(false)
+                  addToast("success", `📁 Assigned "${title}" and copied link to clipboard!`)
+                }}
+                addToast={addToast}
+              />
+            )}
 
             <Button
               onClick={async () => {

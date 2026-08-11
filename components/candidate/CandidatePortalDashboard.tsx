@@ -60,7 +60,30 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [resumeText, setResumeText] = useState("")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [resumeInputMode, setResumeInputMode] = useState<"upload" | "paste">("upload")
-  const [applying, setApplying] = useState(false)
+  // Recruiter Assigned Project State & Realtime Event Listener
+  const [assignedProject, setAssignedProject] = useState<{ title: string; description: string; deadlineDays: number }>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("assigned_project_task")
+      if (saved) {
+        try { return JSON.parse(saved) } catch {}
+      }
+    }
+    return {
+      title: "Distributed Microservices Rate Limiter & Async Router",
+      description: "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation.",
+      deadlineDays: 3
+    }
+  })
+
+  useEffect(() => {
+    const handleProjectAssigned = (e: CustomEvent) => {
+      if (e.detail) {
+        setAssignedProject(e.detail)
+      }
+    }
+    window.addEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
+    return () => window.removeEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
+  }, [])
 
   // File Upload Drag & Drop Handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1042,10 +1065,10 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               <div>
                 <span className="eyebrow text-emerald-400">ASSIGNMENT SPECIFICATIONS</span>
                 <h4 className="text-lg font-display font-extrabold text-white mt-1">
-                  Distributed Microservices Rate Limiter & Async Router
+                  {assignedProject.title}
                 </h4>
                 <p className="text-xs text-neutral-300 leading-relaxed mt-2 font-medium">
-                  Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation.
+                  {assignedProject.description}
                 </p>
               </div>
 
