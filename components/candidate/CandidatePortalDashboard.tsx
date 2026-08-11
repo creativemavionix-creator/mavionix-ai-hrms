@@ -177,6 +177,26 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
+  // Helper to update candidate stage locally & in Supabase
+  const lastDbStageRef = useRef<string | null>(null)
+  const isFirstLoadRef = useRef<boolean>(true)
+
+  const updateCandidateStage = async (newStage: AppStage) => {
+    setActiveCandidate(prev => ({ ...prev, stage: newStage }))
+    lastDbStageRef.current = newStage
+
+    if (activeCandidate.id && !activeCandidate.id.startsWith("cand-pending")) {
+      try {
+        await supabase
+          .from("applications")
+          .update({ stage: newStage })
+          .eq("candidate_id", activeCandidate.id)
+      } catch (err) {
+        console.warn("Supabase stage sync update notice:", err)
+      }
+    }
+  }
+
   // Auto-load active candidate from Supabase on mount and poll for stage updates
   const emailRef = useRef(email)
   useEffect(() => {
@@ -209,13 +229,16 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           const parsed = dbCand.parsed_data || {}
           const liveStage = (app?.stage as AppStage) || "applied"
 
-          setActiveCandidate(prev => {
-            if (prev.id === dbCand.id && prev.stage !== liveStage) {
-              if (["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
-                showToast("success", `🎉 Status updated: ${liveStage.replace(/_/g, " ").toUpperCase()}!`)
-              }
+          const stageHasChangedInDb = lastDbStageRef.current !== null && lastDbStageRef.current !== liveStage
+
+          if (isFirstLoadRef.current || stageHasChangedInDb) {
+            if (stageHasChangedInDb && ["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
+              showToast("success", `🎉 Recruiter updated status to ${liveStage.replace(/_/g, " ").toUpperCase()}!`)
             }
-            return {
+            lastDbStageRef.current = liveStage
+            isFirstLoadRef.current = false
+
+            setActiveCandidate({
               id: dbCand.id,
               name: dbCand.name,
               email: dbCand.email,
@@ -236,8 +259,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               insights: parsed?.statementOfIntent || "Application synchronized with database.",
               tags: ["Submitted", "Under Review"],
               verification_status: "verified"
-            }
-          })
+            })
+          }
 
           setIsAuthenticated(true)
           setApplicationSubmitted(true)
@@ -1074,25 +1097,25 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
             <div className="flex items-center gap-2 bg-white/[0.02] border border-white/[0.06] p-2 rounded-2xl">
               <span className="eyebrow text-neutral-400 px-2">FAST STAGE SIMULATOR:</span>
               <button
-                onClick={() => setActiveCandidate(p => ({ ...p, stage: "applied" }))}
-                className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${activeCandidate.stage === "applied" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-neutral-400 hover:text-white"}`}
+                onClick={() => updateCandidateStage("applied")}
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${activeCandidate.stage === "applied" || activeCandidate.stage === "shortlisted" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-neutral-400 hover:text-white"}`}
               >
                 1. Review
               </button>
               <button
-                onClick={() => setActiveCandidate(p => ({ ...p, stage: "assignment_sent" }))}
+                onClick={() => updateCandidateStage("assignment_sent")}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${activeCandidate.stage === "assignment_sent" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-neutral-400 hover:text-white"}`}
               >
                 2. Project Task
               </button>
               <button
-                onClick={() => setActiveCandidate(p => ({ ...p, stage: "tech_round" }))}
+                onClick={() => updateCandidateStage("tech_round")}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${activeCandidate.stage === "tech_round" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-neutral-400 hover:text-white"}`}
               >
                 3. Proctored Interview
               </button>
               <button
-                onClick={() => setActiveCandidate(p => ({ ...p, stage: "hired" }))}
+                onClick={() => updateCandidateStage("hired")}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${activeCandidate.stage === "hired" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-neutral-400 hover:text-white"}`}
               >
                 4. Offer Hired
@@ -1193,7 +1216,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
             <Button
               onClick={() => {
-                setActiveCandidate(p => ({ ...p, stage: "assignment_sent" }))
+                updateCandidateStage("assignment_sent")
                 showToast("success", "Congrats! You have been advanced to Stage 2: Project Task.")
               }}
               className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 cursor-pointer"
@@ -1279,7 +1302,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                   </p>
                   <Button
                     onClick={() => {
-                      setActiveCandidate(p => ({ ...p, stage: "tech_round" }))
+                      updateCandidateStage("tech_round")
                       showToast("success", "Project Approved! Moving to Proctored AI Video Interview.")
                     }}
                     className="btn-primary py-2.5 px-5 rounded-xl font-bold text-xs uppercase text-white shadow-lg shadow-emerald-500/20 mt-2"
@@ -1567,7 +1590,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                     <div className="flex justify-end">
                       <Button
                         onClick={() => {
-                          setActiveCandidate(p => ({ ...p, stage: "hired" }))
+                          updateCandidateStage("hired")
                           showToast("success", "Interview Complete! Your status has been updated to Final HR Review.")
                         }}
                         className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
