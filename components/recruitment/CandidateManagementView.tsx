@@ -316,6 +316,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   ]
 
   const parsed = c.parsed_data ? (c.parsed_data as any) : null
+  const summaryText = parsed?.summary ?? c.insights ?? "No parsed summary details available."
   const location = parsed?.location || "Remote Candidate"
   const yearsExp = parsed?.yearsExp || "3-5 years"
   const workPreference = parsed?.workPreference || "Remote"
@@ -330,6 +331,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   const skillsList = parsed?.skills || c.tags || []
   const experienceList = parsed?.experience ?? []
   const educationList = parsed?.education ?? []
+  const projectsList = parsed?.projects ?? []
 
   return (
     <div className={`fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200 transition-all duration-300 ${
