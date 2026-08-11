@@ -476,21 +476,36 @@ export const candidatesApi = {
     try {
       return await api.get<ApiCandidate>(`/api/candidates/${id}`)
     } catch (e) {
-      console.warn("Backend candidate get failed, returning fallback for", id)
+      console.warn("Backend candidate get failed, returning rich fallback dossier for", id)
       return {
         id: id,
-        name: "Priya Sharma",
-        email: "priya.sharma@example.com",
+        name: id === "c-2" || id.includes("rahul") ? "Rahul Verma" : id === "c-3" || id.includes("marcus") ? "Marcus Vance" : "Priya Sharma",
+        email: id === "c-2" || id.includes("rahul") ? "rahul.verma@example.com" : id === "c-3" || id.includes("marcus") ? "marcus.vance@example.com" : "priya.sharma@example.com",
         phone: "+1 (555) 019-2834",
-        initials: "PS",
+        initials: id === "c-2" || id.includes("rahul") ? "RV" : id === "c-3" || id.includes("marcus") ? "MV" : "PS",
         resume_url: null,
-        parsed_data: { skills: ["Python", "FastAPI", "PostgreSQL", "Next.js"], experience: "6 years" },
+        parsed_data: {
+          summary: "Pioneer in distributed system architectures, high-concurrency FastAPI microservices, and AI agent integration. Proven track record of scaling high-throughput APIs.",
+          skills: ["Python", "FastAPI", "PostgreSQL", "Next.js", "Docker", "System Architecture", "Redis", "MediaPipe", "Gemini 2.0"],
+          experience: [
+            { title: "Senior Staff Engineer", company: "Aether AI Labs", duration: "2023 - Present (3 yrs)", summary: "Architected distributed agent routing engine serving 4M+ requests daily with sub-50ms latency." },
+            { title: "Lead Backend Developer", company: "DataPulse Systems", duration: "2020 - 2023 (3 yrs)", summary: "Built real-time ETL pipelines and PostgreSQL query optimization engine for enterprise dashboards." }
+          ],
+          education: [
+            { degree: "M.S. Computer Science & AI", institution: "Stanford University", year: "2020" },
+            { degree: "B.Tech Computer Science", institution: "IIT Bombay", year: "2018" }
+          ],
+          projects: [
+            { name: "HireMind AI Engine", description: "Built hybrid rule-based and LLM evaluation matrix for real-time video interview proctoring.", technologies: ["FastAPI", "MediaPipe", "Gemini 2.0", "Next.js"] },
+            { name: "Distributed Rate Limiter", description: "High-throughput Redis token bucket system handling 100k requests/sec.", technologies: ["Python", "Redis", "Asyncio"] }
+          ]
+        },
         created_at: "2026-08-01T10:00:00Z",
         application_id: "app-101",
         job_id: "job-1",
-        job_title: "Senior Backend Engineer",
+        job_title: id === "c-2" || id.includes("rahul") ? "Product Designer (UI/UX)" : id === "c-3" || id.includes("marcus") ? "Lead AI Architect" : "Senior Backend Engineer",
         stage: "tech_round",
-        ai_score: 92,
+        ai_score: id === "c-2" || id.includes("rahul") ? 86 : id === "c-3" || id.includes("marcus") ? 95 : 92,
         match_quality: "excellent",
         flagged: false,
         applied_date: "2026-08-01",
