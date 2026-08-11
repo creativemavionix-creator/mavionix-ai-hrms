@@ -42,6 +42,7 @@ import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
 import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
 import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
+import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
 import { useTheme } from "@/lib/theme"
 
 export default function RecruitmentDashboard() {
