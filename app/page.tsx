@@ -48,7 +48,9 @@ export default function RecruitmentDashboard() {
   const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">("landing")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("dashboard")
-  const { resolved: theme, setMode: setTheme } = useTheme()
+  const themeObj = useTheme()
+  const theme = themeObj?.resolved || "dark"
+  const setTheme = themeObj?.setMode || (() => {})
 
   useEffect(() => {
     setMounted(true)
