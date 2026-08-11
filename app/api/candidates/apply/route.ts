@@ -9,11 +9,15 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, email, phone, jobId, statementOfIntent, skills, resumeText } = body
+    const {
+      name, email, phone, jobId, location, linkedInUrl, githubUrl,
+      yearsExp, workPreference, noticePeriod, statementOfIntent,
+      technicalImpact, outageLesson, skills, resumeText, resumeFileName
+    } = body
 
     if (!name || !email || !jobId) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields: name, email, and jobId are required." },
+        { success: false, error: "Missing required fields: name, email, and target position are required." },
         { status: 400 }
       )
     }
@@ -53,9 +57,18 @@ export async function POST(req: Request) {
           phone: phone || null,
           initials,
           parsed_data: {
+            location: location || "",
+            linkedInUrl: linkedInUrl || "",
+            githubUrl: githubUrl || "",
+            yearsExp: yearsExp || "3-5 years",
+            workPreference: workPreference || "Remote",
+            noticePeriod: noticePeriod || "Immediate",
             statementOfIntent: statementOfIntent || "",
+            technicalImpact: technicalImpact || "",
+            outageLesson: outageLesson || "",
             skills: Array.isArray(skills) ? skills : (skills ? skills.split(",").map((s: string) => s.trim()) : []),
-            resumeText: resumeText || ""
+            resumeText: resumeText || "",
+            resumeFileName: resumeFileName || "uploaded_resume.pdf"
           }
         })
         .select()

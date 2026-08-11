@@ -27,11 +27,29 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [position, setPosition] = useState("Senior Backend Engineer")
+  const [location, setLocation] = useState("")
+  const [linkedInUrl, setLinkedInUrl] = useState("")
+  const [githubUrl, setGithubUrl] = useState("")
+  const [yearsExp, setYearsExp] = useState("3-5 years")
+  const [workPreference, setWorkPreference] = useState("Remote")
+  const [noticePeriod, setNoticePeriod] = useState("Immediate")
   const [statementOfIntent, setStatementOfIntent] = useState("")
+  const [technicalImpact, setTechnicalImpact] = useState("")
+  const [outageLesson, setOutageLesson] = useState("")
   const [skillsText, setSkillsText] = useState("")
   const [resumeText, setResumeText] = useState("")
-  const [file, setFile] = useState<File | null>(null)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [resumeInputMode, setResumeInputMode] = useState<"upload" | "paste">("upload")
   const [applying, setApplying] = useState(false)
+
+  // File Upload Drag & Drop Handler
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selected = e.target.files[0]
+      setUploadedFile(selected)
+      showToast("info", `Selected resume file: ${selected.name} (${Math.round(selected.size / 1024)} KB)`)
+    }
+  }
 
   // Live Candidate Application State
   const [activeCandidate, setActiveCandidate] = useState<ApiCandidate>({
@@ -132,6 +150,10 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   // Handle Application Submit via Server API Ingestion Route
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name || !email) {
+      showToast("error", "Full Name and Email Address are required.")
+      return
+    }
     setApplying(true)
     try {
       const res = await fetch("/api/candidates/apply", {
@@ -142,9 +164,18 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           email,
           phone,
           jobId: position.includes("Backend") ? "JOB-101" : position.includes("Architect") ? "JOB-102" : "JOB-103",
-          statementOfIntent: "Applying for " + position + " role.",
-          skills: ["System Architecture", "TypeScript", "Python"],
-          resumeText: `${name} resume content for ${position}`
+          location,
+          linkedInUrl,
+          githubUrl,
+          yearsExp,
+          workPreference,
+          noticePeriod,
+          statementOfIntent: statementOfIntent || `Applying for ${position} role.`,
+          technicalImpact,
+          outageLesson,
+          skills: skillsText ? skillsText.split(",").map(s => s.trim()) : ["System Architecture", "Python", "Next.js"],
+          resumeText: resumeText || `${name} resume content for ${position}`,
+          resumeFileName: uploadedFile ? uploadedFile.name : "uploaded_resume.pdf"
         })
       })
 
@@ -176,7 +207,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         }
 
         setActiveCandidate(newCand)
-        setShowApplyModal(false)
+        setIsAuthenticated(true)
+        setApplicationSubmitted(true)
         showToast("success", data.message || "Application Received! Profile is under recruiter review.")
       } else {
         showToast("error", data.error || "Application submission error.")
@@ -234,7 +266,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }, 800)
   }
 
-  // ── 1. AUTH GATEWAY VIEW (Displayed when candidate first enters) ──────────
+  // ── 1. AUTH GATEWAY & RICH APPLICATION FORM VIEW ──────────────────────────
   if (!isAuthenticated && !applicationSubmitted) {
     return (
       <div className="min-h-screen bg-[#090A10] text-white font-sans relative overflow-hidden flex flex-col justify-between p-4 sm:p-8">
@@ -251,7 +283,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 HIREMIND CANDIDATE PORTAL
               </span>
               <span className="block text-[9px] text-neutral-400 font-mono tracking-widest uppercase">
-                Candidate Sign In & Job Application Gateway
+                Candidate Sign In & Engineering Application Gateway
               </span>
             </div>
           </div>
@@ -265,19 +297,19 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           </button>
         </header>
 
-        <main className="relative z-10 max-w-2xl w-full mx-auto my-auto py-8">
+        <main className="relative z-10 max-w-3xl w-full mx-auto my-auto py-8">
           <Card className="glass-card border-white/[0.1] p-8 rounded-3xl shadow-2xl space-y-6">
             {/* Header & Tabs */}
             <div className="text-center space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Autonomous Screening Active</span>
+                <span>Autonomous AI Screening Active</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-white">
-                Candidate Portal Sign In
+                Engineering Application Gateway
               </h1>
-              <p className="text-xs text-neutral-400">
-                Sign in to check your application status or apply for an open engineering position.
+              <p className="text-xs text-neutral-400 max-w-lg mx-auto">
+                Complete your candidate profile, attach your resume, and share your technical experience to enter the autonomous recruitment evaluation.
               </p>
             </div>
 
@@ -290,7 +322,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                     : "border-transparent text-neutral-400 hover:text-white"
                 }`}
               >
-                📝 NEW CANDIDATE SIGN UP
+                📝 COMPLETE CANDIDATE APPLICATION
               </button>
               <button
                 onClick={() => setAuthMode("signin")}
@@ -304,98 +336,282 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               </button>
             </div>
 
-            {/* Sign Up Form */}
+            {/* Rich Sign Up & Application Form */}
             {authMode === "signup" && (
-              <form onSubmit={handleApply} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <form onSubmit={handleApply} className="space-y-6">
+                
+                {/* Section 1: Candidate Identification */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400 border-b border-white/5 pb-1">
+                    <UserCheck className="w-4 h-4" />
+                    <span>SECTION 1: PERSONAL & PROFESSIONAL PROFILES</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Full Name *</label>
+                      <Input
+                        required
+                        placeholder="e.g. Priya Sharma"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Email Address *</label>
+                      <Input
+                        required
+                        type="email"
+                        placeholder="priya@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Phone Number</label>
+                      <Input
+                        placeholder="+1 (555) 019-2834"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Current Location</label>
+                      <Input
+                        placeholder="e.g. San Francisco, CA"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Years of Experience</label>
+                      <select
+                        value={yearsExp}
+                        onChange={(e) => setYearsExp(e.target.value)}
+                        className="w-full bg-[#0d0f17] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
+                      >
+                        <option value="0-2 years">0 - 2 Years (Junior)</option>
+                        <option value="3-5 years">3 - 5 Years (Mid-Level)</option>
+                        <option value="6-10 years">6 - 10 Years (Senior / Lead)</option>
+                        <option value="10+ years">10+ Years (Principal / Staff)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">LinkedIn Profile URL</label>
+                      <Input
+                        placeholder="https://linkedin.com/in/username"
+                        value={linkedInUrl}
+                        onChange={(e) => setLinkedInUrl(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">GitHub / Portfolio URL</label>
+                      <Input
+                        placeholder="https://github.com/username"
+                        value={githubUrl}
+                        onChange={(e) => setGithubUrl(e.target.value)}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Role Selection & Work Preferences */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-400 border-b border-white/5 pb-1">
+                    <Briefcase className="w-4 h-4" />
+                    <span>SECTION 2: TARGET POSITION & WORK PREFERENCES</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 col-span-1 sm:col-span-2">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Target Position *</label>
+                      <select
+                        value={position}
+                        onChange={(e) => setPosition(e.target.value)}
+                        className="w-full bg-[#0d0f17] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500 font-bold"
+                      >
+                        <option value="Senior Backend Engineer">Senior Backend Engineer (JOB-101) · Engineering</option>
+                        <option value="Lead AI Architect">Lead AI Architect (JOB-102) · AI Infrastructure</option>
+                        <option value="Product Designer (UI/UX)">Product Designer UI/UX (JOB-103) · Product Design</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Work Arrangement</label>
+                      <select
+                        value={workPreference}
+                        onChange={(e) => setWorkPreference(e.target.value)}
+                        className="w-full bg-[#0d0f17] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
+                      >
+                        <option value="Remote">Remote</option>
+                        <option value="Hybrid">Hybrid</option>
+                        <option value="On-Site">On-Site</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Thoughtful Engineering & Problem Solving */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-indigo-400 border-b border-white/5 pb-1">
+                    <Brain className="w-4 h-4" />
+                    <span>SECTION 3: THOUGHTFUL ENGINEERING & SYSTEM ARCHITECTURE</span>
+                  </div>
+
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Full Name *</label>
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
+                      1. Complex Architecture Impact: Describe the most complex system or feature you personally designed and shipped. What architectural trade-offs did you make?
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Detail your system design, scalability choices, database selection, and trade-offs..."
+                      value={technicalImpact}
+                      onChange={(e) => setTechnicalImpact(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500 leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
+                      2. Resilience & Lessons Learned: Share a major production outage, bug, or technical decision that failed. How did you resolve it and what system guardrails did you put in place?
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Share a real debugging scenario, root cause analysis (RCA), and preventative guardrails..."
+                      value={outageLesson}
+                      onChange={(e) => setOutageLesson(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500 leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">
+                      3. Statement of Motivation: Why do you want to join HireMind AI, and what technical challenges excite you most about autonomous recruitment AI?
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Share your motivation and interest in autonomous AI hiring systems..."
+                      value={statementOfIntent}
+                      onChange={(e) => setStatementOfIntent(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 4: Resume File Attachment & Skills Matrix */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <div className="flex items-center gap-2 text-xs font-mono font-bold text-violet-400">
+                      <FileText className="w-4 h-4" />
+                      <span>SECTION 4: RESUME ATTACHMENT & SKILLS MATRIX</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[10px] font-mono font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setResumeInputMode("upload")}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          resumeInputMode === "upload" ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-white"
+                        }`}
+                      >
+                        📁 File Upload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResumeInputMode("paste")}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          resumeInputMode === "paste" ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-white"
+                        }`}
+                      >
+                        📋 Paste Text
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resume Drag & Drop Upload Zone */}
+                  {resumeInputMode === "upload" && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Attach Resume (PDF, DOCX, TXT)</label>
+                      <div className="border-2 border-dashed border-white/15 hover:border-emerald-500/50 bg-white/[0.02] hover:bg-emerald-500/[0.02] transition-all p-5 rounded-2xl text-center relative group cursor-pointer flex flex-col items-center justify-center gap-2">
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.txt"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        />
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        {uploadedFile ? (
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-center">
+                              <CheckCircle className="w-4 h-4 text-emerald-400" />
+                              {uploadedFile.name}
+                            </span>
+                            <span className="block text-[10px] text-neutral-400 font-mono">
+                              File Size: {Math.round(uploadedFile.size / 1024)} KB · Click to replace file
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold text-white block">
+                              Click or Drag & Drop your Resume File Here
+                            </span>
+                            <span className="text-[10px] text-neutral-400 font-mono block">
+                              Supports PDF, DOCX, or TXT up to 10MB
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alternate Paste Resume Text Area */}
+                  {resumeInputMode === "paste" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Paste Resume Content / Work History</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Paste your full resume text or detailed career experience summary here..."
+                        value={resumeText}
+                        onChange={(e) => setResumeText(e.target.value)}
+                        className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-3 outline-none focus:border-emerald-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Core Technical Skills & Framework Matrix</label>
                     <Input
-                      required
-                      placeholder="e.g. Priya Sharma"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Python, FastAPI, PostgreSQL, Distributed Systems, Docker, Next.js"
+                      value={skillsText}
+                      onChange={(e) => setSkillsText(e.target.value)}
                       className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Email Address *</label>
-                    <Input
-                      required
-                      type="email"
-                      placeholder="priya@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Phone Number</label>
-                    <Input
-                      placeholder="+1 (555) 019-2834"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Target Position *</label>
-                    <select
-                      value={position}
-                      onChange={(e) => setPosition(e.target.value)}
-                      className="w-full bg-[#0d0f17] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
-                    >
-                      <option value="Senior Backend Engineer">Senior Backend Engineer (JOB-101)</option>
-                      <option value="Lead AI Architect">Lead AI Architect (JOB-102)</option>
-                      <option value="Product Designer (UI/UX)">Product Designer UI/UX (JOB-103)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Why are you applying for this role?</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Briefly state your core motivation and experience alignment..."
-                    value={statementOfIntent}
-                    onChange={(e) => setStatementOfIntent(e.target.value)}
-                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Technical Skills & Frameworks</label>
-                  <Input
-                    placeholder="e.g. Python, FastAPI, PostgreSQL, Next.js, System Architecture"
-                    value={skillsText}
-                    onChange={(e) => setSkillsText(e.target.value)}
-                    className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Paste Resume Text / Summary</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Paste resume content or key professional highlights here..."
-                    value={resumeText}
-                    onChange={(e) => setResumeText(e.target.value)}
-                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
-                  />
                 </div>
 
                 <Button
                   type="submit"
                   disabled={applying}
-                  className="w-full btn-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                  className="w-full btn-primary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer mt-4"
                 >
                   {applying ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Submitting Candidate Application...</span>
+                      <span>Submitting Candidate Application & Parsing Resume...</span>
                     </>
                   ) : (
                     <>
