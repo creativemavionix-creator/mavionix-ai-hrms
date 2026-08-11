@@ -383,39 +383,42 @@ async function uploadCandidate(payload: {
 export const candidatesApi = {
   list: async (params?: { stage?: string; search?: string }): Promise<ApiCandidate[]> => {
     try {
-      let query = supabase
+      // 1. Query Supabase candidates table directly
+      let candQuery = supabase
         .from("candidates")
-        .select(`
-          *,
-          applications (
-            id,
-            job_id,
-            stage,
-            ai_score,
-            match_quality,
-            flagged,
-            applied_date,
-            jobs ( title )
-          )
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
 
       if (params?.search) {
-        query = query.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%`)
+        candQuery = candQuery.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%`)
       }
 
-      const { data: dbCandidates, error } = await query
+      const { data: dbCandidates, error: candError } = await candQuery
 
-      if (!error && dbCandidates && dbCandidates.length > 0) {
+      if (!candError && dbCandidates && dbCandidates.length > 0) {
+        // 2. Fetch applications & jobs in parallel for fail-proof merging
+        const { data: dbApps } = await supabase.from("applications").select("*")
+        const { data: dbJobs } = await supabase.from("jobs").select("*")
+
+        const appsMap = new Map<string, any>()
+        if (dbApps) {
+          dbApps.forEach((app: any) => {
+            if (app.candidate_id && !appsMap.has(app.candidate_id)) {
+              appsMap.set(app.candidate_id, app)
+            }
+          })
+        }
+
+        const jobsMap = new Map<string, any>()
+        if (dbJobs) {
+          dbJobs.forEach((j: any) => jobsMap.set(j.id, j))
+        }
+
         const formatted: ApiCandidate[] = dbCandidates.map((cand: any) => {
-          const appList = Array.isArray(cand.applications) ? cand.applications : []
-          let matchedApp = appList[0] || null
-          if (params?.stage && params.stage !== "all") {
-            const found = appList.find((a: any) => a.stage === params.stage)
-            if (found) matchedApp = found
-          }
-
+          const matchedApp = appsMap.get(cand.id) || null
+          const matchedJob = matchedApp?.job_id ? jobsMap.get(matchedApp.job_id) : null
           const parsed = cand.parsed_data || {}
+
           return {
             id: cand.id,
             name: cand.name,
@@ -427,7 +430,7 @@ export const candidatesApi = {
             created_at: cand.created_at || new Date().toISOString(),
             application_id: matchedApp?.id || null,
             job_id: matchedApp?.job_id || null,
-            job_title: matchedApp?.jobs?.title || parsed?.position || "Senior Backend Engineer",
+            job_title: matchedJob?.title || parsed?.position || "Senior Backend Engineer",
             stage: (matchedApp?.stage as AppStage) || "applied",
             ai_score: matchedApp?.ai_score ?? 92,
             match_quality: (matchedApp?.match_quality as MatchQuality) || "excellent",
@@ -451,7 +454,7 @@ export const candidatesApi = {
         return formatted
       }
     } catch (err) {
-      console.warn("Supabase direct query notice:", err)
+      console.warn("Supabase candidates direct fetch notice:", err)
     }
 
     try {
@@ -510,26 +513,15 @@ export const candidatesApi = {
 
   get: async (id: string): Promise<ApiCandidate> => {
     try {
-      const { data: cand, error } = await supabase
-        .from("candidates")
-        .select(`
-          *,
-          applications (
-            id,
-            job_id,
-            stage,
-            ai_score,
-            match_quality,
-            flagged,
-            applied_date,
-            jobs ( title )
-          )
-        `)
-        .eq("id", id)
-        .single()
+      const { data: cand } = await supabase.from("candidates").select("*").eq("id", id).single()
+      if (cand) {
+        const { data: appData } = await supabase.from("applications").select("*").eq("candidate_id", cand.id).limit(1).single()
+        let jobTitle = "Senior Backend Engineer"
+        if (appData?.job_id) {
+          const { data: jobData } = await supabase.from("jobs").select("title").eq("id", appData.job_id).limit(1).single()
+          if (jobData?.title) jobTitle = jobData.title
+        }
 
-      if (!error && cand) {
-        const app = Array.isArray(cand.applications) && cand.applications.length > 0 ? cand.applications[0] : null
         const parsed = cand.parsed_data || {}
         return {
           id: cand.id,
@@ -553,14 +545,14 @@ export const candidatesApi = {
             ]
           },
           created_at: cand.created_at || new Date().toISOString(),
-          application_id: app?.id || null,
-          job_id: app?.job_id || null,
-          job_title: app?.jobs?.title || "Senior Backend Engineer",
-          stage: (app?.stage as AppStage) || "applied",
-          ai_score: app?.ai_score ?? 92,
-          match_quality: (app?.match_quality as MatchQuality) || "excellent",
-          flagged: app?.flagged || false,
-          applied_date: app?.applied_date || new Date().toISOString().split("T")[0],
+          application_id: appData?.id || null,
+          job_id: appData?.job_id || null,
+          job_title: jobTitle,
+          stage: (appData?.stage as AppStage) || "applied",
+          ai_score: appData?.ai_score ?? 92,
+          match_quality: (appData?.match_quality as MatchQuality) || "excellent",
+          flagged: appData?.flagged || false,
+          applied_date: appData?.applied_date || new Date().toISOString().split("T")[0],
           skill_score: 94,
           exp_score: 90,
           edu_score: 88,
@@ -573,7 +565,7 @@ export const candidatesApi = {
         }
       }
     } catch (e) {
-      console.warn("Supabase candidate get error:", e)
+      console.warn("Supabase candidate get notice:", e)
     }
 
     try {

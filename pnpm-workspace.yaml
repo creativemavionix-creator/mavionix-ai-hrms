@@ -1,2 +1,9 @@
 allowBuilds:
   sharp: set this to true or false
+minimumReleaseAgeExclude:
+  - '@supabase/auth-js@2.112.3'
+  - '@supabase/functions-js@2.112.3'
+  - '@supabase/postgrest-js@2.112.3'
+  - '@supabase/realtime-js@2.112.3'
+  - '@supabase/storage-js@2.112.3'
+  - '@supabase/supabase-js@2.112.3'
