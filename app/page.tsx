@@ -48,9 +48,21 @@ import { supabase } from "@/lib/supabaseClient"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
-  const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">("landing")
+  const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hiremind_portal_view_mode")
+      if (saved === "recruiter" || saved === "candidate" || saved === "landing") return saved
+    }
+    return "landing"
+  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activeTab, setActiveTab] = useState<string>("dashboard")
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hiremind_recruiter_active_tab")
+      if (saved) return saved
+    }
+    return "dashboard"
+  })
   const themeObj = useTheme()
   const theme = themeObj?.resolved || "dark"
   const setTheme = themeObj?.setMode || (() => {})
@@ -58,6 +70,18 @@ export default function RecruitmentDashboard() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hiremind_portal_view_mode", portalViewMode)
+    }
+  }, [portalViewMode])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hiremind_recruiter_active_tab", activeTab)
+    }
+  }, [activeTab])
 
   // Supabase Realtime Channel Sync for Candidates & Applications
   useEffect(() => {

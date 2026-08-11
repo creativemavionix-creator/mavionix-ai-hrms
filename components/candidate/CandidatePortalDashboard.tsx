@@ -178,9 +178,15 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   }, [])
 
   // Auto-load active candidate from Supabase on mount and poll for stage updates
+  const emailRef = useRef(email)
+  useEffect(() => {
+    emailRef.current = email
+  }, [email])
+
   useEffect(() => {
     const fetchAndPollCandidate = async () => {
       try {
+        const targetEmail = emailRef.current
         let query = supabase
           .from("candidates")
           .select(`
@@ -191,8 +197,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           `)
           .order("created_at", { ascending: false })
 
-        if (email.trim()) {
-          query = query.eq("email", email.toLowerCase().trim())
+        if (targetEmail && targetEmail.trim()) {
+          query = query.eq("email", targetEmail.toLowerCase().trim())
         }
 
         const { data: cands } = await query.limit(1)
@@ -202,11 +208,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           const app = Array.isArray(dbCand.applications) && dbCand.applications.length > 0 ? dbCand.applications[0] : null
           const parsed = dbCand.parsed_data || {}
           const liveStage = (app?.stage as AppStage) || "applied"
-
-          if (!email) {
-            setEmail(dbCand.email || "")
-            setName(dbCand.name || "")
-          }
 
           setActiveCandidate(prev => {
             if (prev.id === dbCand.id && prev.stage !== liveStage) {
@@ -218,7 +219,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               id: dbCand.id,
               name: dbCand.name,
               email: dbCand.email,
-              phone: dbCand.phone || phone || "+1 (555) 019-2834",
+              phone: dbCand.phone || "+1 (555) 019-2834",
               initials: dbCand.initials || dbCand.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
               job_title: app?.jobs?.title || position,
               stage: liveStage,
@@ -247,9 +248,9 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
 
     fetchAndPollCandidate()
-    const interval = setInterval(fetchAndPollCandidate, 2000)
+    const interval = setInterval(fetchAndPollCandidate, 2500)
     return () => clearInterval(interval)
-  }, [email])
+  }, [])
 
   // Handle Application Submit via Server API Ingestion Route
   const handleApply = async (e: React.FormEvent) => {
