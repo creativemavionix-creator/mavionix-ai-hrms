@@ -22,6 +22,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup")
   const [applicationSubmitted, setApplicationSubmitted] = useState(false)
   const [viewingFullWorkspace, setViewingFullWorkspace] = useState(false)
+  const [showApplyModal, setShowApplyModal] = useState(false)
 
   // Candidate Registration Form Fields
   const [name, setName] = useState("")
