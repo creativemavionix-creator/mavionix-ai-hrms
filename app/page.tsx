@@ -44,6 +44,7 @@ import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
 import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
 import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
 import { useTheme } from "@/lib/theme"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
@@ -57,6 +58,36 @@ export default function RecruitmentDashboard() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Supabase Realtime Channel Sync for Candidates & Applications
+  useEffect(() => {
+    if (!mounted) return
+
+    const channel = supabase
+      .channel("recruiter-realtime-sync")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "candidates" },
+        (payload) => {
+          const newCand = payload.new
+          const alertMsg = `🚀 New Candidate Arrived: ${newCand?.name || "Applicant"} registered.`
+          setNotifications((prev) => [alertMsg, ...prev])
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "applications" },
+        (payload) => {
+          const alertMsg = `📋 New Application Submitted! Candidate queued for AI screening.`
+          setNotifications((prev) => [alertMsg, ...prev])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [mounted])
 
   // App States
   const [jobs, setJobs] = useState<Job[]>(initialJobs)

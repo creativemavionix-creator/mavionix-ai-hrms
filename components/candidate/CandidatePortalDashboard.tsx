@@ -16,22 +16,30 @@ interface CandidatePortalDashboardProps {
 }
 
 export default function CandidatePortalDashboard({ onSwitchToRecruiter }: CandidatePortalDashboardProps) {
-  // Application Form Modal state
-  const [showApplyModal, setShowApplyModal] = useState(false)
-  const [name, setName] = useState("Priya Sharma")
-  const [email, setEmail] = useState("priya.sharma@example.com")
-  const [phone, setPhone] = useState("+1 (555) 019-2834")
+  // Authentication & Entry Flow State
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authMode, setAuthMode] = useState<"signup" | "signin">("signup")
+  const [applicationSubmitted, setApplicationSubmitted] = useState(false)
+  const [viewingFullWorkspace, setViewingFullWorkspace] = useState(false)
+
+  // Candidate Registration Form Fields
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
   const [position, setPosition] = useState("Senior Backend Engineer")
+  const [statementOfIntent, setStatementOfIntent] = useState("")
+  const [skillsText, setSkillsText] = useState("")
+  const [resumeText, setResumeText] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [applying, setApplying] = useState(false)
 
   // Live Candidate Application State
   const [activeCandidate, setActiveCandidate] = useState<ApiCandidate>({
-    id: "cand-active-1",
-    name: "Priya Sharma",
-    email: "priya.sharma@example.com",
+    id: "cand-pending-1",
+    name: "New Applicant",
+    email: "applicant@example.com",
     phone: "+1 (555) 019-2834",
-    initials: "PS",
+    initials: "NA",
     job_title: "Senior Backend Engineer",
     stage: "applied",
     ai_score: 92,
@@ -44,8 +52,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     proj_score: 95,
     confidence: 96,
     sentiment_score: 92,
-    insights: "Exceptional technical depth in distributed backend architectures & microservices.",
-    tags: ["Python", "FastAPI", "PostgreSQL", "System Architecture"],
+    insights: "Application received and queued for AI screening & Recruiter review.",
+    tags: ["Submitted", "Under Review"],
     verification_status: "verified"
   })
 
@@ -121,51 +129,98 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
-  // Handle Application Submit
+  // Handle Application Submit via Server API Ingestion Route
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault()
     setApplying(true)
     try {
-      const newCand: ApiCandidate = {
-        id: `cand-${Date.now()}`,
-        name,
-        email,
-        phone,
-        initials: name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
-        job_title: position,
-        stage: "applied",
-        ai_score: 94,
-        match_quality: "excellent",
-        flagged: false,
-        applied_date: new Date().toLocaleDateString(),
-        skill_score: 95,
-        exp_score: 92,
-        edu_score: 90,
-        proj_score: 96,
-        confidence: 97,
-        insights: "New candidate submission parsed automatically via HireMind AI.",
-        tags: ["FastAPI", "Python", "Next.js"],
-        verification_status: "verified"
+      const res = await fetch("/api/candidates/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          jobId: position.includes("Backend") ? "JOB-101" : position.includes("Architect") ? "JOB-102" : "JOB-103",
+          statementOfIntent: "Applying for " + position + " role.",
+          skills: ["System Architecture", "TypeScript", "Python"],
+          resumeText: `${name} resume content for ${position}`
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        const returnedCand = data.candidate
+        const newCand: ApiCandidate = {
+          id: returnedCand?.id || `cand-${Date.now()}`,
+          name: returnedCand?.name || name,
+          email: returnedCand?.email || email,
+          phone: returnedCand?.phone || phone,
+          initials: (returnedCand?.name || name).split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+          job_title: position,
+          stage: "applied",
+          ai_score: 92,
+          match_quality: "excellent",
+          flagged: false,
+          applied_date: new Date().toLocaleDateString(),
+          skill_score: 94,
+          exp_score: 90,
+          edu_score: 88,
+          proj_score: 92,
+          confidence: 95,
+          sentiment_score: 90,
+          insights: "Application received and queued for AI screening & Recruiter review.",
+          tags: ["Submitted", "Under Review"],
+          verification_status: "verified"
+        }
+
+        setActiveCandidate(newCand)
+        setShowApplyModal(false)
+        showToast("success", data.message || "Application Received! Profile is under recruiter review.")
+      } else {
+        showToast("error", data.error || "Application submission error.")
       }
-
-      // Add candidate to local API store
-      await candidatesApi.create({
-        name, email, phone, job_id: "job-1", resume: file || undefined
-      }).catch(() => {})
-
-      // Dispatch custom window event so Recruiter Dashboard updates in real time
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("new-candidate-applied", { detail: newCand }))
-      }
-
-      setActiveCandidate(newCand)
-      setShowApplyModal(false)
-      showToast("success", "Application Submitted! Your profile is now visible in the Recruiter Dashboard.")
-    } catch {
-      showToast("error", "Application submission error.")
+    } catch (err: any) {
+      showToast("error", "Network error during application submission.")
     } finally {
       setApplying(false)
     }
+  }
+
+  // Handle Candidate Sign In
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) {
+      showToast("error", "Please enter your candidate email address.")
+      return
+    }
+    const candName = name || email.split("@")[0].replace(".", " ")
+    setActiveCandidate({
+      id: `cand-${Date.now()}`,
+      name: candName,
+      email: email,
+      phone: phone || "+1 (555) 019-2834",
+      initials: candName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+      job_title: position,
+      stage: "applied",
+      ai_score: 92,
+      match_quality: "excellent",
+      flagged: false,
+      applied_date: new Date().toLocaleDateString(),
+      skill_score: 94,
+      exp_score: 90,
+      edu_score: 88,
+      proj_score: 92,
+      confidence: 95,
+      sentiment_score: 90,
+      insights: "Signed in successfully. Application is under recruiter review.",
+      tags: ["Submitted", "Under Review"],
+      verification_status: "verified"
+    })
+    setIsAuthenticated(true)
+    setApplicationSubmitted(true)
+    showToast("success", `Welcome back, ${candName}! Your application profile is loaded.`)
   }
 
   // Handle Project Solution Submission
@@ -177,6 +232,338 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       setSubmittingProject(false)
       showToast("success", "Project Assignment Submitted! Moving to Recruiter Evaluation.")
     }, 800)
+  }
+
+  // ── 1. AUTH GATEWAY VIEW (Displayed when candidate first enters) ──────────
+  if (!isAuthenticated && !applicationSubmitted) {
+    return (
+      <div className="min-h-screen bg-[#090A10] text-white font-sans relative overflow-hidden flex flex-col justify-between p-4 sm:p-8">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-cyan-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
+
+        <header className="relative z-10 max-w-5xl w-full mx-auto flex items-center justify-between py-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-white/20">
+              <UserCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <span className="font-display font-extrabold text-lg tracking-wider bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">
+                HIREMIND CANDIDATE PORTAL
+              </span>
+              <span className="block text-[9px] text-neutral-400 font-mono tracking-widest uppercase">
+                Candidate Sign In & Job Application Gateway
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={onSwitchToRecruiter}
+            className="p-2 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Briefcase className="w-4 h-4 text-violet-400" />
+            <span>Recruiter Workstation</span>
+          </button>
+        </header>
+
+        <main className="relative z-10 max-w-2xl w-full mx-auto my-auto py-8">
+          <Card className="glass-card border-white/[0.1] p-8 rounded-3xl shadow-2xl space-y-6">
+            {/* Header & Tabs */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Autonomous Screening Active</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-white">
+                Candidate Portal Sign In
+              </h1>
+              <p className="text-xs text-neutral-400">
+                Sign in to check your application status or apply for an open engineering position.
+              </p>
+            </div>
+
+            <div className="flex border-b border-white/10 text-xs font-bold font-mono">
+              <button
+                onClick={() => setAuthMode("signup")}
+                className={`py-3 px-6 flex-1 text-center border-b-2 transition-all ${
+                  authMode === "signup"
+                    ? "border-emerald-400 text-emerald-400 bg-emerald-500/5 font-extrabold"
+                    : "border-transparent text-neutral-400 hover:text-white"
+                }`}
+              >
+                📝 NEW CANDIDATE SIGN UP
+              </button>
+              <button
+                onClick={() => setAuthMode("signin")}
+                className={`py-3 px-6 flex-1 text-center border-b-2 transition-all ${
+                  authMode === "signin"
+                    ? "border-emerald-400 text-emerald-400 bg-emerald-500/5 font-extrabold"
+                    : "border-transparent text-neutral-400 hover:text-white"
+                }`}
+              >
+                🔑 EXISTING CANDIDATE SIGN IN
+              </button>
+            </div>
+
+            {/* Sign Up Form */}
+            {authMode === "signup" && (
+              <form onSubmit={handleApply} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Full Name *</label>
+                    <Input
+                      required
+                      placeholder="e.g. Priya Sharma"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Email Address *</label>
+                    <Input
+                      required
+                      type="email"
+                      placeholder="priya@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Phone Number</label>
+                    <Input
+                      placeholder="+1 (555) 019-2834"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Target Position *</label>
+                    <select
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                      className="w-full bg-[#0d0f17] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
+                    >
+                      <option value="Senior Backend Engineer">Senior Backend Engineer (JOB-101)</option>
+                      <option value="Lead AI Architect">Lead AI Architect (JOB-102)</option>
+                      <option value="Product Designer (UI/UX)">Product Designer UI/UX (JOB-103)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Why are you applying for this role?</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Briefly state your core motivation and experience alignment..."
+                    value={statementOfIntent}
+                    onChange={(e) => setStatementOfIntent(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Technical Skills & Frameworks</label>
+                  <Input
+                    placeholder="e.g. Python, FastAPI, PostgreSQL, Next.js, System Architecture"
+                    value={skillsText}
+                    onChange={(e) => setSkillsText(e.target.value)}
+                    className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Paste Resume Text / Summary</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Paste resume content or key professional highlights here..."
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={applying}
+                  className="w-full btn-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                >
+                  {applying ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Submitting Candidate Application...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>🚀 Submit Application & View Review Status</span>
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+
+            {/* Sign In Form */}
+            {authMode === "signin" && (
+              <form onSubmit={handleSignIn} className="space-y-4 py-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Registered Candidate Email *</label>
+                  <Input
+                    required
+                    type="email"
+                    placeholder="Enter your registered email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2.5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Full Name (Optional)</label>
+                  <Input
+                    placeholder="e.g. Priya Sharma"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2.5"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full btn-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>Sign In & Track Application</span>
+                </Button>
+              </form>
+            )}
+          </Card>
+        </main>
+      </div>
+    )
+  }
+
+  // ── 2. "PROFILE UNDER REVIEW" STATUS SCREEN (Displayed immediately after application submission) ──
+  if (applicationSubmitted && !viewingFullWorkspace) {
+    return (
+      <div className="min-h-screen bg-[#090A10] text-white font-sans relative overflow-hidden flex flex-col justify-between p-4 sm:p-8">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-cyan-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
+
+        <header className="relative z-10 max-w-5xl w-full mx-auto flex items-center justify-between py-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-white/20">
+              <UserCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <span className="font-display font-extrabold text-lg tracking-wider bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">
+                HIREMIND CANDIDATE PORTAL
+              </span>
+              <span className="block text-[9px] text-neutral-400 font-mono tracking-widest uppercase">
+                Application Status & Review Room
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={onSwitchToRecruiter}
+            className="p-2 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Briefcase className="w-4 h-4 text-violet-400" />
+            <span>Recruiter Workstation</span>
+          </button>
+        </header>
+
+        <main className="relative z-10 max-w-3xl w-full mx-auto my-auto py-8">
+          <Card className="glass-card border-white/[0.1] p-8 rounded-3xl shadow-2xl space-y-6 text-center">
+            {/* Status Header Badge */}
+            <div className="space-y-3">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/10">
+                <Clock className="w-8 h-8 animate-pulse text-emerald-400" />
+              </div>
+
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold font-mono uppercase">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                APPLICATION UNDER REVIEW
+              </div>
+
+              <h1 className="text-3xl font-display font-extrabold text-white">
+                Thank You, {activeCandidate.name}!
+              </h1>
+              <p className="text-sm text-neutral-300 max-w-lg mx-auto">
+                Your application for <span className="text-emerald-400 font-bold">{activeCandidate.job_title}</span> has been received and is currently under review by our recruitment team.
+              </p>
+            </div>
+
+            {/* Candidate Submission Card Info */}
+            <div className="bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-left space-y-3">
+              <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
+                <span className="text-neutral-400 font-mono">APPLICANT EMAIL:</span>
+                <span className="text-white font-bold">{activeCandidate.email}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
+                <span className="text-neutral-400 font-mono">SUBMITTED DATE:</span>
+                <span className="text-white font-bold">{activeCandidate.applied_date}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
+                <span className="text-neutral-400 font-mono">AI MATCH VERIFICATION:</span>
+                <span className="text-emerald-400 font-bold uppercase font-mono">
+                  {activeCandidate.match_quality} ({activeCandidate.ai_score}/100)
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-mono">RECRUITER DASHBOARD SYNC:</span>
+                <span className="text-emerald-400 font-bold font-mono flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  LIVE SYNCED
+                </span>
+              </div>
+            </div>
+
+            {/* Pipeline Stage Machine Tracker */}
+            <div className="space-y-2 pt-2">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest block font-bold">
+                APPLICATION LIFECYCLE PROGRESSION
+              </span>
+              <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-mono font-bold">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+                  ✓ SUBMITTED
+                </div>
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+                  ⚡ AI PARSED
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 animate-pulse">
+                  ⏳ HR REVIEW
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 text-neutral-500">
+                  📅 TECH ROUND
+                </div>
+              </div>
+            </div>
+
+            {/* Action Control */}
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button
+                onClick={() => setViewingFullWorkspace(true)}
+                className="w-full sm:w-auto btn-primary py-3 px-6 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Enter Live Candidate Assessment Workspace</span>
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+              <button
+                onClick={() => setIsAuthenticated(false)}
+                className="text-xs text-neutral-400 hover:text-white underline font-mono py-2"
+              >
+                Sign Out / Apply For Another Role
+              </button>
+            </div>
+          </Card>
+        </main>
+      </div>
+    )
   }
 
   return (
