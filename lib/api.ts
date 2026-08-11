@@ -1148,8 +1148,28 @@ export const assignmentsApi = {
       `/api/applications/${applicationId}/manual-shortlist-and-assign`, {}
     ),
 
-  getByApplication: (applicationId: string) =>
-    api.get<ApiAssignment>(`/api/applications/${applicationId}/assignment`),
+  getByApplication: async (applicationId: string): Promise<ApiAssignment | null> => {
+    try {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: false })
+        .maybeSingle()
+
+      if (!error && data) {
+        return data as ApiAssignment
+      }
+    } catch (e) {
+      console.warn("Supabase assignment fetch warning:", e)
+    }
+
+    try {
+      return await api.get<ApiAssignment>(`/api/applications/${applicationId}/assignment`)
+    } catch {
+      return null
+    }
+  },
 
   get: (id: string) =>
     api.get<ApiAssignment>(`/api/assignments/${id}`),
@@ -1188,65 +1208,98 @@ export const pipelineApi = {
       { new_stage: newStage, reason }
     ),
 
-  history: async (applicationId: string) => {
+  history: async (applicationId: string): Promise<PipelineHistory> => {
     try {
-      return await api.get<PipelineHistory>(`/api/pipeline/${applicationId}/history`)
-    } catch (e) {
-      return {
-        application_id: applicationId,
-        candidate_name: "Priya Sharma",
-        job_title: "Senior Backend Engineer",
-        current_stage: "tech_round",
-        ai_score: 92,
-        match_quality: "excellent",
-        flagged: false,
-        applied_date: "2026-08-01",
-        stages: [
+      const { data: appData } = await supabase
+        .from("applications")
+        .select(`
+          id,
+          stage,
+          ai_score,
+          match_quality,
+          flagged,
+          applied_date,
+          created_at,
+          candidates ( name, email ),
+          jobs ( title )
+        `)
+        .eq("id", applicationId)
+        .maybeSingle()
+
+      if (appData) {
+        const cand = (appData.candidates as any) || {}
+        const stage = appData.stage || "applied"
+        const isApplied = stage === "applied"
+
+        const stageList = [
           { stage: "applied", index: 0, status: "completed" },
-          { stage: "screened", index: 1, status: "completed" },
-          { stage: "shortlisted", index: 2, status: "completed" },
-          { stage: "assignment_sent", index: 3, status: "completed" },
-          { stage: "tech_round", index: 4, status: "current" },
+          { stage: "screened", index: 1, status: isApplied ? "current" : "completed" },
+          { stage: "shortlisted", index: 2, status: stage === "shortlisted" ? "current" : (["assignment_sent", "tech_round", "hr_round", "hired"].includes(stage) ? "completed" : "upcoming") },
+          { stage: "assignment_sent", index: 3, status: stage === "assignment_sent" ? "current" : (["tech_round", "hr_round", "hired"].includes(stage) ? "completed" : "upcoming") },
+          { stage: "tech_round", index: 4, status: stage === "tech_round" ? "current" : (["hr_round", "hired"].includes(stage) ? "completed" : "upcoming") },
           { stage: "interview_round", index: 5, status: "upcoming" },
           { stage: "speaking_round", index: 6, status: "upcoming" },
-          { stage: "hr_round", index: 7, status: "upcoming" },
-          { stage: "offered", index: 8, status: "upcoming" }
+          { stage: "hr_round", index: 7, status: stage === "hr_round" ? "current" : (stage === "hired" ? "completed" : "upcoming") },
+          { stage: "offered", index: 8, status: stage === "offered" || stage === "hired" ? "completed" : "upcoming" }
+        ]
+
+        // Fetch candidate's real assignments if any
+        const { data: userAsgns } = await supabase
+          .from("assignments")
+          .select("*")
+          .eq("application_id", applicationId)
+
+        return {
+          application_id: appData.id,
+          candidate_name: cand.name || "Candidate",
+          job_title: (appData.jobs as any)?.title || "Senior Backend Engineer",
+          current_stage: stage,
+          ai_score: appData.ai_score ?? 85,
+          match_quality: appData.match_quality || "strong",
+          flagged: appData.flagged || false,
+          applied_date: appData.applied_date || new Date().toISOString().split("T")[0],
+          stages: stageList,
+          activity_history: [
+            {
+              actor_name: cand.name || "Candidate",
+              action: `submitted engineering application`,
+              context_label: "applied",
+              log_type: "info",
+              created_at: appData.created_at || new Date().toISOString()
+            }
+          ],
+          assignments: (userAsgns as ApiAssignment[]) || [],
+          ai_interview_rounds: [],
+          final_recommendation: null
+        }
+      }
+    } catch (e) {
+      console.warn("Supabase pipeline history notice:", e)
+    }
+
+    try {
+      return await api.get<PipelineHistory>(`/api/pipeline/${applicationId}/history`)
+    } catch {
+      return {
+        application_id: applicationId,
+        candidate_name: "Candidate Application",
+        job_title: "Engineering Position",
+        current_stage: "applied",
+        ai_score: 85,
+        match_quality: "strong",
+        flagged: false,
+        applied_date: new Date().toISOString().split("T")[0],
+        stages: [
+          { stage: "applied", index: 0, status: "completed" },
+          { stage: "screened", index: 1, status: "current" },
+          { stage: "shortlisted", index: 2, status: "upcoming" },
+          { stage: "assignment_sent", index: 3, status: "upcoming" },
+          { stage: "tech_round", index: 4, status: "upcoming" }
         ],
         activity_history: [
-          { actor_name: "System", action: "applied to position", context_label: "applied", log_type: "info", created_at: "2026-08-01T10:00:00Z" },
-          { actor_name: "AI Evaluator", action: "screened resume — Match score 92/100", context_label: "screened", log_type: "success", created_at: "2026-08-02T14:30:00Z" },
-          { actor_name: "Recruiter", action: "advanced candidate to Technical Round", context_label: "tech_round", log_type: "info", created_at: "2026-08-05T09:15:00Z" }
+          { actor_name: "Candidate", action: "submitted application", context_label: "applied", log_type: "info", created_at: new Date().toISOString() }
         ],
-        assignments: [
-          {
-            id: "asgn-101",
-            application_id: applicationId,
-            title: "Distributed Backend Architecture Assignment",
-            description: "Design a high-throughput microservices architecture with FastAPI, Redis rate limiting, and PostgreSQL connection pooling.",
-            requirements: "1. Complete FastAPI endpoint handlers\n2. Include Docker Compose setup\n3. Provide Redis cache strategy",
-            submission_text: "SOLUTION OVERVIEW:\nImplemented token bucket rate-limiter middleware in FastAPI using Redis async pipelines. Schema uses asyncpg pool with max_size=20.",
-            submission_url: "https://github.com/priyasharma/distributed-backend-demo",
-            submission_type: "GITHUB_REPO",
-            status: "reviewed",
-            ai_evaluation: {
-              overall_score: 94,
-              score: 94,
-              criteria: { architecture: 96, correctness: 92, code_quality: 95, documentation: 93 },
-              strengths: [
-                "Exceptional asyncpg pool tuning for high concurrency",
-                "Clean modular FastAPI middleware structure"
-              ],
-              weaknesses: [
-                "Minor lack of unit test coverage for Redis connection failures"
-              ],
-              recommendation: "Highly qualified candidate. Recommend proceeding immediately to live Technical Round.",
-              confidence: 0.96
-            },
-            score: 94,
-            deadline: "2026-08-10T23:59:59Z",
-            created_at: "2026-08-03T10:00:00Z"
-          }
-        ],
+        assignments: [],
         ai_interview_rounds: [],
         final_recommendation: null
       }
@@ -1342,60 +1395,24 @@ export const aiRoundsApi = {
   respond: (applicationId: string, roundId: string, message: string) =>
     api.post<RespondResponse>(`/api/applications/${applicationId}/round/${roundId}/respond`, { message }),
 
-  listRounds: async (applicationId: string) => {
+  listRounds: async (applicationId: string): Promise<ApiAIRound[]> => {
+    try {
+      const { data, error } = await supabase
+        .from("ai_interview_rounds")
+        .select("*")
+        .eq("application_id", applicationId)
+
+      if (!error && data) {
+        return data as ApiAIRound[]
+      }
+    } catch (e) {
+      console.warn("Supabase AI rounds list notice:", e)
+    }
+
     try {
       return await api.get<ApiAIRound[]>(`/api/applications/${applicationId}/rounds`)
-    } catch (e) {
-      return [
-        {
-          id: "rnd-101",
-          application_id: applicationId,
-          round_type: "tech",
-          status: "completed",
-          ai_score: 92,
-          ai_summary: "Demonstrated deep mastery of Python async IO, FastAPI middleware, and distributed database connection pooling.",
-          strengths: ["FastAPI async architecture", "System concurrency design", "Database indexing & optimization"],
-          concerns: ["Needs more experience with Kubernetes Helm deployments"],
-          started_at: "2026-08-05T10:00:00Z",
-          completed_at: "2026-08-05T10:25:00Z",
-          created_at: "2026-08-05T10:00:00Z",
-          evaluation_status: "verified",
-          evaluation_engine: "hybrid_rule_v2",
-          evaluation_model: "Gemini 2.0 Flash",
-          resume_integrity_score: 96,
-          browser_strike_count: 0,
-          probe_questions: [
-            "How do you handle Redis connection pool exhaustion under 10k RPS load?",
-            "Can you explain your strategy for zero-downtime database schema migrations?"
-          ],
-          transcript: [
-            {
-              role: "ai",
-              message: "Welcome to the HireMind AI Technical Screening. Can you describe how you architect high-concurrency FastAPI applications with database connection pooling?",
-              timestamp: "10:00:15",
-              answer_score: 95
-            },
-            {
-              role: "candidate",
-              message: "I utilize asyncpg with FastAPI lifespan context managers to manage connection pools dynamically. For caching, I integrate Redis async pipelines to offload read-heavy database operations.",
-              timestamp: "10:01:42",
-              speaking_metrics: { audio_duration: 24, words_per_minute: 140, microphone_fallback: false }
-            },
-            {
-              role: "ai",
-              message: "Excellent explanation. How do you prevent race conditions when updating shared counters in distributed Redis instances?",
-              timestamp: "10:02:10",
-              answer_score: 90
-            },
-            {
-              role: "candidate",
-              message: "I use atomic Redis Lua scripts or Redlock algorithms to guarantee thread safety across distributed worker pods.",
-              timestamp: "10:03:05",
-              speaking_metrics: { audio_duration: 18, words_per_minute: 135, microphone_fallback: false }
-            }
-          ]
-        }
-      ]
+    } catch {
+      return []
     }
   },
 
