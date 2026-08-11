@@ -1081,7 +1081,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 { stage: "hired", label: "4. FINAL HR DECISION", desc: "Offer & Onboarding" },
               ].map((step, idx) => {
                 const isActive = activeCandidate.stage === step.stage ||
-                  (idx === 0 && activeCandidate.stage === "screened") ||
+                  (idx === 0 && (activeCandidate.stage === "screened" || activeCandidate.stage === "shortlisted")) ||
                   (idx === 1 && activeCandidate.stage === "assignment_submitted") ||
                   (idx === 2 && activeCandidate.stage === "interview_round")
                 const isPassed = idx === 0 && activeCandidate.stage !== "applied"
@@ -1106,27 +1106,59 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
         {/* Dynamic Stage View Container */}
 
-        {/* STAGE 1: IN REVIEW */}
-        {(activeCandidate.stage === "applied" || activeCandidate.stage === "screened") && (
+        {/* STAGE 1: IN REVIEW & SHORTLISTED STATUS */}
+        {(activeCandidate.stage === "applied" || activeCandidate.stage === "screened" || activeCandidate.stage === "shortlisted") && (
           <Card className="glass-card border-white/[0.08] p-8 rounded-3xl space-y-6 text-center reveal-up">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto text-emerald-400 shadow-xl">
-              <RefreshCw className="w-8 h-8 animate-spin" />
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/20">
+              {activeCandidate.stage === "shortlisted" ? (
+                <Sparkles className="w-8 h-8 text-emerald-400 animate-bounce" />
+              ) : (
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
+              )}
             </div>
 
             <div className="max-w-xl mx-auto space-y-2">
               <h3 className="text-2xl font-display font-extrabold text-white uppercase tracking-wide">
-                APPLICATION UNDER RECRUITER & AI REVIEW
+                {activeCandidate.stage === "shortlisted"
+                  ? `🎉 CONGRATULATIONS, ${activeCandidate.name.toUpperCase()}! YOU ARE SHORTLISTED`
+                  : "APPLICATION UNDER RECRUITER & AI REVIEW"}
               </h3>
               <p className="text-xs text-neutral-300 leading-relaxed font-medium">
-                Your application has been received and registered into the Recruiter Dashboard. Gemini 2.0 AI is currently mapping your resume credentials and compatibility indices.
+                {activeCandidate.stage === "shortlisted"
+                  ? "Our recruitment team has reviewed your profile and shortlisted you for the next evaluation stage. Below are your evaluation ground rules while you await task assignment."
+                  : "Your application has been received and registered into the Recruiter Dashboard. Gemini 2.0 AI is currently mapping your resume credentials and compatibility indices."}
               </p>
             </div>
 
+            {/* Evaluation Ground Rules */}
+            <div className="bg-white/[0.02] border border-white/10 p-5 rounded-2xl text-left space-y-3 max-w-2xl mx-auto">
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-violet-400 border-b border-white/5 pb-2">
+                <ShieldCheck className="w-4 h-4 text-violet-400" />
+                <span>EVALUATION GROUND RULES & SUBMISSION POLICIES</span>
+              </div>
+              <div className="space-y-2 text-xs text-neutral-300">
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-400 font-bold font-mono">1. 72-HOUR DEADLINE:</span>
+                  <span className="text-neutral-400">Take-home project assignments have a strict 72-hour (3 days) submission window. The submission link locks automatically when deadline expires.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-cyan-400 font-bold font-mono">2. NEURAL PROCTORING:</span>
+                  <span className="text-neutral-400">Camera vision and browser tab switch detection are active during the live AI video interview. Maximum 3 tab switch strikes allowed before automatic termination.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-indigo-400 font-bold font-mono">3. CODE INTEGRITY:</span>
+                  <span className="text-neutral-400">All submissions are processed through static AST code analysis and plagiarist detection engines.</span>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-2xl max-w-lg mx-auto flex items-center justify-between text-xs">
-              <span className="eyebrow text-neutral-400">STATUS:</span>
+              <span className="eyebrow text-neutral-400">CURRENT STATUS:</span>
               <span className="text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                In Progress — AI Score Calculated (94/100)
+                {activeCandidate.stage === "shortlisted"
+                  ? "SHORTLISTED — READY FOR TASK ASSIGNMENT"
+                  : "In Progress — AI Score Calculated (94/100)"}
               </span>
             </div>
 
@@ -1135,9 +1167,11 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 setActiveCandidate(p => ({ ...p, stage: "assignment_sent" }))
                 showToast("success", "Congrats! You have been advanced to Stage 2: Project Task.")
               }}
-              className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
+              className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 cursor-pointer"
             >
-              Simulate Recruiter Approval → Advance to Project Task
+              {activeCandidate.stage === "shortlisted"
+                ? "📁 Open 3-Day Project Task Assignment →"
+                : "Simulate Recruiter Approval → Advance to Project Task"}
             </Button>
           </Card>
         )}
