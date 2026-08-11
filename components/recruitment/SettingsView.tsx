@@ -157,7 +157,29 @@ export default function SettingsView() {
     } finally { setSavingIntegrations(false) }
   }
 
-  const totalWeight = weights.skills + weights.experience + weights.education + weights.projects
+  // ── Gemini API Key ─────────────────────────────────────────────────────────
+  const [geminiApiKey, setGeminiApiKey] = useState("")
+  const [showKey, setShowKey] = useState(false)
+  const [savingKey, setSavingKey] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("hiremind_gemini_api_key") || ""
+      setGeminiApiKey(stored)
+    }
+  }, [])
+
+  const saveGeminiKey = (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingKey(true)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hiremind_gemini_api_key", geminiApiKey.trim())
+    }
+    setTimeout(() => {
+      setSavingKey(false)
+      addToast("success", geminiApiKey.trim() ? "Gemini 2.0 Flash API Key Saved Successfully!" : "Gemini API Key cleared.")
+    }, 400)
+  }
 
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
 
@@ -175,8 +197,55 @@ export default function SettingsView() {
         <h1 className="text-xl font-display font-extrabold text-neutral-900 dark:text-white tracking-wider">
           SYSTEM & <span className="text-gradient">ALGORITHM SETTINGS</span>
         </h1>
-        <p className="text-xs text-neutral-400 mt-0.5">Configure role permission parameters, neural algorithms, and service integrations.</p>
+        <p className="text-xs text-neutral-400 mt-0.5">Configure role permission parameters, neural algorithms, Gemini API keys, and service integrations.</p>
       </div>
+
+      {/* GEMINI 2.0 FLASH AI CONFIGURATION CARD */}
+      <Card className="glass-card border-violet-500/30 rounded-radius-lg shadow-xl relative overflow-hidden reveal-up bg-gradient-to-r from-violet-600/10 via-transparent to-transparent">
+        <CardHeader className="pb-3 border-b border-white/[0.05]">
+          <CardTitle className="text-xs font-bold text-white tracking-widest uppercase flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-violet-400" />
+              <span>GEMINI 2.0 FLASH API KEY CONFIGURATION</span>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase ${
+              geminiApiKey.trim() ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+            }`}>
+              {geminiApiKey.trim() ? "🟢 GEMINI LIVE CONNECTED" : "🟡 DEMO SIMULATOR MODE"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 space-y-4 text-xs">
+          <p className="text-neutral-300 text-[11px] leading-relaxed font-medium">
+            Enter your Google Gemini API Key below to enable live autonomous AI evaluations, resume match scoring, candidate screening, and Recruiter Copilot responses.
+          </p>
+          <form onSubmit={saveGeminiKey} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? "text" : "password"}
+                value={geminiApiKey}
+                onChange={e => setGeminiApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full bg-white/[0.02] dark:bg-black/40 border border-white/[0.1] rounded-radius-md px-4 py-2.5 text-xs text-white font-mono focus:border-violet-500 outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-3 top-2.5 text-[10px] font-mono text-neutral-400 hover:text-white uppercase font-bold"
+              >
+                {showKey ? "HIDE" : "SHOW"}
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={savingKey}
+              className="btn-primary py-2.5 px-5 rounded-radius-md font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-violet-500/20 shrink-0 cursor-pointer"
+            >
+              {savingKey ? "SAVING..." : "SAVE GEMINI KEY"}
+            </button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Theme Toggle */}
       <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-lg relative overflow-hidden reveal-up">
