@@ -149,47 +149,79 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
-  // Realtime Polling for Recruiter Shortlist Action
+  // Auto-load active candidate from Supabase on mount and poll for stage updates
   useEffect(() => {
-    if (!email || !applicationSubmitted) return
-
-    const checkLiveStage = async () => {
+    const fetchAndPollCandidate = async () => {
       try {
-        const { data: cand } = await supabase
+        let query = supabase
           .from("candidates")
           .select(`
-            id,
-            applications ( id, stage, ai_score, match_quality )
+            *,
+            applications (
+              id, job_id, stage, ai_score, match_quality, flagged, applied_date, jobs ( title )
+            )
           `)
-          .eq("email", email.toLowerCase().trim())
-          .limit(1)
-          .maybeSingle()
+          .order("created_at", { ascending: false })
 
-        if (cand && Array.isArray(cand.applications) && cand.applications.length > 0) {
-          const app = cand.applications[0]
-          const liveStage = (app.stage as AppStage) || "applied"
-          if (liveStage && liveStage !== activeCandidate.stage) {
-            setActiveCandidate(prev => ({
-              ...prev,
-              stage: liveStage,
-              ai_score: app.ai_score ?? prev.ai_score,
-              match_quality: (app.match_quality as MatchQuality) || prev.match_quality
-            }))
-            if (["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
-              showToast("success", "🎉 You have been shortlisted by the recruiter!")
-            }
+        if (email.trim()) {
+          query = query.eq("email", email.toLowerCase().trim())
+        }
+
+        const { data: cands } = await query.limit(1)
+
+        if (cands && cands.length > 0) {
+          const dbCand = cands[0]
+          const app = Array.isArray(dbCand.applications) && dbCand.applications.length > 0 ? dbCand.applications[0] : null
+          const parsed = dbCand.parsed_data || {}
+          const liveStage = (app?.stage as AppStage) || "applied"
+
+          if (!email) {
+            setEmail(dbCand.email || "")
+            setName(dbCand.name || "")
           }
+
+          setActiveCandidate(prev => {
+            if (prev.id === dbCand.id && prev.stage !== liveStage) {
+              if (["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
+                showToast("success", `🎉 Status updated: ${liveStage.replace(/_/g, " ").toUpperCase()}!`)
+              }
+            }
+            return {
+              id: dbCand.id,
+              name: dbCand.name,
+              email: dbCand.email,
+              phone: dbCand.phone || phone || "+1 (555) 019-2834",
+              initials: dbCand.initials || dbCand.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+              job_title: app?.jobs?.title || position,
+              stage: liveStage,
+              ai_score: app?.ai_score ?? 92,
+              match_quality: (app?.match_quality as MatchQuality) || "excellent",
+              flagged: app?.flagged || false,
+              applied_date: app?.applied_date || new Date().toLocaleDateString(),
+              skill_score: 94,
+              exp_score: 90,
+              edu_score: 88,
+              proj_score: 95,
+              confidence: 96,
+              sentiment_score: 92,
+              insights: parsed?.statementOfIntent || "Application synchronized with database.",
+              tags: ["Submitted", "Under Review"],
+              verification_status: "verified"
+            }
+          })
+
+          setIsAuthenticated(true)
+          setApplicationSubmitted(true)
         }
       } catch (err) {
-        console.warn("Live candidate stage check notice:", err)
+        console.warn("Live candidate sync notice:", err)
       }
     }
 
-    const interval = setInterval(checkLiveStage, 3000)
-    checkLiveStage()
-
+    fetchAndPollCandidate()
+    const interval = setInterval(fetchAndPollCandidate, 2000)
     return () => clearInterval(interval)
-  }, [email, applicationSubmitted, activeCandidate.stage])
+  }, [email])
 
   // Handle Application Submit via Server API Ingestion Route
   const handleApply = async (e: React.FormEvent) => {
