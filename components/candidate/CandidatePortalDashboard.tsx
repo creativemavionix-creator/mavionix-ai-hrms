@@ -57,6 +57,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [submittingProject, setSubmittingProject] = useState(false)
 
   // Interview Session Proctoring States
+  const [interviewLinkSent, setInterviewLinkSent] = useState(false)
+  const [interviewRoomActive, setInterviewRoomActive] = useState(false)
   const [proctorCameraActive, setProctorCameraActive] = useState(true)
   const [proctorFaceLossCount, setProctorFaceLossCount] = useState(0)
   const [browserStrikes, setBrowserStrikes] = useState(0)
@@ -475,156 +477,261 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           </div>
         )}
 
-        {/* STAGE 3: PROCTORED AI INTERVIEW ROOM (WITH ALL 3 INTEGRITY DETECTORS PRESERVED!) */}
+        {/* STAGE 3: PROCTORED AI INTERVIEW SESSION (HR LINK DELIVERY & PROCTORING ROOM) */}
         {(activeCandidate.stage === "tech_round" || activeCandidate.stage === "interview_round") && (
           <div className="space-y-6 reveal-up">
-            {/* Header Banner */}
+            {/* Stage Header Banner */}
             <div className="bg-gradient-to-r from-violet-600/20 via-indigo-600/15 to-transparent border border-violet-500/30 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <span className="eyebrow text-violet-400 uppercase">STAGE 3 · PROCTORED SESSION</span>
+                <span className="eyebrow text-violet-400 uppercase">STAGE 3 · PROCTORED INTERVIEW</span>
                 <h3 className="text-xl font-display font-extrabold text-white mt-0.5">
-                  🎙️ AI PROCTORED VIDEO & VOICE INTERVIEW ROOM
+                  🎙️ AI PROCTORED VIDEO & VOICE INTERVIEW SESSION
                 </h3>
                 <p className="text-xs text-neutral-300 font-semibold mt-1">
-                  Integrity proctoring is active: Camera Absence, Voice Telemetry, and 3-Strike Tab-Switch Security rules are enforced.
+                  HR will issue your unique 4-Hour Proctored Interview Link once your project submission is reviewed.
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-mono font-bold flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  STRIKES LOGGED: {browserStrikes}/3
+                  PROCTORING ENFORCED
                 </span>
               </div>
             </div>
 
-            {/* 3 Integrity Detector Status Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Detector 1: Camera Presence */}
-              <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Video className="w-5 h-5 text-emerald-400" />
-                  <div>
-                    <span className="eyebrow text-neutral-400 block text-[9px]">1. CAMERA PRESENCE</span>
-                    <span className="text-xs font-bold text-emerald-400">FACE DETECTED (100%)</span>
-                  </div>
+            {/* Sub-State A: Waiting for HR to Send Link */}
+            {!interviewLinkSent && !interviewRoomActive && (
+              <Card className="glass-card border-white/[0.08] p-8 rounded-3xl text-center space-y-6">
+                <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/25 flex items-center justify-center mx-auto text-violet-400 shadow-xl">
+                  <Clock className="w-8 h-8 animate-pulse" />
                 </div>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              </div>
+                <div className="max-w-md mx-auto space-y-2">
+                  <h4 className="text-lg font-display font-extrabold text-white uppercase">AWAITING HR INTERVIEW INVITATION</h4>
+                  <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                    Your project has been reviewed by the recruiting team. HR will mail/issue your official 4-Hour Proctored Interview Link shortly.
+                  </p>
+                </div>
 
-              {/* Detector 2: Voice & Speaking Telemetry */}
-              <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Mic className="w-5 h-5 text-blue-400" />
-                  <div>
-                    <span className="eyebrow text-neutral-400 block text-[9px]">2. VOICE TELEMETRY</span>
-                    <span className="text-xs font-bold text-blue-400">{wpm} WPM · 0 FILLERS</span>
-                  </div>
-                </div>
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
-              </div>
-
-              {/* Detector 3: Tab Switch Security */}
-              <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className={`w-5 h-5 ${browserStrikes > 0 ? "text-amber-400" : "text-emerald-400"}`} />
-                  <div>
-                    <span className="eyebrow text-neutral-400 block text-[9px]">3. TAB-SWITCH DETECTOR</span>
-                    <span className={`text-xs font-bold ${browserStrikes > 0 ? "text-amber-400" : "text-emerald-400"}`}>
-                      {browserStrikes === 0 ? "0 STRIKES (SECURE)" : `STRIKE ${browserStrikes}/3 LOGGED`}
-                    </span>
-                  </div>
-                </div>
-                <span className={`w-2.5 h-2.5 rounded-full ${browserStrikes > 0 ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
-              </div>
-            </div>
-
-            {/* Video Preview & Chat Interface */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Camera Video Simulation Box (4 cols) */}
-              <Card className="lg:col-span-4 glass-card border-white/[0.08] p-4 rounded-3xl space-y-4">
-                <span className="eyebrow text-neutral-400 block">LIVE PROCTOR CAMERA FEED</span>
-                <div className="relative aspect-video bg-[#050608] rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col items-center justify-center shadow-inner">
-                  <Video className="w-10 h-10 text-emerald-400 animate-pulse mb-2" />
-                  <span className="text-[10px] text-emerald-400 font-mono font-bold tracking-wider uppercase">
-                    ● MEDIAPIPE FACE TRACKING ACTIVE
-                  </span>
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-[8px] font-mono text-emerald-400 border border-emerald-500/30">
-                    FPS: 30 · CONFIDENCE: 98%
-                  </div>
-                </div>
-                <p className="text-[10px] text-neutral-400 leading-relaxed font-medium">
-                  Keep your face centered inside the frame. Navigating away from the browser window logs a proctor security strike.
-                </p>
+                <Button
+                  onClick={() => {
+                    setInterviewLinkSent(true)
+                    showToast("success", "HR sent your Proctored Interview Link! (Expires in 4 Hours)")
+                  }}
+                  className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase text-white shadow-lg shadow-violet-500/20"
+                >
+                  Simulate HR Sending Interview Link (4h Expiry)
+                </Button>
               </Card>
+            )}
 
-              {/* Chat Transcript Box (8 cols) */}
-              <Card className="lg:col-span-8 glass-card border-white/[0.08] p-6 rounded-3xl space-y-4 flex flex-col h-[480px]">
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
-                  <span className="eyebrow text-violet-400 flex items-center gap-1.5">
-                    <Brain className="w-4 h-4 text-violet-400" /> AI INTERVIEWER CHAT
-                  </span>
-                  <span className="text-[10px] text-neutral-400 font-mono font-bold">STATUS: INTERVIEW IN PROGRESS</span>
-                </div>
+            {/* Sub-State B: Link Issued - Displays Expiration & Critical Security Warning Box */}
+            {interviewLinkSent && !interviewRoomActive && (
+              <div className="space-y-6">
+                {/* Expiration & Link Box */}
+                <Card className="glass-card border-emerald-500/30 p-6 rounded-3xl space-y-4 bg-gradient-to-r from-emerald-600/10 via-transparent to-transparent">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+                    <div>
+                      <span className="eyebrow text-emerald-400">OFFICIAL INTERVIEW ACCESS LINK ISSUED BY HR</span>
+                      <h4 className="text-base font-bold text-white mt-0.5">https://mavionix-ai-hrms.vercel.app/candidate-portal?token=tok_live_4h_992</h4>
+                    </div>
+                    <div className="bg-[#090a10] border border-emerald-500/40 px-4 py-2 rounded-2xl text-center shrink-0">
+                      <span className="eyebrow text-neutral-400 block text-[8px]">LINK EXPIRATION TIMER</span>
+                      <span className="stat-number text-lg text-emerald-400 font-mono">03h 59m 58s</span>
+                    </div>
+                  </div>
 
-                <div className="flex-1 overflow-y-auto space-y-4 scrollbar-none pr-1">
-                  {chatMessages.map((m, idx) => (
-                    <div key={idx} className={`flex ${m.role === "candidate" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed ${
-                        m.role === "ai" ? "bg-white/[0.03] border border-white/[0.08] text-neutral-200" :
-                        "bg-emerald-500/15 border border-emerald-500/30 text-white font-medium"
-                      }`}>
-                        <span className="text-[9px] font-bold text-neutral-400 uppercase block mb-1 font-mono">
-                          {m.role === "ai" ? "AI INTERVIEWER" : "YOU (CANDIDATE)"} · {m.time}
-                        </span>
-                        <p>{m.text}</p>
+                  {/* PROMINENT SECURITY WARNING BOX */}
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl space-y-3">
+                    <div className="flex items-center gap-2 text-amber-400 font-bold text-xs font-mono uppercase">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>CRITICAL PROCTORED INTERVIEW WARNING & SECURITY RULES</span>
+                    </div>
+                    <ul className="text-xs text-neutral-200 space-y-2 font-medium pl-1">
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400 font-mono font-bold">•</span>
+                        <span><strong>NO PAUSING:</strong> Once you click "START INTERVIEW", the session cannot be paused or stopped.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400 font-mono font-bold">•</span>
+                        <span><strong>CAMERA ENFORCED:</strong> Your camera must remain enabled. Face loss or absence triggers proctor warnings.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400 font-mono font-bold">•</span>
+                        <span><strong>3 STRIKES RULE:</strong> Switching browser tabs or minimizing the window 3 times WILL PERMANENTLY TERMINATE your session. Only HR can unlock a terminated session.</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      onClick={() => {
+                        setInterviewRoomActive(true)
+                        showToast("info", "Starting Proctored AI Video & Audio Interview Session...")
+                      }}
+                      className="btn-primary py-4 px-8 rounded-2xl font-extrabold text-xs uppercase tracking-wider text-white shadow-xl shadow-emerald-500/25 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Video className="w-4 h-4" /> START PROCTORED INTERVIEW SESSION NOW
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Sub-State C: Full-Screen Live Proctored Interview Room */}
+            {interviewRoomActive && (
+              <div className="space-y-6">
+                {/* Lockout Warning if 3 strikes hit */}
+                {browserStrikes >= 3 ? (
+                  <Card className="glass-card border-red-500/40 p-8 rounded-3xl text-center space-y-4 bg-red-500/10">
+                    <XCircle className="w-12 h-12 text-red-400 mx-auto" />
+                    <h4 className="text-xl font-bold text-white uppercase">SESSION TERMINATED & LOCKED BY PROCTOR</h4>
+                    <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                      You logged 3 browser tab-switch strikes. Pursuant to platform security rules, your session is locked. Only your Recruiter/HR can unlock and restart your interview.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        setBrowserStrikes(0)
+                        showToast("success", "HR Unlocked your session! You may resume.")
+                      }}
+                      className="px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-200 font-bold rounded-xl text-xs uppercase"
+                    >
+                      Simulate HR Unlocking Session
+                    </Button>
+                  </Card>
+                ) : (
+                  <>
+                    {/* 3 Integrity Detector Status Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Detector 1: Camera Presence */}
+                      <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Video className="w-5 h-5 text-emerald-400" />
+                          <div>
+                            <span className="eyebrow text-neutral-400 block text-[9px]">1. CAMERA PRESENCE</span>
+                            <span className="text-xs font-bold text-emerald-400">FACE DETECTED (100%)</span>
+                          </div>
+                        </div>
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                      </div>
+
+                      {/* Detector 2: Voice & Speaking Telemetry */}
+                      <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Mic className="w-5 h-5 text-blue-400" />
+                          <div>
+                            <span className="eyebrow text-neutral-400 block text-[9px]">2. VOICE TELEMETRY</span>
+                            <span className="text-xs font-bold text-blue-400">{wpm} WPM · 0 FILLERS</span>
+                          </div>
+                        </div>
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
+                      </div>
+
+                      {/* Detector 3: Tab Switch Security */}
+                      <div className="bg-white/[0.02] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle className={`w-5 h-5 ${browserStrikes > 0 ? "text-amber-400" : "text-emerald-400"}`} />
+                          <div>
+                            <span className="eyebrow text-neutral-400 block text-[9px]">3. TAB-SWITCH DETECTOR</span>
+                            <span className={`text-xs font-bold ${browserStrikes > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                              {browserStrikes === 0 ? "0 STRIKES (SECURE)" : `STRIKE ${browserStrikes}/3 LOGGED`}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`w-2.5 h-2.5 rounded-full ${browserStrikes > 0 ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                {/* Answer input */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    if (!candidateAnswer.trim()) return
-                    const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                    setChatMessages(p => [...p, { role: "candidate", text: candidateAnswer, time: timeStr }])
-                    setCandidateAnswer("")
-                    setTimeout(() => {
-                      setChatMessages(p => [...p, {
-                        role: "ai",
-                        text: "Great explanation! Can you describe a challenging bug you encountered in production and how you resolved it?",
-                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                      }])
-                    }, 1000)
-                  }}
-                  className="pt-3 border-t border-white/[0.06] flex items-center gap-2 shrink-0"
-                >
-                  <Input
-                    value={candidateAnswer}
-                    onChange={e => setCandidateAnswer(e.target.value)}
-                    placeholder="Type your technical answer here..."
-                    className="bg-white/[0.02] border-white/[0.08] text-xs text-neutral-200 rounded-xl h-10 flex-1 font-medium"
-                  />
-                  <Button type="submit" className="btn-primary h-10 px-4 rounded-xl text-white font-bold text-xs uppercase flex items-center gap-1.5">
-                    <Send className="w-3.5 h-3.5" /> Send
-                  </Button>
-                </form>
-              </Card>
-            </div>
+                    {/* Video Preview & Chat Interface */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Camera Video Simulation Box (4 cols) */}
+                      <Card className="lg:col-span-4 glass-card border-white/[0.08] p-4 rounded-3xl space-y-4">
+                        <span className="eyebrow text-neutral-400 block">LIVE PROCTOR CAMERA FEED</span>
+                        <div className="relative aspect-video bg-[#050608] rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col items-center justify-center shadow-inner">
+                          <Video className="w-10 h-10 text-emerald-400 animate-pulse mb-2" />
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold tracking-wider uppercase">
+                            ● MEDIAPIPE FACE TRACKING ACTIVE
+                          </span>
+                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-[8px] font-mono text-emerald-400 border border-emerald-500/30">
+                            FPS: 30 · CONFIDENCE: 98%
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 leading-relaxed font-medium">
+                          Keep your face centered inside the frame. Navigating away from the browser window logs a proctor security strike.
+                        </p>
+                      </Card>
 
-            <div className="flex justify-end">
-              <Button
-                onClick={() => {
-                  setActiveCandidate(p => ({ ...p, stage: "hired" }))
-                  showToast("success", "Interview Complete! Your status has been updated to Final HR Review.")
-                }}
-                className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
-              >
-                Complete Interview → Move to Final HR Decision
-              </Button>
-            </div>
+                      {/* Chat Transcript Box (8 cols) */}
+                      <Card className="lg:col-span-8 glass-card border-white/[0.08] p-6 rounded-3xl space-y-4 flex flex-col h-[480px]">
+                        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
+                          <span className="eyebrow text-violet-400 flex items-center gap-1.5">
+                            <Brain className="w-4 h-4 text-violet-400" /> AI INTERVIEWER CHAT
+                          </span>
+                          <span className="text-[10px] text-neutral-400 font-mono font-bold">STATUS: INTERVIEW IN PROGRESS</span>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 scrollbar-none pr-1">
+                          {chatMessages.map((m, idx) => (
+                            <div key={idx} className={`flex ${m.role === "candidate" ? "justify-end" : "justify-start"}`}>
+                              <div className={`max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed ${
+                                m.role === "ai" ? "bg-white/[0.03] border border-white/[0.08] text-neutral-200" :
+                                "bg-emerald-500/15 border border-emerald-500/30 text-white font-medium"
+                              }`}>
+                                <span className="text-[9px] font-bold text-neutral-400 uppercase block mb-1 font-mono">
+                                  {m.role === "ai" ? "AI INTERVIEWER" : "YOU (CANDIDATE)"} · {m.time}
+                                </span>
+                                <p>{m.text}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Answer input */}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            if (!candidateAnswer.trim()) return
+                            const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                            setChatMessages(p => [...p, { role: "candidate", text: candidateAnswer, time: timeStr }])
+                            setCandidateAnswer("")
+                            setTimeout(() => {
+                              setChatMessages(p => [...p, {
+                                role: "ai",
+                                text: "Great explanation! Can you describe a challenging bug you encountered in production and how you resolved it?",
+                                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                              }])
+                            }, 1000)
+                          }}
+                          className="pt-3 border-t border-white/[0.06] flex items-center gap-2 shrink-0"
+                        >
+                          <Input
+                            value={candidateAnswer}
+                            onChange={e => setCandidateAnswer(e.target.value)}
+                            placeholder="Type your technical answer here..."
+                            className="bg-white/[0.02] border-white/[0.08] text-xs text-neutral-200 rounded-xl h-10 flex-1 font-medium"
+                          />
+                          <Button type="submit" className="btn-primary h-10 px-4 rounded-xl text-white font-bold text-xs uppercase flex items-center gap-1.5">
+                            <Send className="w-3.5 h-3.5" /> Send
+                          </Button>
+                        </form>
+                      </Card>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={() => {
+                          setActiveCandidate(p => ({ ...p, stage: "hired" }))
+                          showToast("success", "Interview Complete! Your status has been updated to Final HR Review.")
+                        }}
+                        className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
+                      >
+                        Complete Interview → Move to Final HR Decision
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
