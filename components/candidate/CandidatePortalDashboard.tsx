@@ -62,6 +62,31 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [resumeInputMode, setResumeInputMode] = useState<"upload" | "paste">("upload")
   const [applying, setApplying] = useState(false)
 
+  // Recruiter Assigned Project State & Realtime Event Listener
+  const [assignedProject, setAssignedProject] = useState<{ title: string; description: string; deadlineDays: number }>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("assigned_project_task")
+      if (saved) {
+        try { return JSON.parse(saved) } catch {}
+      }
+    }
+    return {
+      title: "Distributed Microservices Rate Limiter & Async Router",
+      description: "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation.",
+      deadlineDays: 3
+    }
+  })
+
+  useEffect(() => {
+    const handleProjectAssigned = (e: CustomEvent) => {
+      if (e.detail) {
+        setAssignedProject(e.detail)
+      }
+    }
+    window.addEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
+    return () => window.removeEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
+  }, [])
+
   // Candidate Auth & Password state
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
