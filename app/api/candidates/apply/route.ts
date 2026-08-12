@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { analyzeCandidateResume } from "@/lib/geminiScoring"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ukwmhwgchscvyvzsbcxk.supabase.co"
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrd21od2djaHNjdnl2enNiY3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTY4OTYsImV4cCI6MjEwMjAzMjg5Nn0.TkYjSEd5CF85NpY9v2XM_btJUtDBqHas9gKhjb3oiDw"
@@ -166,39 +167,56 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. Create or update AI Report in public.ai_reports table
+    // 4. Perform Real AI Resume Scoring via Gemini API & Persist to public.ai_reports table
+    let aiReportRecord: any = null
     if (applicationRecord?.id && candidateId) {
-      await supabase.from("ai_reports").upsert({
-        application_id: applicationRecord.id,
-        candidate_id: candidateId,
-        skill_score: 92,
-        exp_score: 90,
-        edu_score: 88,
-        proj_score: 94,
-        confidence: 95,
-        sentiment_score: 90,
-        insights: statementOfIntent || "Candidate application received. Autonomous AI screening active.",
-        tags: Array.isArray(skills) ? skills.slice(0, 5) : ["Engineering", "Applicant"],
-        verification_status: "verified"
-      }, { onConflict: "application_id" })
-    }
-
-    // 3. Delegate to persistent FastAPI backend for durable AI resume processing
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-    try {
-      fetch(`${backendUrl}/api/v1/applications/process`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          applicationId: applicationRecord?.id,
-          candidateId: candidateId,
+      try {
+        const userApiKey = req.headers.get("x-gemini-api-key") || undefined
+        const aiAnalysis = await analyzeCandidateResume({
+          name: name.trim(),
+          jobTitle: jobId || "Senior Backend Engineer",
           resumeText: resumeText || "",
           statementOfIntent: statementOfIntent || "",
-          skills: skills || []
+          technicalImpact: technicalImpact || "",
+          outageLesson: outageLesson || "",
+          skills: skills || [],
+          yearsExp: yearsExp || "3-5 years",
+          userApiKey
         })
-      }).catch((err) => console.warn("Backend processing async call warning:", err.message))
-    } catch (e) {
-      console.warn("Backend API dispatch skipped:", e)
+
+        const { data: upsertedReport, error: rError } = await supabase.from("ai_reports").upsert({
+          application_id: applicationRecord.id,
+          candidate_id: candidateId,
+          skill_score: aiAnalysis.skill_score,
+          exp_score: aiAnalysis.exp_score,
+          edu_score: aiAnalysis.edu_score,
+          proj_score: aiAnalysis.proj_score,
+          confidence: aiAnalysis.confidence,
+          sentiment_score: aiAnalysis.sentiment_score,
+          insights: aiAnalysis.insights,
+          tags: aiAnalysis.tags,
+          verification_status: aiAnalysis.verification_status
+        }, { onConflict: "application_id" }).select().single()
+
+        if (rError) {
+          console.error("AI Report Upsert Error:", rError.message)
+        } else {
+          aiReportRecord = upsertedReport
+        }
+
+        // Update public.applications table with calculated overall AI score & match quality
+        const matchQuality = aiAnalysis.overall_score >= 85 ? "excellent" : aiAnalysis.overall_score >= 70 ? "strong" : "moderate"
+        const { data: updatedApp } = await supabase.from("applications").update({
+          ai_score: aiAnalysis.overall_score,
+          match_quality: matchQuality
+        }).eq("id", applicationRecord.id).select().single()
+
+        if (updatedApp) {
+          applicationRecord = updatedApp
+        }
+      } catch (scoringErr: any) {
+        console.error("Gemini Scoring Execution Warning:", scoringErr.message)
+      }
     }
 
     return NextResponse.json(

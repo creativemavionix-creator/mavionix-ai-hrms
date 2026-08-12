@@ -118,6 +118,15 @@ export default function RecruitmentDashboard() {
           setNotifications((prev) => [alertMsg, ...prev])
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ai_reports" },
+        (payload) => {
+          const report = payload.new
+          const alertMsg = `✨ Real Gemini AI Scoring Completed! Skill Score: ${report?.skill_score || "N/A"}%`
+          setNotifications((prev) => [alertMsg, ...prev])
+        }
+      )
       .subscribe()
 
     return () => {

@@ -78,12 +78,16 @@ const MATCH_COLORS: Record<string, string> = {
 }
 
 function ScoreBadge({ score }: { score: number | null }) {
-  if (score === null) return <span className="text-neutral-600 text-xs">—</span>
-  const color = score >= 85 ? "text-green-500" : score >= 70 ? "text-[var(--hm-accent)]" : "text-[var(--hm-text-muted)]"
+  if (score === null || score === undefined) return (
+    <span className="inline-flex items-center gap-1 text-[9px] font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full animate-pulse">
+      <RefreshCw className="w-2.5 h-2.5 animate-spin text-cyan-400" />
+      <span>SCORING...</span>
+    </span>
+  )
+  const color = score >= 85 ? "text-emerald-400 font-extrabold" : score >= 70 ? "text-cyan-400 font-bold" : "text-neutral-400 font-medium"
   return (
-    <span>
-      <span className={`font-bold text-sm ${color}`}>{score}</span>
-      <span className="text-[10px] text-[var(--hm-text-muted)]">/100</span>
+    <span className="inline-flex items-baseline gap-0.5">
+      <span className={`font-mono text-sm ${color}`}>{score}%</span>
     </span>
   )
 }
@@ -1083,6 +1087,65 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
     window.addEventListener("new-candidate-applied", handleNewApp)
     return () => window.removeEventListener("new-candidate-applied", handleNewApp)
   }, [addToast])
+
+  // Listen to Realtime updates on public.ai_reports and public.applications
+  useEffect(() => {
+    const channel = supabase
+      .channel("recruiter-management-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ai_reports" },
+        (payload) => {
+          const updatedReport = payload.new as any
+          if (updatedReport) {
+            setCandidates(prev => prev.map(c => {
+              if (c.id === updatedReport.candidate_id || c.application_id === updatedReport.application_id) {
+                return {
+                  ...c,
+                  skill_score: updatedReport.skill_score,
+                  exp_score: updatedReport.exp_score,
+                  edu_score: updatedReport.edu_score,
+                  proj_score: updatedReport.proj_score,
+                  confidence: updatedReport.confidence,
+                  sentiment_score: updatedReport.sentiment_score,
+                  insights: updatedReport.insights,
+                  tags: updatedReport.tags
+                }
+              }
+              return c
+            }))
+            fetchCandidates(stageFilter, searchTerm)
+            addToast("success", `✨ Real Gemini AI Scoring Completed for candidate!`)
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "applications" },
+        (payload) => {
+          const updatedApp = payload.new as any
+          if (updatedApp) {
+            setCandidates(prev => prev.map(c => {
+              if (c.application_id === updatedApp.id) {
+                return {
+                  ...c,
+                  ai_score: updatedApp.ai_score,
+                  match_quality: updatedApp.match_quality,
+                  stage: updatedApp.stage,
+                  flagged: updatedApp.flagged
+                }
+              }
+              return c
+            }))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchCandidates, stageFilter, searchTerm, addToast])
 
   useEffect(() => {
     if (selectedId) {
