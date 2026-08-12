@@ -393,6 +393,9 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
   useEffect(() => {
     const fetchAndPollCandidate = async () => {
+      if (isLoggedOutRef.current || (typeof window !== "undefined" && localStorage.getItem("candidate_authenticated") === "false")) {
+        return
+      }
       try {
         const targetEmail = emailRef.current
         let query = supabase
@@ -465,8 +468,10 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
             })
           }
 
-          setIsAuthenticated(true)
-          setApplicationSubmitted(true)
+          if (!isLoggedOutRef.current && (typeof window === "undefined" || localStorage.getItem("candidate_authenticated") !== "false")) {
+            setIsAuthenticated(true)
+            setApplicationSubmitted(true)
+          }
         }
       } catch (err) {
         console.warn("Live candidate sync notice:", err)
