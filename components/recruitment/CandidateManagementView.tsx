@@ -481,6 +481,9 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   )
   if (!c) return null
 
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showAssignModal, setShowAssignModal] = useState(false)
+
   const score = c.ai_score
   const mq    = c.match_quality
 
