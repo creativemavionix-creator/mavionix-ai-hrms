@@ -1000,21 +1000,9 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                 </select>
               </div>
               <div className="flex flex-wrap gap-2.5">
-                <Button onClick={async () => {
-                  try {
-                    const res = await portalApi.generateToken({
-                      candidate_id: c.id,
-                      application_id: c.application_id!,
-                      round_type: "tech"
-                    })
-                    await navigator.clipboard.writeText(res.url)
-                    addToast("success", `Candidate Assessment Link Generated & Copied to Clipboard! (${res.token})`)
-                  } catch {
-                    addToast("error", "Failed to generate assessment link.")
-                  }
-                }}
-                  className="h-9 px-4 bg-signal/15 border border-signal/30 text-signal hover:bg-signal/25 rounded-xl text-[10px] font-extrabold transition-all active:scale-[0.99] flex items-center gap-1.5 shadow-lg shadow-signal/10">
-                  <Link2 className="w-3.5 h-3.5" /> GENERATE ASSESSMENT LINK
+                <Button onClick={() => setShowAssignModal(true)}
+                  className="h-9 px-4 bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 rounded-xl text-[10px] font-extrabold transition-all active:scale-[0.99] flex items-center gap-1.5 shadow-lg shadow-cyan-500/10">
+                  <FileText className="w-3.5 h-3.5" /> 📁 ASSIGN 3-DAY PROJECT TASK & SET TEMPLATE
                 </Button>
                 <Button onClick={() => { onFlagChange(c.application_id!, !c.flagged); setC(prev => prev ? { ...prev, flagged: !prev.flagged } : prev) }}
                   className={`h-9 px-4 text-[10px] rounded-xl font-bold flex items-center gap-1.5 transition-all border active:scale-[0.99] ${
@@ -1310,22 +1298,12 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
                               ))}
                             </select>
                           ) : null}
-                          <Button onClick={async (e) => {
+                          <Button onClick={(e) => {
                             e.stopPropagation()
-                            try {
-                              const res = await portalApi.generateToken({
-                                candidate_id: c.id,
-                                application_id: c.application_id || "app-101",
-                                round_type: "tech"
-                              })
-                              await navigator.clipboard.writeText(res.url)
-                              addToast("success", `Assessment Link Copied: ${res.token}`)
-                            } catch {
-                              addToast("error", "Failed to generate link.")
-                            }
+                            setSelectedId(c.id)
                           }}
-                            className="bg-signal/15 hover:bg-signal/25 border border-signal/30 text-signal text-[10px] font-extrabold px-2.5 py-1.5 h-7 rounded-xl transition-all active:scale-95 flex items-center gap-1">
-                            <Link2 className="w-3 h-3" /> LINK
+                            className="bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-400 text-[10px] font-extrabold px-2.5 py-1.5 h-7 rounded-xl transition-all active:scale-95 flex items-center gap-1 cursor-pointer">
+                            <FileText className="w-3 h-3" /> ASSIGN TASK
                           </Button>
                           <Button onClick={() => setSelectedId(c.id)}
                             className="bg-transparent hover:bg-white/5 border border-white/[0.08] text-neutral-300 text-[10px] font-bold px-3 py-1.5 h-7 rounded-xl transition-all active:scale-95">
