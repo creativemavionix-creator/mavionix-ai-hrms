@@ -465,6 +465,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
 }) {
   const [c, setC]         = useState<ApiCandidate | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showRejectModal, setShowRejectModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
 
   useEffect(() => {
@@ -480,9 +481,6 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
     </div>
   )
   if (!c) return null
-
-  const [showRejectModal, setShowRejectModal] = useState(false)
-  const [showAssignModal, setShowAssignModal] = useState(false)
 
   const score = c.ai_score
   const mq    = c.match_quality
