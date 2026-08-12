@@ -599,6 +599,20 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
               />
             )}
 
+            {(c.stage === "task_submitted" || c.stage === "assignment_submitted") && (
+              <Button
+                onClick={() => {
+                  onStageChange(c.application_id!, "task_approved" as any, "Approved project task submission")
+                  setC(prev => prev ? { ...prev, stage: "task_approved" as any } : prev)
+                  addToast("success", `🎉 Project task approved for ${c.name}!`)
+                }}
+                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>✅ APPROVE PROJECT TASK</span>
+              </Button>
+            )}
+
             <Button
               onClick={() => setShowAssignModal(true)}
               className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/10"

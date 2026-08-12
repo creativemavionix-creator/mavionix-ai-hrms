@@ -1201,34 +1201,46 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           </Card>
         )}
 
-        {/* STAGE 2: PROJECT ASSIGNMENT TASK */}
-        {(activeCandidate.stage === "assignment_sent" || activeCandidate.stage === "assignment_submitted") && (
+        {/* STAGE 2: PROJECT ASSIGNMENT TASK, SUBMITTED, OR APPROVED */}
+        {(activeCandidate.stage === "assignment_sent" || activeCandidate.stage === "task_assigned" || activeCandidate.stage === "assignment_submitted" || activeCandidate.stage === "task_submitted" || activeCandidate.stage === "task_approved") && (
           <div className="space-y-6 reveal-up">
             {/* Congrats Header Banner */}
             <div className="bg-gradient-to-r from-emerald-600/20 via-cyan-600/15 to-transparent border border-emerald-500/30 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <span className="eyebrow text-emerald-400 uppercase">STAGE 2 UNLOCKED</span>
+                <span className="eyebrow text-emerald-400 uppercase">
+                  {activeCandidate.stage === "task_approved" ? "STAGE 2 COMPLETED & APPROVED" : "STAGE 2 UNLOCKED"}
+                </span>
                 <h3 className="text-xl font-display font-extrabold text-white mt-0.5">
-                  🎉 CONGRATS! YOU HAVE ADVANCED TO THE PROJECT TASK STAGE
+                  {activeCandidate.stage === "task_approved"
+                    ? "🎉 CONGRATULATIONS! YOU HAVE PASSED THE PROJECT TASK ROUND"
+                    : activeCandidate.stage === "task_submitted" || activeCandidate.stage === "assignment_submitted"
+                    ? "🎉 PROJECT TASK SUBMITTED — UNDER RECRUITER REVIEW"
+                    : "🎉 CONGRATS! YOU HAVE ADVANCED TO THE PROJECT TASK STAGE"}
                 </h3>
                 <p className="text-xs text-neutral-300 font-semibold mt-1">
-                  Please review the project assignment requirements below and submit your solution before the countdown expires.
+                  {activeCandidate.stage === "task_approved"
+                    ? "Our recruitment team has evaluated and approved your submission. Waiting for the recruiter to schedule your live AI proctored interview round."
+                    : activeCandidate.stage === "task_submitted" || activeCandidate.stage === "assignment_submitted"
+                    ? "Your assignment submission has been received and logged. The recruiter is currently reviewing your architecture report and code repository."
+                    : "Please review the project assignment requirements below and submit your solution before the countdown expires."}
                 </p>
               </div>
 
               {/* Countdown Timer Display */}
-              <div className="bg-[#090a10] border border-emerald-500/40 px-5 py-3 rounded-2xl text-center shrink-0 shadow-xl">
-                <span className="eyebrow text-neutral-400 block text-[9px]">TIME REMAINING</span>
-                {timeLeft.expired ? (
-                  <span className="text-red-400 font-bold text-sm uppercase block mt-0.5 animate-pulse">
-                    ⚠️ DEADLINE EXPIRED
-                  </span>
-                ) : (
-                  <span className="stat-number text-2xl text-emerald-400 tracking-tight font-mono">
-                    {String(timeLeft.h).padStart(2, "0")}:{String(timeLeft.m).padStart(2, "0")}:{String(timeLeft.s).padStart(2, "0")}
-                  </span>
-                )}
-              </div>
+              {activeCandidate.stage !== "task_approved" && (
+                <div className="bg-[#090a10] border border-emerald-500/40 px-5 py-3 rounded-2xl text-center shrink-0 shadow-xl">
+                  <span className="eyebrow text-neutral-400 block text-[9px]">TIME REMAINING</span>
+                  {timeLeft.expired ? (
+                    <span className="text-red-400 font-bold text-sm uppercase block mt-0.5 animate-pulse">
+                      ⚠️ DEADLINE EXPIRED
+                    </span>
+                  ) : (
+                    <span className="stat-number text-2xl text-emerald-400 tracking-tight font-mono">
+                      {String(timeLeft.h).padStart(2, "0")}:{String(timeLeft.m).padStart(2, "0")}:{String(timeLeft.s).padStart(2, "0")}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Evaluation Ground Rules & Submission Policies Card */}
@@ -1240,41 +1252,18 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               <div className="space-y-2 text-xs text-neutral-300">
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-400 font-bold font-mono">1. 72-HOUR DEADLINE:</span>
-                  <span className="text-neutral-400">Take-home project assignments have a strict 72-hour (3 days) submission window. The submission link locks automatically when deadline expires.</span>
+                  <span className="text-neutral-400">Take-home project assignments have a strict 72-hour (3 days) submission window.</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="text-cyan-400 font-bold font-mono">2. NEURAL PROCTORING:</span>
-                  <span className="text-neutral-400">Camera vision and browser tab switch detection are active during the live AI video interview. Maximum 3 tab switch strikes allowed before automatic termination.</span>
+                  <span className="text-cyan-400 font-bold font-mono">2. DELIVERABLE EXPECTATIONS:</span>
+                  <span className="text-neutral-400">Please provide your public GitHub / GitLab URL along with architecture design notes.</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-indigo-400 font-bold font-mono">3. CODE INTEGRITY:</span>
-                  <span className="text-neutral-400">All submissions are processed through static AST code analysis and plagiarist detection engines.</span>
+                  <span className="text-neutral-400">All submissions are logged with timestamp audit trail for recruiter evaluation.</span>
                 </div>
               </div>
             </div>
-
-            {/* Expired Warning & Contact HR extension button */}
-            {timeLeft.expired && (
-              <div className="bg-red-500/10 border border-red-500/25 p-4 rounded-2xl flex items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-                  <div>
-                    <span className="text-red-400 font-bold block uppercase">Deadline Has Expired</span>
-                    <span className="text-neutral-300">You must contact HR to request a deadline extension before submitting.</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(new CustomEvent("hr-extend-deadline"))
-                    }
-                  }}
-                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 font-bold rounded-xl uppercase text-[10px] tracking-wider transition-all"
-                >
-                  Request HR Deadline Extension (+24h)
-                </button>
-              </div>
-            )}
 
             {/* Project Details & Submission Card */}
             <Card className="glass-card border-white/[0.08] p-6 rounded-3xl space-y-6">
@@ -1288,25 +1277,32 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 </p>
               </div>
 
-              {activeCandidate.stage === "assignment_submitted" ? (
+              {activeCandidate.stage === "task_approved" ? (
                 <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl text-center space-y-3">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                  <h4 className="text-base font-bold text-white uppercase">PROJECT SUBMITTED SUCCESSFULLY!</h4>
+                  <Sparkles className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
+                  <h4 className="text-base font-bold text-white uppercase">STAGE 2 APPROVED BY RECRUITER!</h4>
                   <p className="text-xs text-neutral-300 max-w-md mx-auto">
-                    Your solution has been logged and sent to the recruiter for AI criterion scoring.
+                    Your project task submission has been evaluated and approved. Please wait for the recruiter to issue your live AI proctored interview link.
                   </p>
-                  <Button
-                    onClick={() => {
-                      updateCandidateStage("tech_round")
-                      showToast("success", "Project Approved! Moving to Proctored AI Video Interview.")
-                    }}
-                    className="btn-primary py-2.5 px-5 rounded-xl font-bold text-xs uppercase text-white shadow-lg shadow-emerald-500/20 mt-2"
-                  >
-                    Simulate Recruiter Approval → Advance to Proctored Interview
-                  </Button>
+                </div>
+              ) : activeCandidate.stage === "assignment_submitted" || activeCandidate.stage === "task_submitted" ? (
+                <div className="bg-cyan-500/10 border border-cyan-500/30 p-6 rounded-2xl text-center space-y-3">
+                  <CheckCircle2 className="w-8 h-8 text-cyan-400 mx-auto" />
+                  <h4 className="text-base font-bold text-white uppercase font-display">YOUR ASSIGNMENT IS BEING REVIEWED</h4>
+                  <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                    Your solution has been submitted and is currently undergoing recruiter review and criterion scoring.
+                  </p>
                 </div>
               ) : (
-                <form onSubmit={handleProjectSubmit} className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <form onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (activeCandidate.id) {
+                    await submitProjectTask(activeCandidate.id, submissionText, submissionUrl)
+                    await logStageTransition(activeCandidate.id, "task_assigned", "task_submitted", "candidate", "Candidate submitted project task solution")
+                  }
+                  updateCandidateStage("task_submitted" as any)
+                  showToast("success", "🎉 Assignment submitted successfully! Your submission is being reviewed by the recruiter.")
+                }} className="space-y-4 pt-4 border-t border-white/[0.06]">
                   <div className="space-y-1.5">
                     <label className="eyebrow text-neutral-400">SOLUTION OVERVIEW & ARCHITECTURE NOTES *</label>
                     <textarea
