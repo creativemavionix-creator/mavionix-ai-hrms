@@ -317,6 +317,33 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
+  // Logout Candidate Session & Clear Local Cache
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {}
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("candidate_authenticated")
+      localStorage.removeItem("candidate_app_submitted")
+      localStorage.removeItem("candidate_email")
+      localStorage.removeItem("candidate_current_stage")
+      localStorage.removeItem("candidate_viewing_workspace")
+    }
+
+    setIsAuthenticated(false)
+    setApplicationSubmitted(false)
+    setViewingFullWorkspace(false)
+    setEmail("")
+    setPassword("")
+    setName("")
+    setUserSession(null)
+    lastDbStageRef.current = null
+    isFirstLoadRef.current = true
+
+    showToast("info", "Logged out candidate session. You can now sign up or sign in as a different applicant.")
+  }
+
   // Stage Rank Mapping to prevent polling regression
   const STAGE_RANK: Record<string, number> = {
     applied: 1, screened: 1, shortlisted: 1,
@@ -1022,6 +1049,14 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
             + Apply For New Position
           </Button>
 
+          <Button
+            onClick={handleLogout}
+            className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-red-500/10"
+          >
+            <XCircle className="w-4 h-4 text-red-400" />
+            <span>Logout Session</span>
+          </Button>
+
           <button
             onClick={onSwitchToRecruiter}
             className="p-2 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1043,6 +1078,18 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 {activeCandidate.initials}
               </div>
               <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-display font-extrabold text-white">
+                    {activeCandidate.name}
+                  </h2>
+                  <Button
+                    onClick={handleLogout}
+                    className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ml-2"
+                  >
+                    <XCircle className="w-3 h-3 text-red-400" />
+                    <span>LOGOUT</span>
+                  </Button>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="eyebrow text-emerald-400">APPLICATION ACTIVE</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-mono font-bold uppercase">
