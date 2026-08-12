@@ -1126,40 +1126,76 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
         {/* Dynamic Stage View Container */}
 
-        {/* STAGE 1: APPLICATION REVIEW & SHORTLISTED STATUS */}
-        {(activeCandidate.stage === "applied" || activeCandidate.stage === "shortlisted") && (
+        {/* STAGE 1: APPLICATION REVIEW, APPROVED CONGRATS, OR REJECTION STATUS */}
+        {(activeCandidate.stage === "applied" || activeCandidate.stage === "submitted" || activeCandidate.stage === "under_review" || activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted" || activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected") && (
           <Card className="glass-card border-white/[0.08] p-8 rounded-3xl space-y-6 text-center reveal-up">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/10">
-              {activeCandidate.stage === "shortlisted" ? (
+            <div className={`w-16 h-16 rounded-3xl border flex items-center justify-center mx-auto shadow-xl ${
+              activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
+                : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                ? "bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/10"
+                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
+            }`}>
+              {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted" ? (
                 <Sparkles className="w-8 h-8 text-emerald-400 animate-bounce" />
+              ) : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected" ? (
+                <XCircle className="w-8 h-8 text-red-400" />
               ) : (
                 <Clock className="w-8 h-8 text-emerald-400 animate-pulse" />
               )}
             </div>
 
             <div className="max-w-xl mx-auto space-y-2">
-              <span className="eyebrow text-emerald-400 font-bold uppercase">
-                {activeCandidate.stage === "shortlisted" ? "🎉 STAGE 1 COMPLETED" : "STAGE 1 IN PROGRESS"}
+              <span className={`eyebrow font-bold uppercase ${
+                activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? "text-emerald-400"
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? "text-red-400"
+                  : "text-emerald-400"
+              }`}>
+                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? "🎉 STAGE 1 PASSED & APPROVED"
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? "APPLICATION EVALUATION COMPLETED"
+                  : "STAGE 1 IN PROGRESS — UNDER REVIEW"}
               </span>
+
               <h3 className="text-2xl font-display font-extrabold text-white">
-                {activeCandidate.stage === "shortlisted"
-                  ? `🎉 CONGRATULATIONS, ${activeCandidate.name.toUpperCase()}! YOU ARE SHORTLISTED`
-                  : "APPLICATION UNDER RECRUITER & AI REVIEW"}
+                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? `🎉 CONGRATULATIONS, ${activeCandidate.name.toUpperCase()}! YOU'VE MOVED TO THE NEXT STAGE`
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? "APPLICATION STATUS UPDATE"
+                  : "YOUR PROFILE IS CURRENTLY UNDER REVIEW"}
               </h3>
+
               <p className="text-xs text-neutral-300 leading-relaxed font-medium">
-                {activeCandidate.stage === "shortlisted"
-                  ? "Our recruitment team has reviewed your profile and shortlisted you for the next evaluation stage. The recruiter will generate and send your 3-Day Project Task Assignment link shortly."
-                  : "Your application has been received and registered into the Recruiter Dashboard. Gemini 2.0 AI is currently mapping your resume credentials and compatibility indices."}
+                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? "Our recruitment team has approved your application! Waiting for the recruiter to assign your project task for the next evaluation round."
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? `Thank you for your interest in HireMind AI. After careful review at the Application Review stage, we will not be moving forward with your application for ${activeCandidate.job_title} at this time.`
+                  : "Your application has been received and registered. Gemini 2.0 AI and our recruitment team are currently reviewing your credentials."}
               </p>
             </div>
 
             <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-2xl max-w-lg mx-auto flex items-center justify-between text-xs">
               <span className="eyebrow text-neutral-400">CURRENT STATUS:</span>
-              <span className="text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                {activeCandidate.stage === "shortlisted"
-                  ? "SHORTLISTED — AWAITING PROJECT TASK LINK FROM RECRUITER"
-                  : "In Progress — AI Score Calculated (94/100)"}
+              <span className={`font-bold uppercase tracking-wider flex items-center gap-2 ${
+                activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? "text-emerald-400"
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? "text-red-400"
+                  : "text-emerald-400"
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                    ? "bg-red-400"
+                    : "bg-emerald-400 animate-ping"
+                }`} />
+                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                  ? "APPROVED — WAITING FOR RECRUITER TO ASSIGN PROJECT TASK"
+                  : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
+                  ? "DECISION: REJECTED AT APPLICATION REVIEW STAGE"
+                  : "UNDER REVIEW — RECRUITER & AI EVALUATION IN PROGRESS"}
               </span>
             </div>
           </Card>

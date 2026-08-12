@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { analyzeCandidateResume } from "@/lib/geminiScoring"
+import { logStageTransition } from "@/lib/stageHistory"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ukwmhwgchscvyvzsbcxk.supabase.co"
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrd21od2djaHNjdnl2enNiY3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTY4OTYsImV4cCI6MjEwMjAzMjg5Nn0.TkYjSEd5CF85NpY9v2XM_btJUtDBqHas9gKhjb3oiDw"
@@ -143,13 +144,13 @@ export async function POST(req: Request) {
     }
 
     if (!applicationRecord && candidateId && targetJobUuid) {
-      // Server-controlled defaults: stage is strictly 'applied', ai_score starts null
+      // Server-controlled canonical stage: starts at 'under_review', ai_score starts null
       const { data: newApp, error: createAppErr } = await supabase
         .from("applications")
         .insert({
           job_id: targetJobUuid,
           candidate_id: candidateId,
-          stage: "applied",
+          stage: "under_review",
           flagged: false,
           applied_date: new Date().toISOString().split("T")[0]
         })
@@ -164,6 +165,7 @@ export async function POST(req: Request) {
         )
       } else {
         applicationRecord = newApp
+        await logStageTransition(newApp.id, "submitted", "under_review", "system", "Initial application submitted")
       }
     }
 

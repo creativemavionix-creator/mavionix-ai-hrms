@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { candidatesApi, jobsApi, portalApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
 import { supabase } from "@/lib/supabaseClient"
+import { logStageTransition } from "@/lib/stageHistory"
 import {
   Search, UserPlus, Flag, ShieldCheck, Mail, Phone, Tag,
   Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock, X, RefreshCw, Upload,
@@ -567,15 +568,36 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
           <div className="flex flex-wrap items-center gap-2">
             <Button
               onClick={() => {
-                onStageChange(c.application_id!, "shortlisted")
-                setC(prev => prev ? { ...prev, stage: "shortlisted" } : prev)
-                addToast("success", `${c.name} passed to Shortlisted stage!`)
+                onStageChange(c.application_id!, "approved", "Approved by recruiter during resume screening")
+                setC(prev => prev ? { ...prev, stage: "approved" } : prev)
+                addToast("success", `🎉 ${c.name} APPROVED! Moved candidate to next stage.`)
               }}
               className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
             >
               <CheckCircle className="w-3.5 h-3.5" />
-              <span>✅ PASS TO SHORTLIST</span>
+              <span>✅ APPROVE APPLICATION</span>
             </Button>
+
+            <Button
+              onClick={() => setShowRejectModal(true)}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-red-500/10"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>❌ REJECT APPLICATION</span>
+            </Button>
+
+            {showRejectModal && (
+              <RejectApplicationModal
+                candidateName={c.name}
+                onClose={() => setShowRejectModal(false)}
+                onConfirmReject={(reason) => {
+                  onStageChange(c.application_id!, "decision_rejected", reason)
+                  setC(prev => prev ? { ...prev, stage: "decision_rejected" } : prev)
+                  setShowRejectModal(false)
+                  addToast("error", `Application rejected: note logged to stage_history.`)
+                }}
+              />
+            )}
 
             <Button
               onClick={() => setShowAssignModal(true)}
@@ -592,7 +614,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                 applicationId={c.application_id || `app-${Date.now()}`}
                 onClose={() => setShowAssignModal(false)}
                 onAssigned={(title, desc, days, url) => {
-                  onStageChange(c.application_id!, "assignment_sent")
+                  onStageChange(c.application_id!, "assignment_sent", `Assigned project: ${title}`)
                   setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
                   setShowAssignModal(false)
                   addToast("success", `📁 Assigned "${title}" and copied link to clipboard!`)
@@ -611,7 +633,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   })
                   const interviewUrl = `${window.location.origin}/candidate?token=${res.token}&type=interview`
                   await navigator.clipboard.writeText(interviewUrl)
-                  onStageChange(c.application_id!, "tech_round")
+                  onStageChange(c.application_id!, "tech_round", "Generated live AI interview link")
                   setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
                   addToast("success", `🎙️ Proctored AI Interview Link Copied to Clipboard! (${res.token})`)
                 } catch {
@@ -1177,11 +1199,14 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
 
   const handleStageFilter = (s: string) => setStageFilter(s)
 
-  const handleStageChange = async (appId: string, newStage: AppStage) => {
+  const handleStageChange = async (appId: string, newStage: AppStage, note?: string) => {
     setUpdatingId(appId)
+    const oldCand = candidates.find(c => c.application_id === appId)
+    const fromStage = oldCand?.stage || null
     setCandidates(prev => prev.map(c => c.application_id === appId ? { ...c, stage: newStage } : c))
     try {
       await candidatesApi.updateApplication(appId, { stage: newStage })
+      await logStageTransition(appId, fromStage, newStage, "recruiter", note || `Stage updated to ${newStage}`)
       fetchStats()
       addToast("success", `Stage updated to ${newStage.toUpperCase()}`)
     } catch (err: unknown) {
