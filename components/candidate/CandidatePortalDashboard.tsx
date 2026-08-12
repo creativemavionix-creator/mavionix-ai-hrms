@@ -638,7 +638,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   }
 
   // ── 1. AUTH GATEWAY & RICH APPLICATION FORM VIEW ──────────────────────────
-  if (!isAuthenticated && !applicationSubmitted) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#090A10] text-white font-sans relative overflow-hidden flex flex-col justify-between p-4 sm:p-8">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[140px] rounded-full pointer-events-none z-0" />
