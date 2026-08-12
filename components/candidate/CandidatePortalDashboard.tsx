@@ -72,7 +72,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const lastBroadcastTimeRef = useRef<number>(0)
 
   useEffect(() => {
-    broadcastChannelRef.current = supabase.channel("recruiter-realtime-sync")
+    broadcastChannelRef.current = supabase.channel("candidate-drafting-channel")
     broadcastChannelRef.current.subscribe()
     return () => {
       if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current)

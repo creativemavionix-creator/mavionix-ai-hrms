@@ -87,8 +87,8 @@ export default function RecruitmentDashboard() {
   useEffect(() => {
     if (!mounted) return
 
-    const channel = supabase
-      .channel("recruiter-realtime-sync")
+    const draftChannel = supabase
+      .channel("candidate-drafting-channel")
       .on(
         "broadcast",
         { event: "candidate-drafting" },
@@ -101,6 +101,10 @@ export default function RecruitmentDashboard() {
           })
         }
       )
+      .subscribe()
+
+    const dbChannel = supabase
+      .channel("recruiter-dashboard-db-sync")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "candidates" },
@@ -130,7 +134,8 @@ export default function RecruitmentDashboard() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(draftChannel)
+      supabase.removeChannel(dbChannel)
     }
   }, [mounted])
 

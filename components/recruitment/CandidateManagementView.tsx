@@ -1091,7 +1091,7 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
   // Listen to Realtime updates on public.ai_reports and public.applications
   useEffect(() => {
     const channel = supabase
-      .channel("recruiter-management-realtime")
+      .channel("recruiter-management-table-sync")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "ai_reports" },
