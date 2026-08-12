@@ -1578,15 +1578,18 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                       </Card>
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end pt-4 border-t border-white/10">
                       <Button
-                        onClick={() => {
-                          updateCandidateStage("hired")
-                          showToast("success", "Interview Complete! Your status has been updated to Final HR Review.")
+                        onClick={async () => {
+                          if (activeCandidate.id) {
+                            await logStageTransition(activeCandidate.id, "interview_scheduled", "interview_completed", "candidate", "Candidate marked interview session complete")
+                          }
+                          updateCandidateStage("interview_completed" as any)
+                          showToast("success", "🎉 Interview complete — waiting for final results from recruitment team.")
                         }}
                         className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
                       >
-                        Complete Interview → Move to Final HR Decision
+                        Mark Interview as Complete → Await Final Decision
                       </Button>
                     </div>
                   </>
@@ -1596,8 +1599,35 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           </div>
         )}
 
-        {/* STAGE 4: FINAL HR DECISION */}
-        {activeCandidate.stage === "hired" && (
+        {/* STAGE 3 COMPLETED: INTERVIEW COMPLETED WAITING STATE */}
+        {activeCandidate.stage === "interview_completed" && (
+          <Card className="glass-card border-violet-500/30 p-8 rounded-3xl space-y-6 text-center reveal-up">
+            <div className="w-16 h-16 rounded-3xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center mx-auto text-violet-400 shadow-xl shadow-violet-500/10">
+              <CheckCircle2 className="w-8 h-8 text-violet-400" />
+            </div>
+
+            <div className="max-w-xl mx-auto space-y-2">
+              <span className="eyebrow text-violet-400 font-bold uppercase">STAGE 3 COMPLETED</span>
+              <h3 className="text-2xl font-display font-extrabold text-white">
+                🎉 INTERVIEW COMPLETE — WAITING FOR FINAL RESULTS
+              </h3>
+              <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                Your live AI proctored interview telemetry and code responses have been submitted. The hiring team is conducting final evaluation and will issue the hiring decision shortly.
+              </p>
+            </div>
+
+            <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-2xl max-w-lg mx-auto flex items-center justify-between text-xs">
+              <span className="eyebrow text-neutral-400">CURRENT STATUS:</span>
+              <span className="text-violet-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-violet-400 animate-ping" />
+                INTERVIEW COMPLETED — FINAL HR EVALUATION IN PROGRESS
+              </span>
+            </div>
+          </Card>
+        )}
+
+        {/* STAGE 4: FINAL HR DECISION — HIRED OFFER SCREEN */}
+        {(activeCandidate.stage === "hired" || activeCandidate.stage === "decision_hired") && (
           <Card className="glass-card border-emerald-500/30 p-8 rounded-3xl space-y-6 text-center reveal-up bg-gradient-to-b from-emerald-600/10 to-transparent">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-2xl shadow-emerald-500/30">
               <Award className="w-8 h-8" />

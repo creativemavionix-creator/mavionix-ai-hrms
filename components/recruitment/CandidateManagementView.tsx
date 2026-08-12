@@ -647,17 +647,51 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   })
                   const interviewUrl = `${window.location.origin}/candidate?token=${res.token}&type=interview`
                   await navigator.clipboard.writeText(interviewUrl)
-                  onStageChange(c.application_id!, "tech_round", "Generated live AI interview link")
+                  
+                  // Call Send Link API
+                  const apiRes = await fetch("/api/interviews/send-link", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      candidateEmail: c.email,
+                      candidateName: c.name,
+                      jobTitle: c.job_title || "Senior Backend Engineer",
+                      interviewLink: interviewUrl,
+                      applicationId: c.application_id || `app-${Date.now()}`,
+                      candidateId: c.id
+                    })
+                  })
+
+                  const result = await apiRes.json()
+
+                  onStageChange(c.application_id!, "tech_round", "Generated and sent live AI interview link")
                   setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
-                  addToast("success", `🎙️ Proctored AI Interview Link Copied to Clipboard! (${res.token})`)
-                } catch {
-                  addToast("error", "Failed to generate interview link.")
+
+                  if (result.success) {
+                    addToast("success", `🎙️ Interview link sent to ${c.email} & copied to clipboard!`)
+                  } else {
+                    addToast("error", `Notice: Link generated, but email notice failed: ${result.error}`)
+                  }
+                } catch (err: any) {
+                  addToast("error", `Failed to dispatch interview link: ${err?.message || "Unknown error"}`)
                 }
               }}
               className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-500/10"
             >
               <Brain className="w-3.5 h-3.5" />
-              <span>🎙️ SEND LIVE AI INTERVIEW LINK</span>
+              <span>🎙️ GENERATE & EMAIL INTERVIEW LINK</span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                onStageChange(c.application_id!, "hired", "Recruiter hired candidate after final interview evaluation")
+                setC(prev => prev ? { ...prev, stage: "hired" } : prev)
+                addToast("success", `🎉 ${c.name} HIRED! Official offer issued.`)
+              }}
+              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>🏆 HIRE CANDIDATE</span>
             </Button>
 
             <Button
