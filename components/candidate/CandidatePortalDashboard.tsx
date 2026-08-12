@@ -124,9 +124,12 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
   }
 
+  // Live Candidate Application State
+  const isLoggedOutRef = useRef<boolean>(false)
+
   // Load candidate profile directly from Supabase Database
   const fetchCandidateFromDb = async (userEmail: string) => {
-    if (!userEmail) return
+    if (!userEmail || isLoggedOutRef.current || (typeof window !== "undefined" && localStorage.getItem("candidate_authenticated") === "false")) return
     try {
       const { data: cands } = await supabase
         .from("candidates")
@@ -139,7 +142,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         .eq("email", userEmail.toLowerCase().trim())
         .limit(1)
 
-      if (cands && cands.length > 0) {
+      if (cands && cands.length > 0 && !isLoggedOutRef.current) {
         const dbCand = cands[0]
         const app = Array.isArray(dbCand.applications) && dbCand.applications.length > 0 ? dbCand.applications[0] : null
         const parsed = dbCand.parsed_data || {}
@@ -178,8 +181,13 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
   // Supabase Auth Session Listener on Mount
   useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("candidate_authenticated") === "false") {
+      isLoggedOutRef.current = true
+      return
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+      if (session?.user && !isLoggedOutRef.current) {
         setUserSession(session)
         const userEmail = session.user.email || ""
         if (userEmail) {
@@ -190,7 +198,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+      if (session?.user && !isLoggedOutRef.current) {
         setUserSession(session)
         const userEmail = session.user.email || ""
         if (userEmail) {
@@ -320,6 +328,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
   // Logout Candidate Session & Clear Local Cache
   const handleLogout = async () => {
+    isLoggedOutRef.current = true
     try {
       await supabase.auth.signOut()
     } catch (e) {}
@@ -1079,18 +1088,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 {activeCandidate.initials}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-display font-extrabold text-white">
-                    {activeCandidate.name}
-                  </h2>
-                  <Button
-                    onClick={handleLogout}
-                    className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all ml-2"
-                  >
-                    <XCircle className="w-3 h-3 text-red-400" />
-                    <span>LOGOUT</span>
-                  </Button>
-                </div>
                 <div className="flex items-center gap-2">
                   <span className="eyebrow text-emerald-400">APPLICATION ACTIVE</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-mono font-bold uppercase">
