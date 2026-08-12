@@ -488,28 +488,49 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       localStorage.setItem("candidate_authenticated", "true")
       localStorage.setItem("candidate_app_submitted", "true")
       localStorage.setItem("candidate_viewing_workspace", "true")
+      localStorage.setItem("candidate_email", email.trim().toLowerCase())
     }
 
     try {
-      // 1. Create candidate user in Supabase Auth if password provided
+      let currentAuthUserId = userSession?.user?.id || null
+      let accessToken = userSession?.access_token || null
+
+      // 1. Create or sign in candidate user in Supabase Auth if password provided
       if (password) {
-        const { error: signUpErr } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
           options: { data: { full_name: name.trim() } }
         })
-        if (signUpErr && !signUpErr.message.includes("already registered")) {
-          console.warn("Supabase auth signUp warning:", signUpErr.message)
+        
+        if (signUpData?.user) {
+          currentAuthUserId = signUpData.user.id
+          accessToken = signUpData.session?.access_token || accessToken
+        } else if (signUpErr && signUpErr.message.includes("already registered")) {
+          // Attempt sign in if account exists
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(),
+            password
+          })
+          if (signInData?.user) {
+            currentAuthUserId = signInData.user.id
+            accessToken = signInData.session?.access_token || accessToken
+          }
         }
       }
 
-      // 2. Persist Candidate Record & Application to Database
+      // 2. Persist Candidate Record & Application to Database via Canonical API Endpoint
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`
+      }
+
       const res = await fetch("/api/candidates/apply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
           phone,
           jobId: position.includes("Backend") ? "JOB-101" : position.includes("Architect") ? "JOB-102" : "JOB-103",
           location,
@@ -523,7 +544,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           outageLesson,
           skills: skillsText ? skillsText.split(",").map(s => s.trim()) : ["System Architecture", "Python", "Next.js"],
           resumeText: resumeText || `${name} resume content for ${position}`,
-          resumeFileName: uploadedFile ? uploadedFile.name : "uploaded_resume.pdf"
+          resumeFileName: uploadedFile ? uploadedFile.name : "uploaded_resume.pdf",
+          authUserId: currentAuthUserId
         })
       })
 
