@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { candidatesApi, jobsApi, portalApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
+import { supabase } from "@/lib/supabaseClient"
 import {
   Search, UserPlus, Flag, ShieldCheck, Mail, Phone, Tag,
   Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock, X, RefreshCw, Upload,
