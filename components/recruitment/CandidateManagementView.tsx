@@ -1265,7 +1265,7 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
   }, [])
 
   useEffect(() => { fetchStats(); fetchJobs() }, [fetchStats, fetchJobs])
-  useEffect(() => { fetchCandidates(stageFilter, searchTerm) }, [stageFilter, fetchCandidates])
+  useEffect(() => { fetchCandidates(stageFilter, searchTerm) }, [stageFilter, searchTerm, fetchCandidates])
 
   // Listen to live candidate applications from portal
   useEffect(() => {
@@ -1305,7 +1305,6 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
               }
               return c
             }))
-            fetchCandidates(stageFilter, searchTerm)
             addToast("success", `✨ Real Gemini AI Scoring Completed for candidate!`)
           }
         }
@@ -1336,7 +1335,7 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [fetchCandidates, stageFilter, searchTerm, addToast])
+  }, [addToast])
 
   useEffect(() => {
     if (selectedId) {
