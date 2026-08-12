@@ -17,28 +17,29 @@ interface CandidatePortalDashboardProps {
 }
 
 export default function CandidatePortalDashboard({ onSwitchToRecruiter }: CandidatePortalDashboardProps) {
-  // Session Persistence via localStorage (Prevents refresh logout!)
+  // Candidate Session State (Controlled via Supabase Auth & explicit state)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("candidate_authenticated")
-      return stored !== "false" // Default true so portal opens directly
+      if (stored === "false") return false
+      if (stored === "true") return true
     }
-    return true
+    return false // Gate behind Auth by default!
   })
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup")
   const [applicationSubmitted, setApplicationSubmitted] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("candidate_app_submitted")
-      return stored !== "false" // Default true
+      return stored === "true"
     }
-    return true
+    return false
   })
   const [viewingFullWorkspace, setViewingFullWorkspace] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("candidate_viewing_workspace")
-      return stored !== "false" // Default true so candidate workspace is never empty!
+      return stored === "true"
     }
-    return true
+    return false
   })
   const [showApplyModal, setShowApplyModal] = useState(false)
 
@@ -324,11 +325,11 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     } catch (e) {}
 
     if (typeof window !== "undefined") {
-      localStorage.removeItem("candidate_authenticated")
-      localStorage.removeItem("candidate_app_submitted")
+      localStorage.setItem("candidate_authenticated", "false")
+      localStorage.setItem("candidate_app_submitted", "false")
+      localStorage.setItem("candidate_viewing_workspace", "false")
       localStorage.removeItem("candidate_email")
       localStorage.removeItem("candidate_current_stage")
-      localStorage.removeItem("candidate_viewing_workspace")
     }
 
     setIsAuthenticated(false)
@@ -341,7 +342,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     lastDbStageRef.current = null
     isFirstLoadRef.current = true
 
-    showToast("info", "Logged out candidate session. You can now sign up or sign in as a different applicant.")
+    showToast("info", "YOU'RE LOGGED OUT!!")
   }
 
   // Stage Rank Mapping to prevent polling regression
