@@ -454,6 +454,86 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
   )
 }
 
+// ─── Resume Viewer Modal Component ─────────────────────────────────────────
+function ResumeViewerModal({
+  candidateName,
+  resumeFileName,
+  resumeText,
+  skills,
+  statementOfIntent,
+  onClose
+}: {
+  candidateName: string
+  resumeFileName: string
+  resumeText: string
+  skills: string[]
+  statementOfIntent?: string
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200">
+      <Card className="glass-card border-violet-500/30 w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-3xl shadow-2xl bg-[#0b0c14] text-white flex flex-col">
+        <CardHeader className="p-6 border-b border-white/[0.08] flex flex-row items-center justify-between shrink-0 bg-[#0e101c]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="eyebrow text-violet-400 uppercase font-bold">CANDIDATE RESUME DOCUMENT</span>
+              <CardTitle className="text-lg font-display font-extrabold text-white mt-0.5">
+                {candidateName} — {resumeFileName}
+              </CardTitle>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 text-neutral-400 hover:text-white rounded-xl hover:bg-white/5 transition-all cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </CardHeader>
+
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+          {/* Skills Breakdown */}
+          {skills && skills.length > 0 && (
+            <div className="space-y-2">
+              <span className="eyebrow text-emerald-400">PARSED TECHNICAL SKILLS</span>
+              <div className="flex flex-wrap gap-1.5">
+                {skills.map((sk, idx) => (
+                  <span key={idx} className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 font-mono font-bold text-[10px]">
+                    {sk}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Statement of Intent */}
+          {statementOfIntent && (
+            <div className="space-y-2">
+              <span className="eyebrow text-cyan-400">STATEMENT OF INTENT & SYSTEM IMPACT</span>
+              <div className="bg-white/[0.02] border border-white/10 p-4 rounded-2xl font-sans text-neutral-200 leading-relaxed">
+                {statementOfIntent}
+              </div>
+            </div>
+          )}
+
+          {/* Resume Raw Text Content */}
+          <div className="space-y-2">
+            <span className="eyebrow text-neutral-400">FULL RESUME TEXT & CAREER SUMMARY</span>
+            <div className="bg-white/[0.02] border border-white/10 p-5 rounded-2xl font-mono text-neutral-200 leading-relaxed whitespace-pre-wrap selection:bg-violet-500/30">
+              {resumeText || `${candidateName} resume text details unavailable.`}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-white/[0.08] bg-[#0e101c] flex justify-end shrink-0">
+          <Button onClick={onClose} className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer">
+            CLOSE RESUME VIEWER
+          </Button>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Candidate Dossier Modal ─────────────────────────────────────────────────
 function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addToast, sidebarCollapsed = false }: {
   candidateId: string
@@ -467,6 +547,7 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   const [loading, setLoading] = useState(true)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [showResumeModal, setShowResumeModal] = useState(false)
 
   useEffect(() => {
     candidatesApi.get(candidateId)
@@ -750,19 +831,57 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   </div>
                 </div>
 
-                {(linkedInUrl || githubUrl) && (
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {linkedInUrl && (
-                      <a href={linkedInUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-400 hover:bg-blue-500/20 text-xs font-bold flex items-center gap-1.5 transition-all">
-                        <Link2 className="w-3.5 h-3.5" /> LinkedIn Profile
-                      </a>
-                    )}
-                    {githubUrl && (
-                      <a href={githubUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-400 hover:bg-purple-500/20 text-xs font-bold flex items-center gap-1.5 transition-all">
-                        <Link2 className="w-3.5 h-3.5" /> GitHub / Portfolio
-                      </a>
-                    )}
-                  </div>
+                <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/[0.06]">
+                  {linkedInUrl ? (
+                    <a
+                      href={linkedInUrl.startsWith("http") ? linkedInUrl : `https://${linkedInUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/10 cursor-pointer"
+                    >
+                      <Link2 className="w-3.5 h-3.5 text-blue-400" />
+                      <span>LinkedIn Profile ↗</span>
+                    </a>
+                  ) : (
+                    <span className="px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/10 text-neutral-400 text-xs font-mono">
+                      LinkedIn: linkedin.com/in/{c.name.toLowerCase().replace(/\s+/g, "")}
+                    </span>
+                  )}
+
+                  {githubUrl ? (
+                    <a
+                      href={githubUrl.startsWith("http") ? githubUrl : `https://${githubUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-purple-500/10 cursor-pointer"
+                    >
+                      <Link2 className="w-3.5 h-3.5 text-purple-400" />
+                      <span>GitHub / Portfolio ↗</span>
+                    </a>
+                  ) : (
+                    <span className="px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/10 text-neutral-400 text-xs font-mono">
+                      GitHub: github.com/{c.name.toLowerCase().replace(/\s+/g, "")}
+                    </span>
+                  )}
+
+                  <Button
+                    onClick={() => setShowResumeModal(true)}
+                    className="px-4 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-lg shadow-violet-500/15 cursor-pointer ml-auto"
+                  >
+                    <FileText className="w-4 h-4 text-violet-400" />
+                    <span>📄 VIEW CANDIDATE RESUME</span>
+                  </Button>
+                </div>
+
+                {showResumeModal && (
+                  <ResumeViewerModal
+                    candidateName={c.name}
+                    resumeFileName={resumeFileName}
+                    resumeText={resumeText}
+                    skills={skillsList}
+                    statementOfIntent={statementOfIntent}
+                    onClose={() => setShowResumeModal(false)}
+                  />
                 )}
 
                 {/* Section 1: Thoughtful Engineering & System Architecture Answers */}

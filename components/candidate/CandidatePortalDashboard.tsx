@@ -211,6 +211,37 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => subscription.unsubscribe()
   }, [])
 
+  // Realtime postgres_changes listener for candidate application stage updates
+  useEffect(() => {
+    if (!activeCandidate.id || activeCandidate.id.startsWith("cand-pending")) return
+
+    const channelName = `candidate-live-stage-${activeCandidate.id}`
+    const appChannel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "applications",
+          filter: `candidate_id=eq.${activeCandidate.id}`
+        },
+        (payload) => {
+          const updated = payload.new
+          if (updated?.stage) {
+            const newStage = updated.stage as AppStage
+            setActiveCandidate(prev => ({ ...prev, stage: newStage }))
+            showToast("success", `⚡ REALTIME UPDATE: Recruiter accepted your round! Status: ${newStage.replace(/_/g, " ").toUpperCase()}`)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(appChannel)
+    }
+  }, [activeCandidate.id])
+
   // File Upload Drag & Drop Handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
