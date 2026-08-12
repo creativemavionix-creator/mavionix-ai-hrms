@@ -491,6 +491,13 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       return
     }
     setApplying(true)
+    isLoggedOutRef.current = false
+    if (typeof window !== "undefined") {
+      localStorage.setItem("candidate_authenticated", "true")
+      localStorage.setItem("candidate_app_submitted", "true")
+      localStorage.setItem("candidate_viewing_workspace", "true")
+    }
+
     try {
       // 1. Create candidate user in Supabase Auth if password provided
       if (password) {
@@ -535,6 +542,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         await fetchCandidateFromDb(email.trim().toLowerCase())
         setIsAuthenticated(true)
         setApplicationSubmitted(true)
+        setViewingFullWorkspace(true)
         showToast("success", data.message || "Application Received! Profile is under recruiter review.")
       } else {
         showToast("error", data.error || "Application submission error.")
@@ -552,6 +560,12 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     if (!email) {
       showToast("error", "Please enter your registered candidate email address.")
       return
+    }
+    isLoggedOutRef.current = false
+    if (typeof window !== "undefined") {
+      localStorage.setItem("candidate_authenticated", "true")
+      localStorage.setItem("candidate_app_submitted", "true")
+      localStorage.setItem("candidate_viewing_workspace", "true")
     }
 
     try {
