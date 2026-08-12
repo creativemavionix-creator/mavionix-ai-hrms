@@ -272,13 +272,24 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => window.removeEventListener("hr-extend-deadline", handleExtend)
   }, [])
 
-  // Helper to update candidate stage locally & in Supabase
+  // Stage Rank Mapping to prevent polling regression
+  const STAGE_RANK: Record<string, number> = {
+    applied: 1, screened: 1, shortlisted: 1,
+    assignment_sent: 2, assignment_submitted: 2, assignment_reviewed: 2,
+    tech_round: 3, tech_round_completed: 3, interview_round: 3, interview_round_completed: 3,
+    hr_round: 4, hr_round_completed: 4, offered: 4, hired: 4, rejected: 99
+  }
+
+  // Helper to update candidate stage locally, persist in localStorage, & sync to Supabase
   const lastDbStageRef = useRef<string | null>(null)
   const isFirstLoadRef = useRef<boolean>(true)
 
   const updateCandidateStage = async (newStage: AppStage) => {
     setActiveCandidate(prev => ({ ...prev, stage: newStage }))
     lastDbStageRef.current = newStage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("candidate_current_stage", newStage)
+    }
 
     if (activeCandidate.id && !activeCandidate.id.startsWith("cand-pending")) {
       try {
@@ -324,13 +335,28 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
           const parsed = dbCand.parsed_data || {}
           const liveStage = (app?.stage as AppStage) || "applied"
 
-          const stageHasChangedInDb = lastDbStageRef.current !== null && lastDbStageRef.current !== liveStage
+          const savedStage = typeof window !== "undefined" ? localStorage.getItem("candidate_current_stage") as AppStage | null : null
 
-          if (isFirstLoadRef.current || stageHasChangedInDb) {
-            if (stageHasChangedInDb && ["shortlisted", "assignment_sent", "tech_round"].includes(liveStage)) {
-              showToast("success", `🎉 Recruiter updated status to ${liveStage.replace(/_/g, " ").toUpperCase()}!`)
+          let effectiveStage: AppStage = liveStage
+          if (savedStage && lastDbStageRef.current === null) {
+            effectiveStage = savedStage
+          } else if (lastDbStageRef.current !== null) {
+            const currentRank = STAGE_RANK[lastDbStageRef.current] || 1
+            const dbRank = STAGE_RANK[liveStage] || 1
+            if (dbRank >= currentRank || liveStage === "rejected") {
+              effectiveStage = liveStage
+            } else {
+              effectiveStage = lastDbStageRef.current as AppStage
             }
-            lastDbStageRef.current = liveStage
+          }
+
+          const stageHasChanged = lastDbStageRef.current !== null && lastDbStageRef.current !== effectiveStage
+
+          if (isFirstLoadRef.current || stageHasChanged) {
+            if (stageHasChanged && ["shortlisted", "assignment_sent", "tech_round"].includes(effectiveStage)) {
+              showToast("success", `🎉 Status updated to ${effectiveStage.replace(/_/g, " ").toUpperCase()}!`)
+            }
+            lastDbStageRef.current = effectiveStage
             isFirstLoadRef.current = false
 
             setActiveCandidate({
@@ -340,7 +366,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               phone: dbCand.phone || "+1 (555) 019-2834",
               initials: dbCand.initials || dbCand.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
               job_title: app?.jobs?.title || position,
-              stage: liveStage,
+              stage: effectiveStage,
               ai_score: app?.ai_score ?? 92,
               match_quality: (app?.match_quality as MatchQuality) || "excellent",
               flagged: app?.flagged || false,
@@ -1033,10 +1059,13 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                 const isPassed = idx === 0 && activeCandidate.stage !== "applied"
 
                 return (
-                  <div key={step.stage} className={`p-4 rounded-2xl border transition-all ${
+                  <div
+                    key={step.stage}
+                    onClick={() => updateCandidateStage(step.stage as AppStage)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
                     isActive ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-lg shadow-emerald-500/10" :
                     isPassed ? "bg-white/[0.02] border-white/[0.08] text-emerald-400" :
-                    "bg-white/[0.01] border-white/[0.04] text-neutral-500"
+                    "bg-white/[0.01] border-white/[0.04] text-neutral-500 hover:border-white/20"
                   }`}>
                     <div className="flex items-center justify-center gap-1.5 font-bold text-xs font-mono tracking-wider">
                       {isPassed ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Clock className="w-4 h-4" />}
