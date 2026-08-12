@@ -42,6 +42,26 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   })
   const [showApplyModal, setShowApplyModal] = useState(false)
 
+  // Candidate Registration Form Fields & Auth State
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [position, setPosition] = useState("Senior Backend Engineer")
+  const [location, setLocation] = useState("")
+  const [linkedInUrl, setLinkedInUrl] = useState("")
+  const [githubUrl, setGithubUrl] = useState("")
+  const [yearsExp, setYearsExp] = useState("3-5 years")
+  const [workPreference, setWorkPreference] = useState("Remote")
+  const [noticePeriod, setNoticePeriod] = useState("Immediate")
+  const [statementOfIntent, setStatementOfIntent] = useState("")
+  const [technicalImpact, setTechnicalImpact] = useState("")
+  const [outageLesson, setOutageLesson] = useState("")
+  const [skillsText, setSkillsText] = useState("")
+  const [resumeText, setResumeText] = useState("")
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [resumeInputMode, setResumeInputMode] = useState<"upload" | "paste">("upload")
+  const [applying, setApplying] = useState(false)
+
   // Candidate Auth & Password state
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
