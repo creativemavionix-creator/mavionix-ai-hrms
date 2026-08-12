@@ -17,6 +17,37 @@ interface CandidatePortalDashboardProps {
 }
 
 export default function CandidatePortalDashboard({ onSwitchToRecruiter }: CandidatePortalDashboardProps) {
+  // Toast Notification System
+  const [toast, setToast] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null)
+  const showToast = (type: "success" | "info" | "error", message: string) => {
+    setToast({ type, message })
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  // Live Candidate Application State
+  const [activeCandidate, setActiveCandidate] = useState<ApiCandidate>({
+    id: "cand-pending-1",
+    name: "New Applicant",
+    email: "applicant@example.com",
+    phone: "+1 (555) 019-2834",
+    initials: "NA",
+    job_title: "Senior Backend Engineer",
+    stage: "applied",
+    ai_score: 92,
+    match_quality: "excellent",
+    flagged: false,
+    applied_date: new Date().toLocaleDateString(),
+    skill_score: 94,
+    exp_score: 90,
+    edu_score: 88,
+    proj_score: 95,
+    confidence: 96,
+    sentiment_score: 92,
+    insights: "Application received and queued for AI screening & Recruiter review.",
+    tags: ["Submitted", "Under Review"],
+    verification_status: "verified"
+  })
+
   // Candidate Session State (Controlled via Supabase Auth & explicit state)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -78,16 +109,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
   })
 
-  useEffect(() => {
-    const handleProjectAssigned = (e: CustomEvent) => {
-      if (e.detail) {
-        setAssignedProject(e.detail)
-      }
-    }
-    window.addEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
-    return () => window.removeEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
-  }, [])
-
   // Candidate Auth & Password state
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
@@ -96,35 +117,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   // Realtime Broadcast Channel reference for Live Drafting notifications
   const broadcastChannelRef = useRef<any>(null)
   const lastBroadcastTimeRef = useRef<number>(0)
-
-  useEffect(() => {
-    broadcastChannelRef.current = supabase.channel("candidate-drafting-channel")
-    broadcastChannelRef.current.subscribe()
-    return () => {
-      if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current)
-    }
-  }, [])
-
-  const sendDraftingBroadcast = (candName: string, candEmail: string, candPosition: string) => {
-    const now = Date.now()
-    if (now - lastBroadcastTimeRef.current < 1200) return
-    lastBroadcastTimeRef.current = now
-
-    if (broadcastChannelRef.current && candEmail) {
-      broadcastChannelRef.current.send({
-        type: "broadcast",
-        event: "candidate-drafting",
-        payload: {
-          name: candName.trim() || candEmail.split("@")[0],
-          email: candEmail.trim(),
-          position: candPosition || position || "Senior Backend Engineer",
-          timestamp: new Date().toLocaleTimeString()
-        }
-      })
-    }
-  }
-
-  // Live Candidate Application State
   const isLoggedOutRef = useRef<boolean>(false)
 
   // Load candidate profile directly from Supabase Database
@@ -251,30 +243,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
   }
 
-  // Live Candidate Application State
-  const [activeCandidate, setActiveCandidate] = useState<ApiCandidate>({
-    id: "cand-pending-1",
-    name: "New Applicant",
-    email: "applicant@example.com",
-    phone: "+1 (555) 019-2834",
-    initials: "NA",
-    job_title: "Senior Backend Engineer",
-    stage: "applied",
-    ai_score: 92,
-    match_quality: "excellent",
-    flagged: false,
-    applied_date: new Date().toLocaleDateString(),
-    skill_score: 94,
-    exp_score: 90,
-    edu_score: 88,
-    proj_score: 95,
-    confidence: 96,
-    sentiment_score: 92,
-    insights: "Application received and queued for AI screening & Recruiter review.",
-    tags: ["Submitted", "Under Review"],
-    verification_status: "verified"
-  })
-
   // Project Task & Timer State
   const [projectDeadline, setProjectDeadline] = useState<number>(Date.now() + 48 * 3600 * 1000) // 48h from now
   const [timeLeft, setTimeLeft] = useState<{ h: number; m: number; s: number; expired: boolean }>({ h: 48, m: 0, s: 0, expired: false })
@@ -294,13 +262,6 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [candidateAnswer, setCandidateAnswer] = useState("")
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [wpm, setWpm] = useState(140)
-
-  // Toast State
-  const [toast, setToast] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null)
-  const showToast = (type: "success" | "info" | "error", message: string) => {
-    setToast({ type, message })
-    setTimeout(() => setToast(null), 4000)
-  }
 
   // Timer Effect
   useEffect(() => {
