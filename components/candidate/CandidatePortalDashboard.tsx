@@ -42,47 +42,119 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   })
   const [showApplyModal, setShowApplyModal] = useState(false)
 
-  // Candidate Registration Form Fields
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [position, setPosition] = useState("Senior Backend Engineer")
-  const [location, setLocation] = useState("")
-  const [linkedInUrl, setLinkedInUrl] = useState("")
-  const [githubUrl, setGithubUrl] = useState("")
-  const [yearsExp, setYearsExp] = useState("3-5 years")
-  const [workPreference, setWorkPreference] = useState("Remote")
-  const [noticePeriod, setNoticePeriod] = useState("Immediate")
-  const [statementOfIntent, setStatementOfIntent] = useState("")
-  const [technicalImpact, setTechnicalImpact] = useState("")
-  const [outageLesson, setOutageLesson] = useState("")
-  const [skillsText, setSkillsText] = useState("")
-  const [resumeText, setResumeText] = useState("")
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [resumeInputMode, setResumeInputMode] = useState<"upload" | "paste">("upload")
-  // Recruiter Assigned Project State & Realtime Event Listener
-  const [assignedProject, setAssignedProject] = useState<{ title: string; description: string; deadlineDays: number }>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("assigned_project_task")
-      if (saved) {
-        try { return JSON.parse(saved) } catch {}
-      }
-    }
-    return {
-      title: "Distributed Microservices Rate Limiter & Async Router",
-      description: "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation.",
-      deadlineDays: 3
-    }
-  })
+  // Candidate Auth & Password state
+  const [password, setPassword] = useState("")
+  const [authLoading, setAuthLoading] = useState(false)
+  const [userSession, setUserSession] = useState<any>(null)
+
+  // Realtime Broadcast Channel reference for Live Drafting notifications
+  const broadcastChannelRef = useRef<any>(null)
+  const lastBroadcastTimeRef = useRef<number>(0)
 
   useEffect(() => {
-    const handleProjectAssigned = (e: CustomEvent) => {
-      if (e.detail) {
-        setAssignedProject(e.detail)
-      }
+    broadcastChannelRef.current = supabase.channel("recruiter-realtime-sync")
+    broadcastChannelRef.current.subscribe()
+    return () => {
+      if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current)
     }
-    window.addEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
-    return () => window.removeEventListener("recruiter-assigned-project" as any, handleProjectAssigned)
+  }, [])
+
+  const sendDraftingBroadcast = (candName: string, candEmail: string, candPosition: string) => {
+    const now = Date.now()
+    if (now - lastBroadcastTimeRef.current < 1200) return
+    lastBroadcastTimeRef.current = now
+
+    if (broadcastChannelRef.current && candEmail) {
+      broadcastChannelRef.current.send({
+        type: "broadcast",
+        event: "candidate-drafting",
+        payload: {
+          name: candName.trim() || candEmail.split("@")[0],
+          email: candEmail.trim(),
+          position: candPosition || position || "Senior Backend Engineer",
+          timestamp: new Date().toLocaleTimeString()
+        }
+      })
+    }
+  }
+
+  // Load candidate profile directly from Supabase Database
+  const fetchCandidateFromDb = async (userEmail: string) => {
+    if (!userEmail) return
+    try {
+      const { data: cands } = await supabase
+        .from("candidates")
+        .select(`
+          *,
+          applications (
+            id, job_id, stage, ai_score, match_quality, flagged, applied_date, jobs ( title )
+          )
+        `)
+        .eq("email", userEmail.toLowerCase().trim())
+        .limit(1)
+
+      if (cands && cands.length > 0) {
+        const dbCand = cands[0]
+        const app = Array.isArray(dbCand.applications) && dbCand.applications.length > 0 ? dbCand.applications[0] : null
+        const parsed = dbCand.parsed_data || {}
+        const liveStage = (app?.stage as AppStage) || "applied"
+
+        setActiveCandidate({
+          id: dbCand.id,
+          name: dbCand.name,
+          email: dbCand.email,
+          phone: dbCand.phone || "+1 (555) 019-2834",
+          initials: dbCand.initials || dbCand.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+          job_title: app?.jobs?.title || position,
+          stage: liveStage,
+          ai_score: app?.ai_score ?? 92,
+          match_quality: (app?.match_quality as MatchQuality) || "excellent",
+          flagged: app?.flagged || false,
+          applied_date: app?.applied_date || new Date().toLocaleDateString(),
+          skill_score: 94,
+          exp_score: 90,
+          edu_score: 88,
+          proj_score: 95,
+          confidence: 96,
+          sentiment_score: 92,
+          insights: parsed?.statementOfIntent || "Application loaded directly from database.",
+          tags: ["Submitted", "Under Review"],
+          verification_status: "verified"
+        })
+
+        setIsAuthenticated(true)
+        setApplicationSubmitted(true)
+      }
+    } catch (err) {
+      console.warn("DB candidate fetch notice:", err)
+    }
+  }
+
+  // Supabase Auth Session Listener on Mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserSession(session)
+        const userEmail = session.user.email || ""
+        if (userEmail) {
+          setEmail(userEmail)
+          fetchCandidateFromDb(userEmail)
+        }
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserSession(session)
+        const userEmail = session.user.email || ""
+        if (userEmail) {
+          setEmail(userEmail)
+          fetchCandidateFromDb(userEmail)
+        }
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   // File Upload Drag & Drop Handler
@@ -298,7 +370,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => clearInterval(interval)
   }, [])
 
-  // Handle Application Submit via Server API Ingestion Route
+  // Handle Application Submit via Server API Ingestion Route with Supabase Auth
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !email) {
@@ -307,6 +379,19 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     }
     setApplying(true)
     try {
+      // 1. Create candidate user in Supabase Auth if password provided
+      if (password) {
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: { data: { full_name: name.trim() } }
+        })
+        if (signUpErr && !signUpErr.message.includes("already registered")) {
+          console.warn("Supabase auth signUp warning:", signUpErr.message)
+        }
+      }
+
+      // 2. Persist Candidate Record & Application to Database
       const res = await fetch("/api/candidates/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -333,31 +418,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       const data = await res.json()
 
       if (res.ok && data.success) {
-        const returnedCand = data.candidate
-        const newCand: ApiCandidate = {
-          id: returnedCand?.id || `cand-${Date.now()}`,
-          name: returnedCand?.name || name,
-          email: returnedCand?.email || email,
-          phone: returnedCand?.phone || phone,
-          initials: (returnedCand?.name || name).split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
-          job_title: position,
-          stage: "applied",
-          ai_score: 92,
-          match_quality: "excellent",
-          flagged: false,
-          applied_date: new Date().toLocaleDateString(),
-          skill_score: 94,
-          exp_score: 90,
-          edu_score: 88,
-          proj_score: 92,
-          confidence: 95,
-          sentiment_score: 90,
-          insights: "Application received and queued for AI screening & Recruiter review.",
-          tags: ["Submitted", "Under Review"],
-          verification_status: "verified"
-        }
-
-        setActiveCandidate(newCand)
+        // Fetch fresh candidate details directly from Supabase DB
+        await fetchCandidateFromDb(email.trim().toLowerCase())
         setIsAuthenticated(true)
         setApplicationSubmitted(true)
         showToast("success", data.message || "Application Received! Profile is under recruiter review.")
@@ -548,14 +610,17 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                     <span>SECTION 1: PERSONAL & PROFESSIONAL PROFILES</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Full Name *</label>
                       <Input
                         required
                         placeholder="e.g. Priya Sharma"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e) => {
+                          setName(e.target.value)
+                          sendDraftingBroadcast(e.target.value, email, position)
+                        }}
                         className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
                       />
                     </div>
@@ -566,7 +631,21 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                         type="email"
                         placeholder="priya@example.com"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value)
+                          sendDraftingBroadcast(name, e.target.value, position)
+                        }}
+                        className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Account Password *</label>
+                      <Input
+                        required
+                        type="password"
+                        placeholder="Create candidate password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
                       />
                     </div>
@@ -772,7 +851,21 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                     type="email"
                     placeholder="Enter your registered email address"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      sendDraftingBroadcast(name, e.target.value, position)
+                    }}
+                    className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2.5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Account Password *</label>
+                  <Input
+                    required
+                    type="password"
+                    placeholder="Enter your candidate password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2.5"
                   />
                 </div>
@@ -781,17 +874,30 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                   <Input
                     placeholder="e.g. Priya Sharma"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      sendDraftingBroadcast(e.target.value, email, position)
+                    }}
                     className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2.5"
                   />
                 </div>
 
                 <Button
                   type="submit"
+                  disabled={authLoading}
                   className="w-full btn-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <UserCheck className="w-4 h-4" />
-                  <span>Sign In & Track Application</span>
+                  {authLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Authenticating Candidate Session...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      <span>Sign In & Track Application</span>
+                    </>
+                  )}
                 </Button>
               </form>
             )}

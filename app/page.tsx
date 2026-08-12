@@ -90,6 +90,18 @@ export default function RecruitmentDashboard() {
     const channel = supabase
       .channel("recruiter-realtime-sync")
       .on(
+        "broadcast",
+        { event: "candidate-drafting" },
+        (payload) => {
+          const draft = payload.payload
+          const alertMsg = `✏️ Live Drafting: ${draft?.name || draft?.email || "A candidate"} is currently filling out an application for ${draft?.position || "a role"}.`
+          setNotifications((prev) => {
+            if (prev[0] === alertMsg) return prev
+            return [alertMsg, ...prev]
+          })
+        }
+      )
+      .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "candidates" },
         (payload) => {

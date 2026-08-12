@@ -75,10 +75,11 @@ export async function POST(req: Request) {
         .single()
 
       if (createCandErr || !newCand) {
-        console.error("Error creating candidate:", createCandErr)
-        // Fallback demo object if DB offline
-        candidateId = `cand-${Date.now()}`
-        candidateRecord = { id: candidateId, name, email: normalizedEmail, initials, phone }
+        console.error("Database Candidate creation error:", createCandErr?.message || createCandErr)
+        return NextResponse.json(
+          { success: false, error: `Candidate Persistence Failed: ${createCandErr?.message || "Unknown DB error"}` },
+          { status: 500 }
+        )
       } else {
         candidateRecord = newCand
         candidateId = newCand.id
@@ -155,14 +156,11 @@ export async function POST(req: Request) {
         .single()
 
       if (createAppErr || !newApp) {
-        console.error("Error creating application in Supabase:", createAppErr?.message || createAppErr)
-        applicationRecord = {
-          id: `app-${Date.now()}`,
-          job_id: targetJobUuid,
-          candidate_id: candidateId,
-          stage: "applied",
-          applied_date: new Date().toISOString().split("T")[0]
-        }
+        console.error("Database Application creation error:", createAppErr?.message || createAppErr)
+        return NextResponse.json(
+          { success: false, error: `Application Persistence Failed: ${createAppErr?.message || "Unknown DB error"}` },
+          { status: 500 }
+        )
       } else {
         applicationRecord = newApp
       }
