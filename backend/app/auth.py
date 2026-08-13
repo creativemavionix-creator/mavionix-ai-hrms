@@ -64,8 +64,6 @@ else:
             if user_id is None:
                 raise credentials_exception
         except JWTError:
-            if settings.app_env == "development":
-                return _DEMO_USER
             raise credentials_exception
 
         result = None
@@ -82,8 +80,6 @@ else:
             pass
 
         if not result:
-            if settings.app_env == "development":
-                return _DEMO_USER
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User profile not found. Contact your administrator.",
