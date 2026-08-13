@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     if (token !== "demo") {
       const backendSession = await validateViaBackend(token)
       if (backendSession) {
+        backendSession.token = token
         return NextResponse.json({ session: backendSession })
       }
       // If backend can't find it, it's invalid
@@ -36,12 +37,14 @@ export async function POST(req: NextRequest) {
     // If backend has demo data already, use it. Otherwise return a fixture.
     const backendSession = await validateViaBackend(token)
     if (backendSession) {
+      backendSession.token = token
       return NextResponse.json({ session: backendSession })
     }
 
     // Fallback fixture — only when backend is unreachable AND token is "demo"
     return NextResponse.json({
       session: {
+        token: "demo",
         candidateId: "demo-candidate-001",
         candidateName: "Priya Sharma",
         applicationId: "demo-app-001",

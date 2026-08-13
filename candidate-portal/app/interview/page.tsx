@@ -345,6 +345,7 @@ const searchParams = useSearchParams()
           message: text,
           candidateName: session.candidateName,
           jobTitle: session.jobTitle,
+          token: session.token,
         }),
       })
         .then((res) => res.json())
@@ -450,6 +451,7 @@ const searchParams = useSearchParams()
               roundType: session.roundType,
               strikes: nextStrikes,
               jobTitle: session.jobTitle,
+              token: session.token,
             }),
           })
           const data = await res.json()
@@ -516,6 +518,9 @@ const searchParams = useSearchParams()
       }
 
       const { session: sess } = await res.json()
+      if (sess && !sess.token && t) {
+        sess.token = t
+      }
       setSession(sess)
 
       // 1. If there is an active pending assignment, ALWAYS open assignment screen first!
@@ -576,6 +581,7 @@ const searchParams = useSearchParams()
           round_blueprints: sess.round_blueprints,
           blueprint_version: sess.blueprint_version,
           session: sess,
+          token: sess.token || session?.token,
         }),
       })
 
@@ -678,6 +684,7 @@ const searchParams = useSearchParams()
           candidateName: session.candidateName,
           jobTitle: session.jobTitle,
           speaking_metrics: speakingMetrics,
+          token: session.token,
         }),
       })
 
@@ -817,6 +824,7 @@ const searchParams = useSearchParams()
           assignmentId: session.assignment.id,
           submissionText: text || "[Empty submission]",
           submissionType: subType,
+          token: session.token,
         }),
       })
 

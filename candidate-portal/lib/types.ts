@@ -118,6 +118,7 @@ export interface Assignment {
 }
 
 export interface CandidateSession {
+  token?: string
   candidateId: string
   candidateName: string
   applicationId: string

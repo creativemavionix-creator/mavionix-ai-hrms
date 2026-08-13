@@ -17,6 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.auth import get_current_user, require_role
+from app.candidate_auth import (
+    CandidateSession,
+    get_current_candidate,
+    require_candidate_application,
+)
 from app.database import supabase
 from app.schemas.users import CurrentUser
 from app.services.assignments import (
@@ -34,6 +39,7 @@ CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 HRStaffDep = Annotated[CurrentUser, Depends(require_role(
     "super_admin", "hr_manager", "recruiter", "interviewer"
 ))]
+CandidateDep = Annotated[CandidateSession, Depends(get_current_candidate)]
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -170,7 +176,7 @@ async def generate_and_send_assignment(application_id: str, user: HRStaffDep):
 
 
 @router.post("/api/assignments/{assignment_id}/submit")
-async def submit_assignment(assignment_id: str, body: SubmitRequest, user: CurrentUserDep):
+async def submit_assignment(assignment_id: str, body: SubmitRequest, candidate: CandidateDep):
     """
     Candidate submits their assignment work (text and/or URL).
     Sets assignment status to 'submitted' and stage to 'assignment_submitted'.
@@ -190,6 +196,8 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, user: Curre
         raise HTTPException(status_code=404, detail="Assignment not found.")
     assignment = assign_result.data
 
+    require_candidate_application(assignment["application_id"], candidate)
+
     if assignment["status"] == "reviewed":
         raise HTTPException(status_code=422, detail="Assignment already reviewed.")
 
@@ -206,7 +214,7 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, user: Curre
         await advance_stage(
             application_id=assignment["application_id"],
             new_stage="assignment_submitted",
-            actor_name=user.name,
+            actor_name="Candidate",
             reason="Candidate submitted assignment",
         )
     except Exception as exc:
@@ -215,7 +223,7 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, user: Curre
     # Log
     try:
         supabase.table("activity_logs").insert({
-            "actor_name": user.name,
+            "actor_name": "Candidate",
             "action": "submitted assignment for review for",
             "context_label": "Assignment",
             "log_type": "info",

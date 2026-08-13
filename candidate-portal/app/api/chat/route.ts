@@ -58,18 +58,24 @@ const MAX_EXCHANGES = 6
 
 async function tryBackend(
   action: string,
-  body: any
+  body: any,
+  candidateToken?: string
 ): Promise<{ ok: boolean; data?: any }> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (candidateToken) {
+      headers["Authorization"] = `Bearer ${candidateToken}`
+    }
 
     if (action === "start") {
       const res = await fetch(
         `${ADMIN_API}/api/applications/${body.applicationId}/start-round/${body.roundType}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer demo-token" },
+          headers,
           signal: controller.signal,
         }
       )
@@ -85,11 +91,30 @@ async function tryBackend(
         `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/respond`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer demo-token" },
+          headers,
           body: JSON.stringify({
             message: body.message,
             candidate_skills: body.candidateSkills || [],
             speaking_metrics: body.speaking_metrics,
+          }),
+          signal: controller.signal,
+        }
+      )
+      clearTimeout(timeoutId)
+      if (res.ok) {
+        const data = await res.json()
+        return { ok: true, data }
+      }
+    }
+
+    if (action === "report_strike") {
+      const res = await fetch(
+        `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/strike`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            strikes: body.strikes,
           }),
           signal: controller.signal,
         }
@@ -209,9 +234,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { action } = body
+    const candidateToken = body.token || body.session?.token || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
 
     if (action === "start") {
-      const backendRes = await tryBackend("start", body)
+      const backendRes = await tryBackend("start", body, candidateToken)
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
       }
@@ -255,9 +281,16 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    if (action === "report_strike") {
+      const backendRes = await tryBackend("report_strike", body, candidateToken)
+      if (backendRes.ok && backendRes.data) {
+        return NextResponse.json(backendRes.data)
+      }
+    }
+
     if (action === "respond") {
       const { roundId, message, jobTitle, roundType } = body
-      const backendRes = await tryBackend("respond", body)
+      const backendRes = await tryBackend("respond", body, candidateToken)
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
       }

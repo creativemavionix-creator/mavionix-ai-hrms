@@ -16,6 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.auth import get_current_user, require_role
+from app.candidate_auth import (
+    CandidateSession,
+    get_current_candidate,
+    require_candidate_application,
+    require_candidate_round_type,
+)
 from app.config import settings
 from app.database import supabase
 from app.routers.jobs import JOB_BLUEPRINTS_CACHE
@@ -35,6 +41,7 @@ CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 HRStaffDep = Annotated[CurrentUser, Depends(require_role(
     "super_admin", "hr_manager", "recruiter", "interviewer"
 ))]
+CandidateDep = Annotated[CandidateSession, Depends(get_current_candidate)]
 
 # Stage mapping for round types
 ROUND_STAGE_MAP = {
@@ -70,11 +77,14 @@ class StrikeRequest(BaseModel):
 # ── Start Round ───────────────────────────────────────────────────────────────
 
 @router.post("/api/applications/{application_id}/start-round/{round_type}")
-async def start_round(application_id: str, round_type: str, user: CurrentUserDep):
+async def start_round(application_id: str, round_type: str, candidate: CandidateDep):
     """
     Start an AI interview round (tech, interview, or hr).
     Creates the ai_interview_rounds row and generates the first question.
     """
+    require_candidate_application(application_id, candidate)
+    require_candidate_round_type(round_type, candidate)
+
     if round_type not in ROUND_STAGE_MAP:
         raise HTTPException(status_code=422, detail=f"Invalid round_type. Must be: tech, interview, hr")
 
@@ -190,11 +200,13 @@ async def start_round(application_id: str, round_type: str, user: CurrentUserDep
 # ── Respond ───────────────────────────────────────────────────────────────────
 
 @router.post("/api/applications/{application_id}/round/{round_id}/respond")
-async def respond_to_round(application_id: str, round_id: str, body: RespondRequest, user: CurrentUserDep):
+async def respond_to_round(application_id: str, round_id: str, body: RespondRequest, candidate: CandidateDep):
     """
     Candidate responds to a question. AI evaluates and either asks a follow-up
     or signals round completion.
     """
+    require_candidate_application(application_id, candidate)
+
     # Fetch the round
     round_data = None
     try:
@@ -208,12 +220,7 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         round_data = DEMO_ROUNDS.get(round_id)
 
     if not round_data:
-        r_type = "tech"
-        if "interview" in round_id.lower() or "interview" in application_id.lower():
-            r_type = "interview"
-        elif "hr" in round_id.lower() or "hr" in application_id.lower():
-            r_type = "hr"
-
+        r_type = candidate.round_type
         # Fallback demo round structure
         round_data = {
             "id": round_id,
@@ -224,8 +231,10 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         }
         DEMO_ROUNDS[round_id] = round_data
 
-    if round_data["application_id"] != application_id:
-        raise HTTPException(status_code=422, detail="Round does not belong to this application.")
+    if round_data["application_id"] != candidate.application_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Round does not belong to your authorized application.")
+
+    require_candidate_round_type(round_data["round_type"], candidate)
 
     # Get job context for question generation
     app_result = supabase.table("applications").select("job_id").eq("id", application_id).maybe_single().execute()
@@ -395,11 +404,13 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
 
 
 @router.post("/api/applications/{application_id}/round/{round_id}/strike")
-async def report_strike(application_id: str, round_id: str, body: StrikeRequest, user: CurrentUserDep):
+async def report_strike(application_id: str, round_id: str, body: StrikeRequest, candidate: CandidateDep):
     """
     Update the candidate's browser strikes in the database.
     If strikes >= 3, force compile evaluation and abort interview.
     """
+    require_candidate_application(application_id, candidate)
+
     # Fetch round details
     round_data = None
     if round_id in DEMO_ROUNDS:
@@ -417,11 +428,16 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
         round_data = {
             "id": round_id,
             "application_id": application_id,
-            "round_type": "tech",
+            "round_type": candidate.round_type,
             "transcript": [],
             "status": "in_progress",
             "browser_strike_count": 0,
         }
+
+    if round_data["application_id"] != candidate.application_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Round does not belong to your authorized application.")
+
+    require_candidate_round_type(round_data["round_type"], candidate)
 
     strikes = body.strikes
     round_data["browser_strike_count"] = strikes
