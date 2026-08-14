@@ -10,6 +10,7 @@
 
 import { generateGeminiChatResponse } from "./gemini"
 import { supabase } from "./supabaseClient"
+import { toDbStage } from "./stageHistory"
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
@@ -608,10 +609,11 @@ export const candidatesApi = {
 
   updateApplication: async (applicationId: string, payload: UpdateApplicationPayload) => {
     try {
+      const dbStage = payload.stage ? toDbStage(payload.stage) : undefined
       const { data, error } = await supabase
         .from("applications")
         .update({
-          ...(payload.stage ? { stage: payload.stage } : {}),
+          ...(dbStage ? { stage: dbStage } : {}),
           ...(payload.flagged !== undefined ? { flagged: payload.flagged } : {})
         })
         .eq("id", applicationId)
@@ -620,9 +622,13 @@ export const candidatesApi = {
 
       if (!error && data) {
         return data as any
+      } else if (error) {
+        console.error("Supabase application update DB error:", error.message)
+        throw new Error(error.message)
       }
     } catch (e) {
       console.warn("Supabase application update warning:", e)
+      throw e
     }
 
     return api.patch<{ id: string; stage: string; flagged: boolean }>(
@@ -1138,9 +1144,9 @@ export interface AssignmentEvalResult {
 }
 
 export const assignmentsApi = {
-  generate: (applicationId: string) =>
+  generate: (applicationId: string, payload?: { title?: string; description?: string; requirements?: string; deadline_days?: number }) =>
     api.post<{ assignment: ApiAssignment; message: string; deadline: string }>(
-      `/api/applications/${applicationId}/generate-assignment`, {}
+      `/api/applications/${applicationId}/generate-assignment`, payload || {}
     ),
 
   manualShortlistAndAssign: (applicationId: string) =>
@@ -1314,7 +1320,7 @@ export const pipelineApi = {
 
 // ── AI Interview Rounds API ───────────────────────────────────────────────────
 
-export type RoundType = "tech" | "interview" | "speaking" | "hr"
+export type RoundType = "tech" | "interview" | "speaking" | "hr" | "project"
 export type RoundStatus = "not_started" | "in_progress" | "completed"
 
 export interface TranscriptEntry {

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, require_role
 from app.candidate_auth import (
@@ -44,6 +44,13 @@ CandidateDep = Annotated[CandidateSession, Depends(get_current_candidate)]
 
 # ── Request models ────────────────────────────────────────────────────────────
 
+class AssignmentGenerateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    requirements: str | None = None
+    deadline_days: int | None = Field(default=3, ge=1, le=30)
+
+
 class SubmitRequest(BaseModel):
     submission_text: str | None = None
     submission_url: str | None = None
@@ -52,10 +59,14 @@ class SubmitRequest(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/api/applications/{application_id}/generate-assignment", status_code=status.HTTP_201_CREATED)
-async def generate_and_send_assignment(application_id: str, user: HRStaffDep):
+async def generate_and_send_assignment(
+    application_id: str,
+    user: HRStaffDep,
+    body: AssignmentGenerateRequest | None = None,
+):
     """
-    Generate a role-appropriate assignment using DeepSeek, save it,
-    advance stage to 'assignment_sent', and queue an email to the candidate.
+    Generate a role-appropriate assignment using DeepSeek or store recruiter-provided custom assignment details,
+    save it, advance stage to 'assignment_sent', and queue an email to the candidate.
     """
     # 1. Fetch application + job + candidate
     app_result = (
@@ -91,20 +102,32 @@ async def generate_and_send_assignment(application_id: str, user: HRStaffDep):
         raise HTTPException(status_code=404, detail="Candidate not found.")
     candidate = cand_result.data
 
-    # 2. Generate assignment via DeepSeek
-    assignment_data = await generate_assignment(
-        job_title=job["title"],
-        department=job["department"],
-        job_description=job.get("description"),
-    )
+    # 2. Determine assignment title, description, requirements, and deadline
+    days = (body.deadline_days if body and body.deadline_days and body.deadline_days > 0 else 3)
+    deadline = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+    if body and body.title and body.description:
+        # Use recruiter-provided custom assignment details
+        title = body.title.strip()
+        description = body.description.strip()
+        requirements = body.requirements.strip() if body.requirements else ""
+    else:
+        # Fall back to DeepSeek AI generation if custom assignment details are not provided
+        assignment_data = await generate_assignment(
+            job_title=job["title"],
+            department=job["department"],
+            job_description=job.get("description"),
+        )
+        title = assignment_data.get("title", f"Assignment: {job['title']}")
+        description = assignment_data.get("description", "")
+        requirements = assignment_data.get("requirements", "")
 
     # 3. Save to assignments table
-    deadline = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     assignment_payload = {
         "application_id": application_id,
-        "title": assignment_data.get("title", f"Assignment: {job['title']}"),
-        "description": assignment_data.get("description", ""),
-        "requirements": assignment_data.get("requirements", ""),
+        "title": title,
+        "description": description,
+        "requirements": requirements,
         "status": "pending",
         "deadline": deadline,
     }

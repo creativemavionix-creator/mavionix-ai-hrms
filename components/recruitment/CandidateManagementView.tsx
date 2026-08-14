@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { candidatesApi, jobsApi, portalApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
+import { candidatesApi, jobsApi, portalApi, assignmentsApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
 import { supabase } from "@/lib/supabaseClient"
 import { logStageTransition } from "@/lib/stageHistory"
 import {
@@ -329,6 +329,14 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
 
     setAssigning(true)
     try {
+      if (applicationId && !applicationId.startsWith("app-")) {
+        await assignmentsApi.generate(applicationId, {
+          title: projectTitle,
+          description: projectDescription,
+          deadline_days: deadlineDays
+        })
+      }
+
       const res = await portalApi.generateToken({
         candidate_id: candidateId,
         application_id: applicationId || `app-${Date.now()}`,
@@ -342,14 +350,13 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
         deadlineDays
       }
       if (typeof window !== "undefined") {
-        localStorage.setItem("assigned_project_task", JSON.stringify(assignedData))
         window.dispatchEvent(new CustomEvent("recruiter-assigned-project", { detail: assignedData }))
       }
 
       await navigator.clipboard.writeText(projectUrl)
       onAssigned(projectTitle, projectDescription, deadlineDays, projectUrl)
-    } catch {
-      addToast("error", "Failed to generate project task assignment link.")
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to generate project task assignment link.")
     } finally {
       setAssigning(false)
     }
@@ -1279,10 +1286,48 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
     return () => window.removeEventListener("new-candidate-applied", handleNewApp)
   }, [addToast])
 
-  // Listen to Realtime updates on public.ai_reports and public.applications
+  // Listen to Realtime updates on public.candidates, public.applications, and public.ai_reports
   useEffect(() => {
     const channel = supabase
       .channel("recruiter-management-table-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "candidates" },
+        () => {
+          fetchCandidates(stageFilter, searchTerm)
+          fetchStats()
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "applications" },
+        () => {
+          fetchCandidates(stageFilter, searchTerm)
+          fetchStats()
+          addToast("success", `📋 New Candidate Application Received! Syncing pipeline...`)
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "applications" },
+        (payload) => {
+          const updatedApp = payload.new as any
+          if (updatedApp) {
+            setCandidates(prev => prev.map(c => {
+              if (c.application_id === updatedApp.id) {
+                return {
+                  ...c,
+                  ai_score: updatedApp.ai_score,
+                  match_quality: updatedApp.match_quality,
+                  stage: updatedApp.stage,
+                  flagged: updatedApp.flagged
+                }
+              }
+              return c
+            }))
+          }
+        }
+      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "ai_reports" },
@@ -1309,33 +1354,12 @@ export default function CandidateManagementView({ sidebarCollapsed = false }: { 
           }
         }
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "applications" },
-        (payload) => {
-          const updatedApp = payload.new as any
-          if (updatedApp) {
-            setCandidates(prev => prev.map(c => {
-              if (c.application_id === updatedApp.id) {
-                return {
-                  ...c,
-                  ai_score: updatedApp.ai_score,
-                  match_quality: updatedApp.match_quality,
-                  stage: updatedApp.stage,
-                  flagged: updatedApp.flagged
-                }
-              }
-              return c
-            }))
-          }
-        }
-      )
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [addToast])
+  }, [fetchCandidates, fetchStats, stageFilter, searchTerm, addToast])
 
   useEffect(() => {
     if (selectedId) {

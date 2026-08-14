@@ -9,7 +9,7 @@ import {
   Upload, AlertTriangle, ShieldCheck, Video, Mic, Link2, Copy,
   Sparkles, Award, ArrowRight, RefreshCw, XCircle, Send, CheckCircle
 } from "lucide-react"
-import { candidatesApi, ApiCandidate, AppStage, MatchQuality } from "@/lib/api"
+import { candidatesApi, assignmentsApi, ApiCandidate, AppStage, MatchQuality } from "@/lib/api"
 import { supabase } from "@/lib/supabaseClient"
 
 interface CandidatePortalDashboardProps {
@@ -95,19 +95,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [applying, setApplying] = useState(false)
 
   // Recruiter Assigned Project State & Realtime Event Listener
-  const [assignedProject, setAssignedProject] = useState<{ title: string; description: string; deadlineDays: number }>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("assigned_project_task")
-      if (saved) {
-        try { return JSON.parse(saved) } catch {}
-      }
-    }
-    return {
-      title: "Distributed Microservices Rate Limiter & Async Router",
-      description: "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation.",
-      deadlineDays: 3
-    }
-  })
+  const [activeAssignment, setActiveAssignment] = useState<any | null>(null)
 
   // Candidate Auth & Password state
   const [password, setPassword] = useState("")
@@ -142,6 +130,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
         setActiveCandidate({
           id: dbCand.id,
+          application_id: app?.id || null,
           name: dbCand.name,
           email: dbCand.email,
           phone: dbCand.phone || "+1 (555) 019-2834",
@@ -203,7 +192,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
     return () => subscription.unsubscribe()
   }, [])
 
-  // Realtime postgres_changes listener for candidate application stage updates
+  // Realtime postgres_changes listener for candidate application stage updates & assignments
   useEffect(() => {
     if (!activeCandidate.id || activeCandidate.id.startsWith("cand-pending")) return
 
@@ -224,7 +213,19 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
             const newStage = updated.stage as AppStage
             setActiveCandidate(prev => ({ ...prev, stage: newStage }))
             showToast("success", `⚡ REALTIME UPDATE: Recruiter accepted your round! Status: ${newStage.replace(/_/g, " ").toUpperCase()}`)
+            // We will refetch application/assignment data here in future checkpoints.
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "assignments",
+        },
+        (payload) => {
+          // Listen for assignment changes, we will refetch in future checkpoints.
         }
       )
       .subscribe()
@@ -233,6 +234,25 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       supabase.removeChannel(appChannel)
     }
   }, [activeCandidate.id])
+
+  // Load real persisted assignment from public.assignments when application_id is available
+  useEffect(() => {
+    if (activeCandidate.application_id && !activeCandidate.application_id.startsWith("app-pending")) {
+      assignmentsApi.getByApplication(activeCandidate.application_id).then(asgn => {
+        if (asgn) {
+          setActiveAssignment(asgn)
+          if (asgn.deadline) {
+            const parsed = new Date(asgn.deadline).getTime()
+            if (!isNaN(parsed) && parsed > 0) {
+              setProjectDeadline(parsed)
+            }
+          }
+        }
+      }).catch(err => {
+        console.warn("Candidate assignment fetch notice:", err)
+      })
+    }
+  }, [activeCandidate.application_id])
 
   // File Upload Drag & Drop Handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -438,6 +458,7 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
             setActiveCandidate({
               id: dbCand.id,
+              application_id: app?.id || null,
               name: dbCand.name,
               email: dbCand.email,
               phone: dbCand.phone || "+1 (555) 019-2834",
@@ -1204,17 +1225,17 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
         {/* Dynamic Stage View Container */}
 
-        {/* STAGE 1: APPLICATION REVIEW, APPROVED CONGRATS, OR REJECTION STATUS */}
-        {(activeCandidate.stage === "applied" || activeCandidate.stage === "submitted" || activeCandidate.stage === "under_review" || activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted" || activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected") && (
+        {/* STAGE 1: APPLICATION REVIEW OR REJECTION STATUS */}
+        {(activeCandidate.stage === "applied" || activeCandidate.stage === "submitted" || activeCandidate.stage === "under_review" || activeCandidate.stage === "shortlisted" || activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected") && (
           <Card className="glass-card border-white/[0.08] p-8 rounded-3xl space-y-6 text-center reveal-up">
             <div className={`w-16 h-16 rounded-3xl border flex items-center justify-center mx-auto shadow-xl ${
-              activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+              activeCandidate.stage === "shortlisted"
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
                 : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                 ? "bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/10"
                 : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
             }`}>
-              {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted" ? (
+              {activeCandidate.stage === "shortlisted" ? (
                 <Sparkles className="w-8 h-8 text-emerald-400 animate-bounce" />
               ) : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected" ? (
                 <XCircle className="w-8 h-8 text-red-400" />
@@ -1225,40 +1246,40 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
             <div className="max-w-xl mx-auto space-y-2">
               <span className={`eyebrow font-bold uppercase ${
-                activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                activeCandidate.stage === "shortlisted"
                   ? "text-emerald-400"
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? "text-red-400"
                   : "text-emerald-400"
               }`}>
-                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
-                  ? "🎉 STAGE 1 PASSED & APPROVED"
+                {activeCandidate.stage === "shortlisted"
+                  ? "🎉 SHORTLISTED / AWAITING ASSIGNMENT"
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? "APPLICATION EVALUATION COMPLETED"
                   : "STAGE 1 IN PROGRESS — UNDER REVIEW"}
               </span>
 
               <h3 className="text-2xl font-display font-extrabold text-white">
-                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
-                  ? `🎉 CONGRATULATIONS, ${activeCandidate.name.toUpperCase()}! YOU'VE MOVED TO THE NEXT STAGE`
+                {activeCandidate.stage === "shortlisted"
+                  ? `🎉 CONGRATULATIONS, ${activeCandidate.name.toUpperCase()}! YOU'VE BEEN SHORTLISTED`
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? "APPLICATION STATUS UPDATE"
                   : "YOUR PROFILE IS CURRENTLY UNDER REVIEW"}
               </h3>
 
               <p className="text-xs text-neutral-300 leading-relaxed font-medium">
-                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
-                  ? "Our recruitment team has approved your application! Waiting for the recruiter to assign your project task for the next evaluation round."
+                {activeCandidate.stage === "shortlisted"
+                  ? "You've been shortlisted. Your next step will appear here once the recruiter assigns it."
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? `Thank you for your interest in HireMind AI. After careful review at the Application Review stage, we will not be moving forward with your application for ${activeCandidate.job_title} at this time.`
-                  : "Your application has been received and registered. Gemini 2.0 AI and our recruitment team are currently reviewing your credentials."}
+                  : "Your application is currently under review."}
               </p>
             </div>
 
             <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-2xl max-w-lg mx-auto flex items-center justify-between text-xs">
               <span className="eyebrow text-neutral-400">CURRENT STATUS:</span>
               <span className={`font-bold uppercase tracking-wider flex items-center gap-2 ${
-                activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
+                activeCandidate.stage === "shortlisted"
                   ? "text-emerald-400"
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? "text-red-400"
@@ -1269,8 +1290,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
                     ? "bg-red-400"
                     : "bg-emerald-400 animate-ping"
                 }`} />
-                {activeCandidate.stage === "approved" || activeCandidate.stage === "shortlisted"
-                  ? "APPROVED — WAITING FOR RECRUITER TO ASSIGN PROJECT TASK"
+                {activeCandidate.stage === "shortlisted"
+                  ? "SHORTLISTED — WAITING FOR RECRUITER TO ASSIGN PROJECT TASK"
                   : activeCandidate.stage === "decision_rejected" || activeCandidate.stage === "rejected"
                   ? "DECISION: REJECTED AT APPLICATION REVIEW STAGE"
                   : "UNDER REVIEW — RECRUITER & AI EVALUATION IN PROGRESS"}
@@ -1345,72 +1366,104 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
 
             {/* Project Details & Submission Card */}
             <Card className="glass-card border-white/[0.08] p-6 rounded-3xl space-y-6">
-              <div>
-                <span className="eyebrow text-emerald-400">ASSIGNMENT SPECIFICATIONS</span>
-                <h4 className="text-lg font-display font-extrabold text-white mt-1">
-                  {assignedProject.title}
-                </h4>
-                <p className="text-xs text-neutral-300 leading-relaxed mt-2 font-medium">
-                  {assignedProject.description}
-                </p>
-              </div>
+              {activeAssignment ? (
+                <>
+                  <div>
+                    <span className="eyebrow text-emerald-400">ASSIGNMENT SPECIFICATIONS</span>
+                    <h4 className="text-lg font-display font-extrabold text-white mt-1">
+                      {activeAssignment.title}
+                    </h4>
+                    <p className="text-xs text-neutral-300 leading-relaxed mt-2 font-medium">
+                      {activeAssignment.description}
+                    </p>
+                  </div>
 
-              {activeCandidate.stage === "task_approved" ? (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl text-center space-y-3">
-                  <Sparkles className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
-                  <h4 className="text-base font-bold text-white uppercase">STAGE 2 APPROVED BY RECRUITER!</h4>
-                  <p className="text-xs text-neutral-300 max-w-md mx-auto">
-                    Your project task submission has been evaluated and approved. Please wait for the recruiter to issue your live AI proctored interview link.
-                  </p>
-                </div>
-              ) : activeCandidate.stage === "assignment_submitted" || activeCandidate.stage === "task_submitted" ? (
-                <div className="bg-cyan-500/10 border border-cyan-500/30 p-6 rounded-2xl text-center space-y-3">
-                  <CheckCircle2 className="w-8 h-8 text-cyan-400 mx-auto" />
-                  <h4 className="text-base font-bold text-white uppercase font-display">YOUR ASSIGNMENT IS BEING REVIEWED</h4>
-                  <p className="text-xs text-neutral-300 max-w-md mx-auto">
-                    Your solution has been submitted and is currently undergoing recruiter review and criterion scoring.
-                  </p>
-                </div>
+                  {activeCandidate.stage === "task_approved" ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl text-center space-y-3">
+                      <Sparkles className="w-8 h-8 text-emerald-400 mx-auto animate-bounce" />
+                      <h4 className="text-base font-bold text-white uppercase">STAGE 2 APPROVED BY RECRUITER!</h4>
+                      <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                        Your project task submission has been evaluated and approved. Please wait for the recruiter to issue your live AI proctored interview link.
+                      </p>
+                    </div>
+                  ) : activeCandidate.stage === "assignment_submitted" || activeCandidate.stage === "task_submitted" ? (
+                    <div className="bg-cyan-500/10 border border-cyan-500/30 p-6 rounded-2xl text-center space-y-3">
+                      <CheckCircle2 className="w-8 h-8 text-cyan-400 mx-auto" />
+                      <h4 className="text-base font-bold text-white uppercase font-display">YOUR ASSIGNMENT IS BEING REVIEWED</h4>
+                      <p className="text-xs text-neutral-300 max-w-md mx-auto">
+                        Your solution has been submitted and is currently undergoing recruiter review and criterion scoring.
+                      </p>
+                    </div>
+                  ) : (
+                    <form onSubmit={async (e) => {
+                      e.preventDefault()
+                      if (!submissionText.trim()) {
+                        showToast("error", "Please provide a solution overview or architecture notes.")
+                        return
+                      }
+                      setSubmittingProject(true)
+                      try {
+                        const asgnId = activeAssignment?.id
+                        if (asgnId) {
+                          await fetch("/api/assignment", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              assignmentId: asgnId,
+                              submissionText,
+                              submissionUrl,
+                              submissionType: "text"
+                            })
+                          })
+                        }
+                        updateCandidateStage("assignment_submitted" as any)
+                        showToast("success", "🎉 Assignment submitted successfully! Your submission is being reviewed by the recruiter.")
+                      } catch (err) {
+                        showToast("error", "Failed to submit assignment solution.")
+                      } finally {
+                        setSubmittingProject(false)
+                      }
+                    }} className="space-y-4 pt-4 border-t border-white/[0.06]">
+                      <div className="space-y-1.5">
+                        <label className="eyebrow text-neutral-400">SOLUTION OVERVIEW & ARCHITECTURE NOTES *</label>
+                        <textarea
+                          required
+                          rows={4}
+                          value={submissionText}
+                          onChange={e => setSubmissionText(e.target.value)}
+                          placeholder="Describe your implementation..."
+                          className="w-full bg-white/[0.02] border border-white/[0.08] text-xs text-neutral-200 rounded-2xl p-4 font-mono focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="eyebrow text-neutral-400">GITHUB REPOSITORY / DEMO URL (OPTIONAL)</label>
+                        <Input
+                          value={submissionUrl}
+                          onChange={e => setSubmissionUrl(e.target.value)}
+                          placeholder="https://github.com/priyasharma/demo"
+                          className="bg-white/[0.02] border-white/[0.08] text-xs text-neutral-200 rounded-xl h-10 font-mono"
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        disabled={submittingProject || timeLeft.expired}
+                        className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
+                      >
+                        {submittingProject ? "SUBMITTING..." : "SUBMIT PROJECT SOLUTION"}
+                      </Button>
+                    </form>
+                  )}
+                </>
               ) : (
-                <form onSubmit={async (e) => {
-                  e.preventDefault()
-                  if (activeCandidate.id) {
-                    await submitProjectTask(activeCandidate.id, submissionText, submissionUrl)
-                    await logStageTransition(activeCandidate.id, "task_assigned", "task_submitted", "candidate", "Candidate submitted project task solution")
-                  }
-                  updateCandidateStage("task_submitted" as any)
-                  showToast("success", "🎉 Assignment submitted successfully! Your submission is being reviewed by the recruiter.")
-                }} className="space-y-4 pt-4 border-t border-white/[0.06]">
-                  <div className="space-y-1.5">
-                    <label className="eyebrow text-neutral-400">SOLUTION OVERVIEW & ARCHITECTURE NOTES *</label>
-                    <textarea
-                      required
-                      rows={4}
-                      value={submissionText}
-                      onChange={e => setSubmissionText(e.target.value)}
-                      placeholder="Describe your implementation, Redis token bucket logic, and Docker instructions..."
-                      className="w-full bg-white/[0.02] border border-white/[0.08] text-xs text-neutral-200 rounded-2xl p-4 font-mono focus:border-emerald-500 outline-none"
-                    />
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/5 border border-white/10 mb-4">
+                    <Clock className="w-5 h-5 text-neutral-400" />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="eyebrow text-neutral-400">GITHUB REPOSITORY / DEMO URL (OPTIONAL)</label>
-                    <Input
-                      value={submissionUrl}
-                      onChange={e => setSubmissionUrl(e.target.value)}
-                      placeholder="https://github.com/priyasharma/rate-limiter-demo"
-                      className="bg-white/[0.02] border-white/[0.08] text-xs text-neutral-200 rounded-xl h-10 font-mono"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={submittingProject || timeLeft.expired}
-                    className="btn-primary py-3 px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20"
-                  >
-                    {submittingProject ? "SUBMITTING..." : "SUBMIT PROJECT SOLUTION"}
-                  </Button>
-                </form>
+                  <h4 className="text-sm font-bold text-white uppercase">WAITING FOR RECRUITER TO ASSIGN PROJECT TASK</h4>
+                  <p className="text-xs text-neutral-400 mt-2">Your assignment details will appear here once the recruiter issues the task.</p>
+                </div>
               )}
             </Card>
           </div>
