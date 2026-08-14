@@ -122,7 +122,34 @@ async def generate_and_send_assignment(
         description = assignment_data.get("description", "")
         requirements = assignment_data.get("requirements", "")
 
-    # 3. Save to assignments table
+    # 3. Check for existing assignment to enforce idempotency and reassignment guards
+    existing_asgn_result = (
+        supabase.table("assignments")
+        .select("*")
+        .eq("application_id", application_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    existing_asgn = (
+        existing_asgn_result.data[0]
+        if existing_asgn_result and existing_asgn_result.data
+        else None
+    )
+
+    if existing_asgn:
+        curr_status = existing_asgn.get("status")
+        if curr_status == "submitted":
+            raise HTTPException(
+                status_code=400,
+                detail="Application already has a submitted assignment and cannot be reassigned.",
+            )
+        elif curr_status == "reviewed":
+            raise HTTPException(
+                status_code=400,
+                detail="Application already has a reviewed assignment and cannot be reassigned.",
+            )
+
     assignment_payload = {
         "application_id": application_id,
         "title": title,
@@ -131,10 +158,24 @@ async def generate_and_send_assignment(
         "status": "pending",
         "deadline": deadline,
     }
-    insert_result = supabase.table("assignments").insert(assignment_payload).execute()
-    if not insert_result.data:
-        raise HTTPException(status_code=500, detail="Failed to save assignment.")
-    assignment = insert_result.data[0]
+
+    if existing_asgn and existing_asgn.get("status") == "pending":
+        # Update existing pending assignment in-place to preserve UUID & prevent duplicates
+        update_res = (
+            supabase.table("assignments")
+            .update(assignment_payload)
+            .eq("id", existing_asgn["id"])
+            .execute()
+        )
+        if not update_res.data:
+            raise HTTPException(status_code=500, detail="Failed to update existing assignment.")
+        assignment = update_res.data[0]
+    else:
+        # Insert new assignment when no prior assignment exists
+        insert_result = supabase.table("assignments").insert(assignment_payload).execute()
+        if not insert_result.data:
+            raise HTTPException(status_code=500, detail="Failed to save assignment.")
+        assignment = insert_result.data[0]
 
     # 4. Advance stage to assignment_sent
     try:
