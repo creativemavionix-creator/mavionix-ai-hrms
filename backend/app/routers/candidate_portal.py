@@ -8,11 +8,12 @@ Used by the admin dashboard when advancing a candidate to an AI round.
 """
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.auth import get_current_user, require_role
@@ -21,6 +22,8 @@ from app.database import supabase
 from app.rate_limiter import enforce_rate_limit, extract_client_ip
 from app.routers.jobs import JOB_BLUEPRINTS_CACHE, JOB_BLUEPRINT_VERSIONS_CACHE
 from app.schemas.users import CurrentUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Candidate Portal"])
 
@@ -80,18 +83,10 @@ async def generate_portal_token(body: GenerateTokenRequest, user: HRStaffDep):
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to generate token.")
 
-    # Reset any existing completed round lock so candidate can use fresh link
-    try:
-        supabase.table("ai_interview_rounds").update({"status": "in_progress"}).eq(
-            "application_id", body.application_id
-        ).eq("round_type", body.round_type).execute()
-    except Exception:
-        pass
-
     token_row = result.data[0]
 
-    # Build portal URL (configurable, defaults to localhost:3001)
-    portal_base = "http://localhost:3001"
+    # Build portal URL using configurable portal_base_url
+    portal_base = settings.portal_base_url.rstrip("/")
     url = f"{portal_base}/interview?token={token}"
 
     # Log activity
@@ -143,7 +138,6 @@ async def validate_portal_token(token: str, request: Request):
     enforce_rate_limit(key=f"ip:portal_val:{client_ip}", max_hits=10, window_seconds=60)
 
     if token == "demo":
-
         return {
             "session": {
                 "candidateId": "demo-cand-001",
@@ -179,35 +173,38 @@ async def validate_portal_token(token: str, request: Request):
     )
 
     if not token_result or not token_result.data:
-        # Fallback for demo token
-        return {
-            "session": {
-                "candidateId": "demo-cand-001",
-                "candidateName": "Aisha Patel",
-                "applicationId": "demo-app-001",
-                "roundType": "tech",
-                "jobTitle": "Senior Machine Learning Engineer",
-                "jobDepartment": "AI Engineering",
-                "jobDescription": "Build state-of-the-art ML models and NLP pipelines.",
-                "stage": "tech_round",
-                "candidateSkills": ["Python", "PyTorch", "NLP", "FastAPI"],
-                "round": None,
-                "assignment": None,
-                "is_demo": True,
-            }
-        }
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or non-existent portal access token.",
+        )
 
     token_row = token_result.data
 
-    # Check expiration
-    expires_at = token_row.get("expires_at", "")
-    if expires_at:
-        try:
-            exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            if exp_dt < datetime.now(timezone.utc):
-                raise HTTPException(status_code=410, detail="Token has expired.")
-        except (ValueError, TypeError):
-            pass  # Can't parse — skip expiry check in demo
+    # Check expiration (fail closed on missing, expired, or malformed timestamp)
+    expires_at = token_row.get("expires_at")
+    if not expires_at or not isinstance(expires_at, str) or not expires_at.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or null candidate token expiration timestamp.",
+        )
+
+    try:
+        exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        if exp_dt.tzinfo is None:
+            exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+        if exp_dt < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Candidate access token has expired.",
+            )
+    except HTTPException:
+        raise
+    except (ValueError, TypeError) as exc:
+        logger.warning("Failed to parse candidate token expiration timestamp '%s': %s", expires_at, exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or malformed candidate token expiration timestamp.",
+        )
 
     # Check if this specific token has already been consumed
     if token_row.get("used"):
