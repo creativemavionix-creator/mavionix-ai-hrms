@@ -394,10 +394,11 @@ async def recruiter_review_assignment(assignment_id: str, body: RecruiterReviewR
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    new_status = "approved" if body.decision == "approved" else "rejected"
+    # Column 'status' is PostgreSQL ENUM ('pending', 'submitted', 'reviewed').
+    # Store decision ('approved' | 'rejected') inside recruiter_review JSONB, set assignment status to 'reviewed'.
     supabase.table("assignments").update({
         "score": final_score,
-        "status": new_status,
+        "status": "reviewed",
         "recruiter_review": review_audit,
     }).eq("id", assignment_id).execute()
 
@@ -405,16 +406,17 @@ async def recruiter_review_assignment(assignment_id: str, body: RecruiterReviewR
     if body.decision == "approved":
         try:
             await advance_stage(application_id, "tech_round", user.name, f"Approved by recruiter ({user.name}) with score {final_score}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn(f"Failed to advance stage to tech_round: {e}")
     else:
         try:
             await advance_stage(application_id, "rejected", user.name, f"Rejected by recruiter: {body.rejection_reason_category or 'Assignment review'}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn(f"Failed to advance stage to rejected: {e}")
 
     return {
-        "status": new_status,
+        "status": "reviewed",
+        "decision": body.decision,
         "final_score": final_score,
         "review": review_audit,
     }

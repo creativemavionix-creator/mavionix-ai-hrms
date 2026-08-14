@@ -690,10 +690,30 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
 
             {(c.stage === "task_submitted" || c.stage === "assignment_submitted") && (
               <Button
-                onClick={() => {
-                  onStageChange(c.application_id!, "task_approved" as any, "Approved project task submission")
-                  setC(prev => prev ? { ...prev, stage: "task_approved" as any } : prev)
-                  addToast("success", `🎉 Project task approved for ${c.name}!`)
+                onClick={async () => {
+                  try {
+                    if (!c.application_id) {
+                      addToast("error", "Application ID missing. Cannot complete project review.")
+                      return
+                    }
+
+                    const asgn = await assignmentsApi.getByApplication(c.application_id)
+                    if (!asgn || !asgn.id) {
+                      addToast("error", "Project assignment record not found for this candidate. Cannot complete review.")
+                      return
+                    }
+
+                    await assignmentsApi.recruiterReview(asgn.id, {
+                      recruiter_score: 90,
+                      decision: "approved",
+                      notes: "Approved project task submission"
+                    })
+
+                    setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
+                    addToast("success", `🎉 Project task approved for ${c.name}! Advanced candidate to Tech Round.`)
+                  } catch (err: any) {
+                    addToast("error", err?.message || "Failed to submit recruiter project review.")
+                  }
                 }}
                 className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
               >

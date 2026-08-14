@@ -1143,6 +1143,14 @@ export interface AssignmentEvalResult {
   advanced_to_tech_round: boolean
 }
 
+export interface RecruiterReviewPayload {
+  recruiter_score: number
+  override_reason?: string
+  decision?: "approved" | "rejected"
+  rejection_reason_category?: string | null
+  notes?: string
+}
+
 export const assignmentsApi = {
   generate: (applicationId: string, payload?: { title?: string; description?: string; requirements?: string; deadline_days?: number }) =>
     api.post<{ assignment: ApiAssignment; message: string; deadline: string }>(
@@ -1185,6 +1193,11 @@ export const assignmentsApi = {
 
   evaluate: (id: string) =>
     api.post<AssignmentEvalResult>(`/api/assignments/${id}/evaluate`, {}),
+
+  recruiterReview: (id: string, payload: RecruiterReviewPayload) =>
+    api.post<{ status: string; decision: string; final_score: number; review: any }>(
+      `/api/assignments/${id}/recruiter-review`, payload
+    ),
 }
 
 // ── Pipeline API ──────────────────────────────────────────────────────────────
