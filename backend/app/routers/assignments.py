@@ -210,7 +210,7 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, candidate: 
     # Fetch assignment
     assign_result = (
         supabase.table("assignments")
-        .select("id, application_id, status")
+        .select("id, application_id, status, deadline")
         .eq("id", assignment_id)
         .maybe_single()
         .execute()
@@ -223,6 +223,21 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, candidate: 
 
     if assignment["status"] == "reviewed":
         raise HTTPException(status_code=422, detail="Assignment already reviewed.")
+
+    # Server-side deadline enforcement
+    deadline_val = assignment.get("deadline")
+    if deadline_val:
+        try:
+            deadline_str = str(deadline_val).replace("Z", "+00:00")
+            deadline_dt = datetime.fromisoformat(deadline_str)
+            if deadline_dt.tzinfo is None:
+                deadline_dt = deadline_dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > deadline_dt:
+                raise HTTPException(status_code=400, detail="Assignment submission deadline has expired.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Error parsing assignment deadline timestamp '%s': %s", deadline_val, e)
 
     # Update assignment with submission
     update_payload = {
