@@ -24,7 +24,9 @@ from app.candidate_auth import (
 )
 from app.config import settings
 from app.database import supabase
+from app.rate_limiter import enforce_rate_limit, hash_candidate_token
 from app.routers.jobs import JOB_BLUEPRINTS_CACHE
+
 from app.schemas.users import CurrentUser
 from app.services.ai_interviews import (
     generate_first_question,
@@ -85,7 +87,15 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
     require_candidate_application(application_id, candidate)
     require_candidate_round_type(round_type, candidate)
 
+    # Rate limit: 5 requests per minute per candidate token (hashed)
+    enforce_rate_limit(
+        key=f"ai:start:candidate:{hash_candidate_token(candidate.token)}",
+        max_hits=5,
+        window_seconds=60,
+    )
+
     if round_type not in ROUND_STAGE_MAP:
+
         raise HTTPException(status_code=422, detail=f"Invalid round_type. Must be: tech, interview, hr")
 
     # Fetch application
@@ -174,9 +184,10 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
     # Advance stage
     start_stage = ROUND_STAGE_MAP[round_type]["start"]
     try:
-        await advance_stage(application_id, start_stage, user.name, f"{round_type} round started")
+        await advance_stage(application_id, start_stage, cand_data.get("name", "Candidate"), f"{round_type} round started")
     except Exception as exc:
         logger.warning("Stage advance to %s failed: %s", start_stage, exc)
+
 
     # Log
     try:
@@ -207,7 +218,15 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
     """
     require_candidate_application(application_id, candidate)
 
+    # Rate limit: 10 requests per minute per candidate token (hashed)
+    enforce_rate_limit(
+        key=f"ai:respond:candidate:{hash_candidate_token(candidate.token)}",
+        max_hits=10,
+        window_seconds=60,
+    )
+
     # Fetch the round
+
     round_data = None
     try:
         round_result = supabase.table("ai_interview_rounds").select("*").eq("id", round_id).maybe_single().execute()

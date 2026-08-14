@@ -12,11 +12,13 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.auth import get_current_user
+from app.rate_limiter import enforce_rate_limit, extract_client_ip
 from app.schemas.users import CurrentUser
+
 from app.services.ai_interviews import _call_gemini
 from app.services.copilot_skills import (
     compare_candidates,
@@ -214,12 +216,21 @@ async def get_daily_brief():
 
 
 @router.post("/chat")
-async def chat_copilot(req: CopilotRequest):
+@router.post("/query")
+async def chat_copilot(
+    req: CopilotRequest,
+    request: Request,
+    user: CurrentUser | None = Depends(get_current_user),
+):
+    user_id = user.id if user and hasattr(user, "id") and user.id else extract_client_ip(request)
+    enforce_rate_limit(key=f"hr_user:{user_id}", max_hits=20, window_seconds=60)
+
     query = req.message.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     llm_payload = classify_intent_with_llm(query, req.history or [], req.page_context)
+
     intent = llm_payload.get("intent", "UNIVERSAL_SEARCH")
     params = llm_payload.get("parameters", {})
     missing_params = llm_payload.get("missing_parameters", [])
@@ -228,7 +239,9 @@ async def chat_copilot(req: CopilotRequest):
     ctx_filters.update(params)
 
     data_payload: dict[str, Any] = {}
+    formatted_explanation: str = ""
     follow_up_chips: list[str] = []
+
     action_buttons: list[dict[str, str]] = []
     sources: list[str] = ["candidates", "applications", "jobs"]
     confidence_score = 98

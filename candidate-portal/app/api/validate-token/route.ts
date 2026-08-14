@@ -12,13 +12,55 @@ const ADMIN_API = process.env.ADMIN_API_URL || "http://127.0.0.1:8000"
  * - Real tokens → looked up in backend's candidate_tokens table (DemoStore or Supabase)
  * - token="demo" → tries backend first (in case there's demo data), falls back to fixture
  */
+// In-memory sliding window for Next.js API route
+const ipBuckets = new Map<string, { hits: number; windowStart: number }>()
+
+function checkIpRateLimit(ip: string, maxHits = 10, windowMs = 60000): { allowed: boolean; retryAfter: number } {
+  const now = Date.now()
+  const entry = ipBuckets.get(ip) || { hits: 0, windowStart: now }
+
+  if (now - entry.windowStart >= windowMs) {
+    entry.hits = 1
+    entry.windowStart = now
+  } else {
+    entry.hits += 1
+  }
+
+  ipBuckets.set(ip, entry)
+
+  if (entry.hits <= maxHits) {
+    return { allowed: true, retryAfter: 0 }
+  }
+
+  const elapsedSeconds = Math.floor((now - entry.windowStart) / 1000)
+  const retryAfter = Math.max(1, 60 - elapsedSeconds)
+  return { allowed: false, retryAfter }
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // ── Enforce 10 req/min IP Rate Limit ───────────────────────────────────
+    const xff = req.headers.get("x-forwarded-for")
+    const clientIp = xff ? xff.split(",")[0].trim() : (req.headers.get("x-real-ip") || "127.0.0.1")
+
+    const limitResult = checkIpRateLimit(clientIp, 10, 60000)
+
+    if (!limitResult.allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please wait before retrying." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limitResult.retryAfter) },
+        }
+      )
+    }
+
     const { token } = await req.json()
 
     if (!token || typeof token !== "string") {
       return NextResponse.json({ error: "Token is required" }, { status: 400 })
     }
+
 
     // ── Always try the backend first ─────────────────────────────────────────
     // This works in demo mode (DemoStore has candidate_tokens) and production (Supabase)

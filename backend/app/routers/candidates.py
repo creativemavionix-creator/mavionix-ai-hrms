@@ -18,8 +18,9 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel
 
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, require_internal_or_hr, require_role
 from app.database import get_user_client, supabase
 from app.schemas.applications import ApplicationCreate, ApplicationRead, ApplicationUpdate
 from app.schemas.candidates import (
@@ -420,7 +421,10 @@ class ProcessApplicationRequest(BaseModel):
 
 @router.post("/api/v1/applications/process")
 @router.post("/api/applications/process")
-async def process_application_async(body: ProcessApplicationRequest):
+async def process_application_async(
+    body: ProcessApplicationRequest,
+    auth: Annotated[CurrentUser, Depends(require_internal_or_hr)],
+):
     """
     Durable background processing endpoint called by Next.js ingestion API.
     Parses candidate resume, computes AI match scores, and updates Supabase DB.

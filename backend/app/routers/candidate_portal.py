@@ -12,12 +12,13 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.auth import get_current_user, require_role
 from app.config import settings
 from app.database import supabase
+from app.rate_limiter import enforce_rate_limit, extract_client_ip
 from app.routers.jobs import JOB_BLUEPRINTS_CACHE, JOB_BLUEPRINT_VERSIONS_CACHE
 from app.schemas.users import CurrentUser
 
@@ -130,7 +131,7 @@ async def list_tokens(application_id: str, user: HRStaffDep):
 
 
 @router.get("/api/portal/validate/{token}")
-async def validate_portal_token(token: str):
+async def validate_portal_token(token: str, request: Request):
     """
     Validate a candidate portal access token (public — no auth required).
     Called by the candidate-portal to look up session context for a given token.
@@ -138,7 +139,11 @@ async def validate_portal_token(token: str):
     Returns the full session context: candidate name, role, round type, etc.
     Works in both demo mode (DemoStore) and production (Supabase).
     """
+    client_ip = extract_client_ip(request)
+    enforce_rate_limit(key=f"ip:portal_val:{client_ip}", max_hits=10, window_seconds=60)
+
     if token == "demo":
+
         return {
             "session": {
                 "candidateId": "demo-cand-001",

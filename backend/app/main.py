@@ -45,7 +45,7 @@ app = FastAPI(
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,16 +68,25 @@ app.include_router(support_router)
 app.include_router(recruiter_copilot_router)
 
 
+import logging
+
+logger = logging.getLogger("hiremind.security")
+
+
 @app.on_event("startup")
 async def on_startup():
     """Load dynamic scoring weights from the settings table on boot."""
     if settings.demo_mode:
+        logger.warning(
+            "WARNING: FastAPI backend is running in DEMO_MODE. Authentication is bypassed for local development testing. DO NOT USE IN PRODUCTION."
+        )
         return  # No external DB to read from in demo mode
     try:
         from app.services.resume_parser import reload_weights_from_db
         reload_weights_from_db()
     except Exception:
         pass
+
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
