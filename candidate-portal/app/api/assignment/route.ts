@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const ADMIN_API = process.env.ADMIN_API_URL || "http://127.0.0.1:8000"
+const ADMIN_API = (process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
 
 /**
  * POST /api/assignment

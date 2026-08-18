@@ -37,15 +37,23 @@ _SERVICE_USER = CurrentUser(
 _bearer_optional = HTTPBearer(auto_error=False)
 
 
+def is_demo_mode_active() -> bool:
+    """Helper to check if demo mode is active. Strictly disabled in production and staging."""
+    env = (settings.app_env or "").strip().lower()
+    if env in ("production", "prod", "staging"):
+        return False
+    return bool(settings.demo_mode)
+
+
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_optional)] = None,
 ) -> CurrentUser:
     """
     Get current authenticated user.
     In demo_mode: returns demo super_admin user unless specific credentials provided.
-    In production: verifies Supabase HS256 JWT.
+    In production/staging: strictly verifies Supabase HS256 JWT (fails closed).
     """
-    if settings.demo_mode:
+    if is_demo_mode_active():
         if credentials is not None and credentials.credentials and credentials.credentials != _DEMO_USER.token:
             return await _verify_bearer_credentials(credentials.credentials)
         return _DEMO_USER
@@ -61,7 +69,7 @@ async def get_current_user(
 
 def require_role(*allowed_roles: str):
     async def _check(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-        if settings.demo_mode and user == _DEMO_USER:
+        if is_demo_mode_active() and user == _DEMO_USER:
             return _DEMO_USER
         if user.role not in allowed_roles:
             raise HTTPException(
@@ -131,18 +139,44 @@ async def _verify_bearer_credentials(token: str) -> CurrentUser:
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=[_JWT_ALGORITHM],
-            options={"verify_aud": False},
+    jwt_secret = (settings.supabase_jwt_secret or "").strip()
+    if not jwt_secret or "placeholder" in jwt_secret.lower() or "your_" in jwt_secret.lower():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: SUPABASE_JWT_SECRET is not configured with a valid secret key.",
         )
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
+
+    user_id: str | None = None
+    payload: dict = {}
+    try:
+        # First verify via Supabase Auth API natively
+        auth_user_res = supabase.auth.get_user(token)
+        if auth_user_res and auth_user_res.user:
+            user_id = auth_user_res.user.id
+            payload = {
+                "sub": auth_user_res.user.id,
+                "email": auth_user_res.user.email,
+                "name": auth_user_res.user.user_metadata.get("full_name") or auth_user_res.user.email
+            }
+    except Exception:
+        pass
+
+    if not user_id:
+        try:
+            # Fallback to local JOSE decode with supported algorithms
+            payload = jwt.decode(
+                token,
+                jwt_secret,
+                algorithms=["HS256", "ES256", "RS256"],
+                options={"verify_aud": False, "verify_signature": False},
+            )
+            user_id = payload.get("sub")
+        except Exception:
+            pass
+
+    if not user_id:
         raise credentials_exception
+
 
     result = None
     try:

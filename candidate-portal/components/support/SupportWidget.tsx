@@ -101,7 +101,8 @@ export function SupportWidget() {
     
     try {
       // Connect to SSE backend
-      const res = await fetch("http://localhost:8000/api/support/chat", {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL || "http://localhost:8000").replace(/\/$/, "")
+      const res = await fetch(`${apiBase}/api/support/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: userMsg, history: messages.slice(1) }),

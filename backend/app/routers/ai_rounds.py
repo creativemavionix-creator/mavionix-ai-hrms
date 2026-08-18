@@ -104,9 +104,13 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
     else:
         try:
             app_result = supabase.table("applications").select("id, candidate_id, job_id, stage").eq("id", application_id).maybe_single().execute()
-            app = app_result.data if app_result and app_result.data else {"id": application_id, "candidate_id": "demo-cand-001", "job_id": "demo-job-001", "stage": "tech_round"}
+            if not app_result or not getattr(app_result, "data", None):
+                raise HTTPException(status_code=404, detail=f"Application {application_id} not found.")
+            app = app_result.data
+        except HTTPException:
+            raise
         except Exception:
-            app = {"id": application_id, "candidate_id": "demo-cand-001", "job_id": "demo-job-001", "stage": "tech_round"}
+            raise HTTPException(status_code=404, detail=f"Application {application_id} not found.")
 
     # Check if round already exists and is in progress
     existing = supabase.table("ai_interview_rounds").select("id, status").eq("application_id", application_id).eq("round_type", round_type).maybe_single().execute()
@@ -181,8 +185,16 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
         }
     DEMO_ROUNDS[round_row["id"]] = round_row
 
+    # Mark token as used when round actually starts
+    if candidate and candidate.token:
+        try:
+            supabase.table("candidate_tokens").update({"used": True}).eq("token", candidate.token).execute()
+        except Exception:
+            pass
+
     # Advance stage
     start_stage = ROUND_STAGE_MAP[round_type]["start"]
+
     try:
         await advance_stage(application_id, start_stage, cand_data.get("name", "Candidate"), f"{round_type} round started")
     except Exception as exc:
@@ -672,8 +684,10 @@ async def trigger_recommendation(application_id: str, user: HRStaffDep):
     return result
 
 
+from app.auth import require_internal_or_hr
+
 @router.post("/api/applications/reevaluate-offline-rounds")
-async def reevaluate_offline_rounds(payload: dict | None = None):
+async def reevaluate_offline_rounds(payload: dict | None = None, user: CurrentUser = Depends(require_internal_or_hr)):
     """
     Recalculates offline rule-evaluated interview rounds using the LLM service
     once API connectivity is restored.

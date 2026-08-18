@@ -464,7 +464,7 @@ export default function RecruiterCopilotWidget({
             {filteredMessages.map((msg) => {
               const isUser = msg.role === "user"
               const data = msg.response_data
-              const proposal = data?.action_proposal
+              const proposal = (data as any)?.action_proposal
 
               return (
                 <div key={msg.id} className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>

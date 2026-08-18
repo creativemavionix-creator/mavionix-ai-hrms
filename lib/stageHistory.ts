@@ -35,6 +35,7 @@ export function toDbStage(stage: string): string {
       return "assignment_sent"
     case "task_submitted":
       return "assignment_submitted"
+    case "task_approved":
     case "interview_scheduled":
       return "tech_round"
     case "decision_hired":

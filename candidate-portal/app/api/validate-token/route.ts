@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const ADMIN_API = process.env.ADMIN_API_URL || "http://127.0.0.1:8000"
+const ADMIN_API = (process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
 
 /**
  * POST /api/validate-token
@@ -74,16 +74,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
     }
 
-    // ── token === "demo": try backend, fall back to fixture ──────────────────
-    // The "Start Demo Interview" button uses token=demo. 
-    // If backend has demo data already, use it. Otherwise return a fixture.
+    // ── token === "demo": try backend, fall back to fixture only in dev/demo mode ──
     const backendSession = await validateViaBackend(token)
     if (backendSession) {
       backendSession.token = token
       return NextResponse.json({ session: backendSession })
     }
 
-    // Fallback fixture — only when backend is unreachable AND token is "demo"
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
+    if (!isDemoAllowed) {
+      return NextResponse.json({ error: "Invalid or unauthorized portal access token" }, { status: 401 })
+    }
+
+    // Fallback fixture — only when backend is unreachable AND demo mode is explicitly enabled
     return NextResponse.json({
       session: {
         token: "demo",

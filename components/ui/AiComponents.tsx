@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils"
 export interface AiProvenanceChipProps {
   className?: string
   label?: string
+  provenance?: string
+  confidence?: number
 }
 
 export function AiProvenanceChip({ className, label = "AI EVAL" }: AiProvenanceChipProps) {

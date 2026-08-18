@@ -13,12 +13,23 @@ import { supabase } from "./supabaseClient"
 import { toDbStage } from "./stageHistory"
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
+  (process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null
-  // In demo mode the backend doesn't check tokens, but we still send one if present
-  return localStorage.getItem("hiremind_token") || "demo-token"
+  const mode = localStorage.getItem("hiremind_portal_view_mode")
+  if (mode === "candidate") {
+    return localStorage.getItem("hiremind_candidate_token") || localStorage.getItem("hiremind_token") || "demo-token"
+  }
+  if (mode === "recruiter") {
+    return localStorage.getItem("hiremind_recruiter_token") || localStorage.getItem("hiremind_token") || "demo-token"
+  }
+  return (
+    localStorage.getItem("hiremind_recruiter_token") ||
+    localStorage.getItem("hiremind_candidate_token") ||
+    localStorage.getItem("hiremind_token") ||
+    "demo-token"
+  )
 }
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
@@ -132,120 +143,23 @@ export interface UpdateJobPayload {
 
 export const jobsApi = {
   list: async (params?: { status?: string; search?: string }): Promise<ApiJob[]> => {
-    try {
-      let query = supabase.from("jobs").select("*").order("posted_date", { ascending: false })
-      if (params?.status && params.status !== "all") query = query.eq("status", params.status)
-      if (params?.search) query = query.or(`title.ilike.%${params.search}%,job_code.ilike.%${params.search}%`)
-      const { data, error } = await query
-      if (!error && data && data.length > 0) {
-        return data as ApiJob[]
-      }
-    } catch (e) {}
-
-    try {
-      const qs = new URLSearchParams()
-      if (params?.status && params.status !== "all") qs.set("status", params.status)
-      if (params?.search) qs.set("search", params.search)
-      const query = qs.toString() ? `?${qs.toString()}` : ""
-      return await api.get<ApiJob[]>(`/api/jobs${query}`)
-    } catch (e) {
-      return [
-        {
-          id: "job-1",
-          job_code: "JOB-101",
-          title: "Senior Backend Engineer",
-          department: "Engineering & AI",
-          location: "Remote / London",
-          status: "active",
-          priority: "high",
-          posted_date: "2026-08-01",
-          description: "Distributed Systems, Python FastAPI, Next.js, AI Microservices",
-          created_by: "Admin",
-          created_at: "2026-08-01T00:00:00Z",
-          applicant_count: 142
-        },
-        {
-          id: "job-2",
-          job_code: "JOB-102",
-          title: "Lead AI Architect",
-          department: "Engineering & AI",
-          location: "Onsite / SF",
-          status: "active",
-          priority: "high",
-          posted_date: "2026-08-03",
-          description: "MediaPipe Vision, Multi-Agent Systems, Gemini 2.0 LLM",
-          created_by: "Admin",
-          created_at: "2026-08-03T00:00:00Z",
-          applicant_count: 88
-        },
-        {
-          id: "job-3",
-          job_code: "JOB-103",
-          title: "Product Designer (UI/UX)",
-          department: "Product Design",
-          location: "Hybrid / NY",
-          status: "active",
-          priority: "medium",
-          posted_date: "2026-08-05",
-          description: "Dark Mode Glassmorphism, Micro-animations, Design System",
-          created_by: "Admin",
-          created_at: "2026-08-05T00:00:00Z",
-          applicant_count: 64
-        }
-      ]
-    }
+    const qs = new URLSearchParams()
+    if (params?.status && params.status !== "all") qs.set("status", params.status)
+    if (params?.search) qs.set("search", params.search)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return await api.get<ApiJob[]>(`/api/jobs${query}`)
   },
 
   stats: async () => {
-    try {
-      return await api.get<JobStats>("/api/jobs/stats")
-    } catch (e) {
-      return { active_roles: 6, high_priority: 4, draft_roles: 2 }
-    }
+    return await api.get<JobStats>("/api/jobs/stats")
   },
 
   get: async (id: string) => {
-    try {
-      return await api.get<ApiJob>(`/api/jobs/${id}`)
-    } catch (e) {
-      console.warn("Backend job get failed, returning fallback for", id)
-      return {
-        id: id,
-        job_code: "JOB-101",
-        title: "Senior Backend Engineer",
-        department: "Engineering & AI",
-        location: "Remote / London",
-        status: "active",
-        priority: "high",
-        posted_date: "2026-08-01",
-        description: "Distributed Systems, Python FastAPI, Next.js, AI Microservices",
-        created_by: "Admin",
-        created_at: "2026-08-01T00:00:00Z",
-        applicant_count: 142
-      }
-    }
+    return await api.get<ApiJob>(`/api/jobs/${id}`)
   },
 
   create: async (payload: CreateJobPayload) => {
-    try {
-      return await api.post<ApiJob>("/api/jobs", payload)
-    } catch (e) {
-      console.warn("Backend job create failed, creating job locally", e)
-      return {
-        id: `job-${Date.now()}`,
-        job_code: `JOB-${Math.floor(100 + Math.random() * 900)}`,
-        title: payload.title,
-        department: payload.department,
-        location: payload.location,
-        status: payload.status,
-        priority: payload.priority,
-        posted_date: new Date().toISOString().split("T")[0],
-        description: payload.description || "Active requisition blueprint",
-        created_by: "Admin",
-        created_at: new Date().toISOString(),
-        applicant_count: 0
-      }
-    }
+    return await api.post<ApiJob>("/api/jobs", payload)
   },
 
   update: (id: string, payload: UpdateJobPayload) =>
@@ -265,6 +179,8 @@ export type AppStage =
   | "offered" | "hired" | "rejected" | "waitlisted"
   // Legacy alias (migration 001 used "interview" as a stage name)
   | "interview"
+  // Canonical state machine aliases used by UI components
+  | "submitted" | "under_review" | "approved" | "task_assigned" | "task_submitted" | "task_approved" | "interview_scheduled" | "interview_completed" | "decision_hired" | "decision_rejected"
 
 export type MatchQuality = "excellent" | "strong" | "good" | "fair" | "low"
 
@@ -275,12 +191,13 @@ export interface ApiCandidate {
   email:           string
   phone:           string | null
   initials:        string
-  resume_url:      string | null
-  parsed_data:     Record<string, unknown> | null
-  created_at:      string
+  resume_url?:     string | null
+  parsed_data?:    Record<string, unknown> | null
+  user_id?:        string | null
+  created_at?:     string
   // application
-  application_id:  string | null
-  job_id:          string | null
+  application_id?: string | null
+  job_id?:         string | null
   job_title:       string | null
   stage:           AppStage | null
   ai_score:        number | null
@@ -349,292 +266,48 @@ async function uploadCandidate(payload: {
     }
     return data as ApiCandidate
   } catch (err) {
-    console.warn("Backend candidate upload failed, creating candidate locally", err)
-    const initials = payload.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "PA"
-    return {
-      id: `cand-${Date.now()}`,
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone || "+91 99999 99999",
-      initials: initials,
-      resume_url: null,
-      parsed_data: { skills: ["Python", "Backend", "AI Systems"], experience: "Applied via Web Portal" },
-      created_at: new Date().toISOString(),
-      application_id: `app-${Date.now()}`,
-      job_id: payload.job_id,
-      job_title: "Senior Backend Engineer",
-      stage: "screened",
-      ai_score: 94,
-      match_quality: "excellent",
-      flagged: false,
-      applied_date: new Date().toISOString().split("T")[0],
-      skill_score: 95,
-      exp_score: 92,
-      edu_score: 90,
-      proj_score: 96,
-      confidence: 97,
-      sentiment_score: 95,
-      insights: "Successfully submitted and evaluated by Gemini AI parser. High compatibility match.",
-      tags: ["Python", "FastAPI", "High Priority"],
-      verification_status: "verified"
-    }
+    throw err
   }
 }
 
 export const candidatesApi = {
   list: async (params?: { stage?: string; search?: string }): Promise<ApiCandidate[]> => {
-    try {
-      // 1. Query Supabase candidates table directly
-      let candQuery = supabase
-        .from("candidates")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (params?.search) {
-        candQuery = candQuery.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%`)
-      }
-
-      const { data: dbCandidates, error: candError } = await candQuery
-
-      if (!candError && dbCandidates && dbCandidates.length > 0) {
-        // 2. Fetch applications & jobs in parallel for fail-proof merging
-        const { data: dbApps } = await supabase.from("applications").select("*")
-        const { data: dbJobs } = await supabase.from("jobs").select("*")
-
-        const appsMap = new Map<string, any>()
-        if (dbApps) {
-          dbApps.forEach((app: any) => {
-            if (app.candidate_id && !appsMap.has(app.candidate_id)) {
-              appsMap.set(app.candidate_id, app)
-            }
-          })
-        }
-
-        const jobsMap = new Map<string, any>()
-        if (dbJobs) {
-          dbJobs.forEach((j: any) => jobsMap.set(j.id, j))
-        }
-
-        const formatted: ApiCandidate[] = dbCandidates.map((cand: any) => {
-          const matchedApp = appsMap.get(cand.id) || null
-          const matchedJob = matchedApp?.job_id ? jobsMap.get(matchedApp.job_id) : null
-          const parsed = cand.parsed_data || {}
-
-          return {
-            id: cand.id,
-            name: cand.name,
-            email: cand.email,
-            phone: cand.phone || null,
-            initials: cand.initials || "CN",
-            resume_url: cand.resume_url || null,
-            parsed_data: parsed,
-            created_at: cand.created_at || new Date().toISOString(),
-            application_id: matchedApp?.id || null,
-            job_id: matchedApp?.job_id || null,
-            job_title: matchedJob?.title || parsed?.position || "Senior Backend Engineer",
-            stage: (matchedApp?.stage as AppStage) || "applied",
-            ai_score: matchedApp?.ai_score ?? 92,
-            match_quality: (matchedApp?.match_quality as MatchQuality) || "excellent",
-            flagged: matchedApp?.flagged || false,
-            applied_date: matchedApp?.applied_date || new Date().toISOString().split("T")[0],
-            skill_score: 94,
-            exp_score: 90,
-            edu_score: 88,
-            proj_score: 95,
-            confidence: 96,
-            sentiment_score: 92,
-            insights: parsed?.statementOfIntent || parsed?.technicalImpact || "Application submitted via Candidate Portal.",
-            tags: Array.isArray(parsed?.skills) ? parsed.skills : ["Engineering", "Applicant"],
-            verification_status: "verified"
-          }
-        })
-
-        if (params?.stage && params.stage !== "all") {
-          return formatted.filter(c => c.stage === params.stage)
-        }
-        return formatted
-      }
-    } catch (err) {
-      console.warn("Supabase candidates direct fetch notice:", err)
-    }
-
-    try {
-      const qs = new URLSearchParams()
-      if (params?.stage && params.stage !== "all") qs.set("stage", params.stage)
-      if (params?.search) qs.set("search", params.search)
-      const query = qs.toString() ? `?${qs.toString()}` : ""
-      return await api.get<ApiCandidate[]>(`/api/candidates${query}`)
-    } catch (e) {
-      return [
-        {
-          id: "cand-1",
-          name: "Priya Sharma",
-          email: "priya.sharma@example.com",
-          phone: "+1 (555) 019-2834",
-          initials: "PS",
-          resume_url: null,
-          parsed_data: null,
-          created_at: "2026-08-01T10:00:00Z",
-          application_id: "app-101",
-          job_id: "job-1",
-          job_title: "Senior Backend Engineer",
-          stage: "tech_round",
-          ai_score: 92,
-          match_quality: "excellent",
-          flagged: false,
-          applied_date: "2026-08-01",
-          skill_score: 94,
-          exp_score: 90,
-          edu_score: 88,
-          proj_score: 95,
-          confidence: 96,
-          sentiment_score: 0.92,
-          insights: "Exceptional technical depth in distributed backend architectures & microservices.",
-          tags: ["Python", "FastAPI", "PostgreSQL", "System Architecture"],
-          verification_status: "Verified"
-        }
-      ]
-    }
+    const qs = new URLSearchParams()
+    if (params?.stage && params.stage !== "all") qs.set("stage", params.stage)
+    if (params?.search) qs.set("search", params.search)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return await api.get<ApiCandidate[]>(`/api/candidates${query}`)
   },
 
   stats: async (): Promise<CandidateStats> => {
-    try {
-      const { count } = await supabase.from("candidates").select("*", { count: "exact", head: true })
-      if (count !== null && count > 0) {
-        return { total: count, shortlisted: Math.floor(count * 0.3), in_interview: Math.floor(count * 0.15), rejected: Math.floor(count * 0.1) }
-      }
-    } catch (e) {}
-
-    try {
-      return await api.get<CandidateStats>("/api/candidates/stats")
-    } catch (e) {
-      return { total: 142, shortlisted: 38, in_interview: 12, rejected: 14 }
-    }
+    return await api.get<CandidateStats>("/api/candidates/stats")
   },
 
   get: async (id: string): Promise<ApiCandidate> => {
-    try {
-      const { data: cand } = await supabase.from("candidates").select("*").eq("id", id).single()
-      if (cand) {
-        const { data: appData } = await supabase.from("applications").select("*").eq("candidate_id", cand.id).limit(1).single()
-        let jobTitle = "Senior Backend Engineer"
-        if (appData?.job_id) {
-          const { data: jobData } = await supabase.from("jobs").select("title").eq("id", appData.job_id).limit(1).single()
-          if (jobData?.title) jobTitle = jobData.title
-        }
-
-        const parsed = cand.parsed_data || {}
-        return {
-          id: cand.id,
-          name: cand.name,
-          email: cand.email,
-          phone: cand.phone || null,
-          initials: cand.initials || "CN",
-          resume_url: cand.resume_url || null,
-          parsed_data: {
-            summary: parsed?.statementOfIntent || parsed?.technicalImpact || "Candidate application profile",
-            skills: Array.isArray(parsed?.skills) ? parsed.skills : ["System Architecture", "Python", "Next.js"],
-            experience: [
-              { title: "Candidate Application", company: parsed?.yearsExp || "3-5 yrs experience", duration: "Submitted via Candidate Portal", summary: parsed?.technicalImpact || parsed?.statementOfIntent || "Application details" },
-              { title: "Production Failure Guardrails", company: "System Resilience", duration: "RCA Answer", summary: parsed?.outageLesson || "No outage lessons provided." }
-            ],
-            education: [
-              { degree: "Technical Experience", institution: parsed?.location || "Remote Candidate", year: "2026" }
-            ],
-            projects: [
-              { name: "Candidate Resume", description: parsed?.resumeFileName || "uploaded_resume.pdf", technologies: Array.isArray(parsed?.skills) ? parsed.skills : ["Engineering"] }
-            ]
-          },
-          created_at: cand.created_at || new Date().toISOString(),
-          application_id: appData?.id || null,
-          job_id: appData?.job_id || null,
-          job_title: jobTitle,
-          stage: (appData?.stage as AppStage) || "applied",
-          ai_score: appData?.ai_score ?? 92,
-          match_quality: (appData?.match_quality as MatchQuality) || "excellent",
-          flagged: appData?.flagged || false,
-          applied_date: appData?.applied_date || new Date().toISOString().split("T")[0],
-          skill_score: 94,
-          exp_score: 90,
-          edu_score: 88,
-          proj_score: 95,
-          confidence: 96,
-          sentiment_score: 92,
-          insights: parsed?.statementOfIntent || "Application details on file.",
-          tags: Array.isArray(parsed?.skills) ? parsed.skills : ["Engineering"],
-          verification_status: "verified"
-        }
-      }
-    } catch (e) {
-      console.warn("Supabase candidate get notice:", e)
-    }
-
-    try {
-      return await api.get<ApiCandidate>(`/api/candidates/${id}`)
-    } catch (e) {
-      return {
-        id: id,
-        name: "Priya Sharma",
-        email: "priya.sharma@example.com",
-        phone: "+1 (555) 019-2834",
-        initials: "PS",
-        resume_url: null,
-        parsed_data: {
-          summary: "Pioneer in distributed system architectures.",
-          skills: ["Python", "FastAPI", "PostgreSQL", "Next.js"]
-        },
-        created_at: "2026-08-01T10:00:00Z",
-        application_id: "app-101",
-        job_id: "job-1",
-        job_title: "Senior Backend Engineer",
-        stage: "applied",
-        ai_score: 92,
-        match_quality: "excellent",
-        flagged: false,
-        applied_date: "2026-08-01",
-        skill_score: 94,
-        exp_score: 90,
-        edu_score: 88,
-        proj_score: 95,
-        confidence: 96,
-        sentiment_score: 92,
-        insights: "Application details on file.",
-        tags: ["Python", "FastAPI"],
-        verification_status: "verified"
-      }
-    }
+    return await api.get<ApiCandidate>(`/api/candidates/${id}`)
   },
 
   create: uploadCandidate,
 
   updateApplication: async (applicationId: string, payload: UpdateApplicationPayload) => {
-    try {
-      const dbStage = payload.stage ? toDbStage(payload.stage) : undefined
-      const { data, error } = await supabase
-        .from("applications")
-        .update({
-          ...(dbStage ? { stage: dbStage } : {}),
-          ...(payload.flagged !== undefined ? { flagged: payload.flagged } : {})
-        })
-        .eq("id", applicationId)
-        .select()
-        .single()
-
-      if (!error && data) {
-        return data as any
-      } else if (error) {
-        console.error("Supabase application update DB error:", error.message)
-        throw new Error(error.message)
-      }
-    } catch (e) {
-      console.warn("Supabase application update warning:", e)
-      throw e
-    }
-
-    return api.patch<{ id: string; stage: string; flagged: boolean }>(
+    return await api.patch<{ id: string; stage: string; flagged: boolean }>(
       `/api/applications/${applicationId}`,
       payload,
     )
+  },
+
+  grantPortalAccess: async (candidateId: string) => {
+    return await api.post<{
+      success: boolean
+      message: string
+      candidate_id: string
+      email: string
+      password: string
+      user_id: string | null
+      email_sent: boolean
+      email_id?: string | null
+      email_error?: string | null
+    }>(`/api/candidates/${candidateId}/grant-portal-access`, {})
   },
 
   delete: (id: string) => api.delete<void>(`/api/candidates/${id}`),
@@ -683,91 +356,16 @@ export interface UpdateAIReportPayload {
 
 export const aiReportsApi = {
   stats: async () => {
-    try {
-      return await api.get<AIReportStats>("/api/ai-reports/stats")
-    } catch (e) {
-      return { total_reports: 142, flagged_count: 3, active_sources: 6 }
-    }
+    return await api.get<AIReportStats>("/api/ai-reports/stats")
   },
 
   list: async (filter?: AIReportFilter) => {
-    try {
-      const qs = filter && filter !== "all" ? `?filter=${filter}` : ""
-      return await api.get<ApiAIReport[]>(`/api/ai-reports${qs}`)
-    } catch (e) {
-      return [
-        {
-          id: "rep-101",
-          application_id: "app-101",
-          verification_status: "verified",
-          sentiment_score: 94,
-          match_ranking: "excellent",
-          skill_score: 95,
-          exp_score: 92,
-          edu_score: 88,
-          proj_score: 96,
-          confidence: 97,
-          insights: "Exceptional technical depth in distributed backend architectures & microservices.",
-          tags: ["Python", "FastAPI", "PostgreSQL"],
-          flagged: false,
-          created_at: "2026-08-01T10:00:00Z",
-          candidate_name: "Priya Sharma",
-          candidate_email: "priya.sharma@example.com",
-          candidate_initials: "PS",
-          job_title: "Senior Backend Engineer",
-          ai_score: 92
-        },
-        {
-          id: "rep-102",
-          application_id: "app-102",
-          verification_status: "verified",
-          sentiment_score: 88,
-          match_ranking: "strong",
-          skill_score: 88,
-          exp_score: 84,
-          edu_score: 82,
-          proj_score: 90,
-          confidence: 91,
-          insights: "Strong design portfolio with expertise in dark glassmorphism and modern UI systems.",
-          tags: ["Figma", "UI/UX", "Design Systems"],
-          flagged: false,
-          created_at: "2026-08-03T11:30:00Z",
-          candidate_name: "Rahul Verma",
-          candidate_email: "rahul.verma@example.com",
-          candidate_initials: "RV",
-          job_title: "Product Designer (UI/UX)",
-          ai_score: 86
-        }
-      ]
-    }
+    const qs = filter && filter !== "all" ? `?filter=${filter}` : ""
+    return await api.get<ApiAIReport[]>(`/api/ai-reports${qs}`)
   },
 
   get: async (id: string) => {
-    try {
-      return await api.get<ApiAIReport>(`/api/ai-reports/${id}`)
-    } catch (e) {
-      return {
-        id: id,
-        application_id: "app-101",
-        verification_status: "verified",
-        sentiment_score: 94,
-        match_ranking: "excellent",
-        skill_score: 95,
-        exp_score: 92,
-        edu_score: 88,
-        proj_score: 96,
-        confidence: 97,
-        insights: "Exceptional technical depth in distributed backend architectures & microservices.",
-        tags: ["Python", "FastAPI", "PostgreSQL"],
-        flagged: false,
-        created_at: "2026-08-01T10:00:00Z",
-        candidate_name: "Priya Sharma",
-        candidate_email: "priya.sharma@example.com",
-        candidate_initials: "PS",
-        job_title: "Senior Backend Engineer",
-        ai_score: 92
-      }
-    }
+    return await api.get<ApiAIReport>(`/api/ai-reports/${id}`)
   },
 
   update: (id: string, payload: UpdateAIReportPayload) =>
@@ -820,48 +418,15 @@ export interface UpdateInterviewPayload {
 
 export const interviewsApi = {
   stats: async () => {
-    try {
-      return await api.get<InterviewStats>("/api/interviews/stats")
-    } catch (e) {
-      return { total: 18, scheduled: 6, completed: 10, no_show: 2 }
-    }
+    return await api.get<InterviewStats>("/api/interviews/stats")
   },
 
   list: async (params?: { search?: string; status?: InterviewStatus }) => {
-    try {
-      const qs = new URLSearchParams()
-      if (params?.search) qs.set("search", params.search)
-      if (params?.status) qs.set("status_filter", params.status)
-      const query = qs.toString() ? `?${qs.toString()}` : ""
-      return await api.get<ApiInterview[]>(`/api/interviews${query}`)
-    } catch (e) {
-      return [
-        {
-          id: "int-1",
-          candidate_id: "cand-1",
-          job_id: "job-1",
-          candidate_name: "Priya Sharma",
-          job_title: "Senior Backend Engineer",
-          interviewer_name: "Alex Vance",
-          session_type: "technical",
-          scheduled_at: "2026-08-11T14:00:00Z",
-          status: "scheduled",
-          score: 94
-        },
-        {
-          id: "int-2",
-          candidate_id: "cand-2",
-          job_id: "job-3",
-          candidate_name: "Rahul Verma",
-          job_title: "Product Designer (UI/UX)",
-          interviewer_name: "Elena Rostova",
-          session_type: "ai_screening",
-          scheduled_at: "2026-08-10T16:30:00Z",
-          status: "completed",
-          score: 88
-        }
-      ]
-    }
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set("search", params.search)
+    if (params?.status) qs.set("status_filter", params.status)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return await api.get<ApiInterview[]>(`/api/interviews${query}`)
   },
 
   get: (id: string) => api.get<ApiInterview>(`/api/interviews/${id}`),
@@ -1102,16 +667,18 @@ export const settingsApi = {
 // ── Assignments API ───────────────────────────────────────────────────────────
 
 export interface ApiAssignment {
-  id:               string
-  application_id:   string
-  title:            string
-  description:      string
-  requirements:     string | null
-  submission_url:   string | null
-  submission_text:  string | null
-  submission_type?: string
-  status:           "pending" | "submitted" | "reviewed" | "approved" | "rejected"
-  ai_evaluation:    {
+  id:                    string
+  application_id:        string
+  title:                 string
+  description:           string
+  requirements:          string | null
+  deliverables_required?: string[] | null
+  submission_data?:       Record<string, string> | null
+  submission_url:        string | null
+  submission_text:       string | null
+  submission_type?:      string
+  status:                "pending" | "submitted" | "reviewed" | "approved" | "rejected"
+  ai_evaluation:         {
     score:           number
     overall_score?:  number
     criteria?:       {
@@ -1131,9 +698,9 @@ export interface ApiAssignment {
     completeness?:   number
     communication?:  number
   } | null
-  score:            number | null
-  deadline:         string | null
-  created_at:       string
+  score:                 number | null
+  deadline:              string | null
+  created_at:            string
 }
 
 export interface AssignmentEvalResult {
@@ -1152,14 +719,26 @@ export interface RecruiterReviewPayload {
 }
 
 export const assignmentsApi = {
-  generate: (applicationId: string, payload?: { title?: string; description?: string; requirements?: string; deadline_days?: number }) =>
+  generate: (
+    applicationId: string,
+    payload?: {
+      title?: string
+      description?: string
+      requirements?: string
+      deadline_days?: number
+      deadline_date?: string
+      deliverables_required?: string[]
+    }
+  ) =>
     api.post<{ assignment: ApiAssignment; message: string; deadline: string }>(
-      `/api/applications/${applicationId}/generate-assignment`, payload || {}
+      `/api/applications/${applicationId}/generate-assignment`,
+      payload || {}
     ),
 
   manualShortlistAndAssign: (applicationId: string) =>
     api.post<{ message: string; assignment?: ApiAssignment; already_exists: boolean }>(
-      `/api/applications/${applicationId}/manual-shortlist-and-assign`, {}
+      `/api/applications/${applicationId}/manual-shortlist-and-assign`,
+      {}
     ),
 
   getByApplication: async (applicationId: string): Promise<ApiAssignment | null> => {
@@ -1169,10 +748,10 @@ export const assignmentsApi = {
         .select("*")
         .eq("application_id", applicationId)
         .order("created_at", { ascending: false })
-        .maybeSingle()
+        .limit(1)
 
-      if (!error && data) {
-        return data as ApiAssignment
+      if (!error && data && data.length > 0) {
+        return data[0] as ApiAssignment
       }
     } catch (e) {
       console.warn("Supabase assignment fetch warning:", e)
@@ -1188,15 +767,72 @@ export const assignmentsApi = {
   get: (id: string) =>
     api.get<ApiAssignment>(`/api/assignments/${id}`),
 
-  submit: (id: string, payload: { submission_text?: string; submission_url?: string }) =>
-    api.post<{ status: string; assignment_id: string }>(`/api/assignments/${id}/submit`, payload),
+  submit: async (
+    id: string,
+    payload: {
+      submission_text?: string
+      submission_url?: string
+      submission_data?: Record<string, string>
+    }
+  ) => {
+    // 1. Try local Next.js API route first (/api/assignments/${id}/submit)
+    try {
+      const token = getToken()
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (token) headers["Authorization"] = `Bearer ${token}`
+
+      const res = await fetch(`/api/assignments/${id}/submit`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        return { status: "submitted", assignment_id: data.assignment_id || id }
+      }
+    } catch (localErr) {
+      console.warn("Local Next.js assignment submit notice:", localErr)
+    }
+
+    // 2. Fallback to FastAPI backend endpoint
+    try {
+      return await api.post<{ status: string; assignment_id: string }>(`/api/assignments/${id}/submit`, payload)
+    } catch (backendErr) {
+      console.warn("Backend assignment submit fallback to Supabase direct:", backendErr)
+      const updateData: any = {
+        submission_text: payload.submission_text || "",
+        submission_url: payload.submission_url || "",
+        status: "submitted"
+      }
+      
+      const { data: asgn } = await supabase
+        .from("assignments")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (asgn) {
+        if (asgn.application_id) {
+          await supabase
+            .from("applications")
+            .update({ stage: "assignment_submitted" })
+            .eq("id", asgn.application_id)
+        }
+        return { status: "submitted", assignment_id: id }
+      }
+      throw backendErr
+    }
+  },
 
   evaluate: (id: string) =>
     api.post<AssignmentEvalResult>(`/api/assignments/${id}/evaluate`, {}),
 
   recruiterReview: (id: string, payload: RecruiterReviewPayload) =>
     api.post<{ status: string; decision: string; final_score: number; review: any }>(
-      `/api/assignments/${id}/recruiter-review`, payload
+      `/api/assignments/${id}/recruiter-review`,
+      payload
     ),
 }
 

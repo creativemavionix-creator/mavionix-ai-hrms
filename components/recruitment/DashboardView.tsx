@@ -30,7 +30,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         dashboardApi.activityLogs(10),
       ])
       setStats(s)
-      setLogs(l)
+      setLogs(l as ActivityLogEntry[])
     } catch {} finally { setLoading(false) }
   }, [])
 
@@ -73,7 +73,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             </p>
           </div>
           <button
-            onClick={() => onNavigate?.("intelligence")}
+            onClick={() => onNavigate?.("ai")}
             className="btn-primary shrink-0 inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-xs font-black uppercase tracking-wider hover:-translate-y-0.5 transition-transform"
           >
             Review AI Screening <ArrowRight size={14} />
@@ -87,7 +87,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           { label: 'Total Candidates', value: totalCandidates.toLocaleString(), icon: Users, tab: 'candidates', color: 'text-signal', delay: 'reveal-delay-1' },
           { label: 'Shortlisted', value: shortlisted.toLocaleString(), icon: ShieldCheck, tab: 'candidates', color: 'text-signal', delay: 'reveal-delay-2' },
           { label: 'High Priority Jobs', value: activeJobs, icon: Flame, tab: 'jobs', color: 'text-signal', delay: 'reveal-delay-3' },
-          { label: 'AI Actions Today', value: '18', icon: Zap, tab: 'intelligence', color: 'text-amber-500', delay: 'reveal-delay-4' },
+          { label: 'AI Actions Today', value: '18', icon: Zap, tab: 'ai', color: 'text-amber-500', delay: 'reveal-delay-4' },
         ].map((s) => {
           const Icon = s.icon
           return (

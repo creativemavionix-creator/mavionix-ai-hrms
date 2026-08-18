@@ -308,12 +308,17 @@ export default function SettingsView() {
                 </div>
               ))}
             </div>
-            <div className="pt-3.5 border-t border-white/[0.05] bg-white/[0.01] p-3.5 rounded-radius-lg text-[10px] flex items-center justify-between text-neutral-400 font-bold tracking-wider">
-              <span>ACCUMULATIVE CALIBRATION:</span>
-              <span className={`font-extrabold ${totalWeight === 100 ? "text-emerald-400" : "text-signal"}`}>
-                {totalWeight}% {totalWeight === 100 ? "(STABLE)" : "(NORMALISED)"}
-              </span>
-            </div>
+            {(() => {
+              const totalWeight = (weights.skills || 0) + (weights.experience || 0) + (weights.education || 0) + (weights.projects || 0)
+              return (
+                <div className="pt-3.5 border-t border-white/[0.05] bg-white/[0.01] p-3.5 rounded-radius-lg text-[10px] flex items-center justify-between text-neutral-400 font-bold tracking-wider">
+                  <span>ACCUMULATIVE CALIBRATION:</span>
+                  <span className={`font-extrabold ${totalWeight === 100 ? "text-emerald-400" : "text-signal"}`}>
+                    {totalWeight}% {totalWeight === 100 ? "(STABLE)" : "(NORMALISED)"}
+                  </span>
+                </div>
+              )
+            })()}
 
             {/* AI Shortlisting Threshold */}
             <div className="pt-4 border-t border-white/[0.05] space-y-4">

@@ -240,6 +240,7 @@ async def create_candidate(
     phone:    str        = Form(""),
     job_id:   str        = Form(...),       # must link to an existing job
     resume:   UploadFile = File(...),       # PDF resume file
+    user:     HRStaffDep = None,
 ):
     """
     Create a new candidate record + upload resume + run Gemini AI parse/score.
@@ -358,6 +359,144 @@ async def update_candidate(candidate_id: str, body: CandidateUpdate, user: HRSta
     return result.data[0]
 
 
+@router.post("/api/candidates/{candidate_id}/grant-portal-access")
+async def grant_portal_access(candidate_id: str, user: HRStaffDep):
+    """
+    HR-Triggered Portal Access Provisioning Endpoint.
+    Generates a strong random password, provisions a real Supabase Auth account,
+    links candidates.user_id, updates application stage to shortlisted,
+    and returns generated credentials to HR for relay.
+    """
+    import secrets
+
+    # 1. Fetch Candidate
+    c_res = supabase.table("candidates").select("*").eq("id", candidate_id).maybe_single().execute()
+    if not c_res or not c_res.data:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    cand = c_res.data
+
+    email = cand["email"].strip().lower()
+    name = cand.get("name", "Candidate")
+
+    # 2. Check if Auth user already exists or provision new
+    auth_user_id = cand.get("user_id")
+    generated_password = f"CandPass_{secrets.token_hex(4)}!"
+
+    try:
+        user_list = supabase.auth.admin.list_users()
+        if hasattr(user_list, "users"):
+            user_list = user_list.users
+        found_user = next((u for u in (user_list or []) if getattr(u, "email", None) and getattr(u, "email", "").lower() == email), None)
+
+        if found_user:
+            auth_user_id = found_user.id
+            supabase.auth.admin.update_user_by_id(auth_user_id, {
+                "password": generated_password,
+                "email_confirm": True,
+                "user_metadata": {"full_name": name}
+            })
+        else:
+          new_user = supabase.auth.admin.create_user({
+              "email": email,
+              "password": generated_password,
+              "email_confirm": True,
+              "user_metadata": {"full_name": name}
+          })
+          if new_user and new_user.user:
+              auth_user_id = new_user.user.id
+    except Exception as exc:
+        logger.error("Error provisioning Supabase Auth account: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to provision candidate credentials: {exc}")
+
+    # 3. Link real user_id column on candidates table
+    parsed = cand.get("parsed_data") or {}
+    if isinstance(parsed, dict):
+        parsed["user_id"] = auth_user_id
+
+    update_payload = {"parsed_data": parsed}
+    if auth_user_id:
+        update_payload["user_id"] = auth_user_id
+
+    try:
+        supabase.table("candidates").update(update_payload).eq("id", candidate_id).execute()
+    except Exception as exc:
+        # Fallback if user_id root column missing
+        update_payload.pop("user_id", None)
+        supabase.table("candidates").update(update_payload).eq("id", candidate_id).execute()
+
+    # 4. Advance application stage to shortlisted if currently applied
+    app_res = supabase.table("applications").select("*").eq("candidate_id", candidate_id).limit(1).execute()
+    if app_res and app_res.data:
+        app_id = app_res.data[0]["id"]
+        if app_res.data[0].get("stage") == "applied":
+            supabase.table("applications").update({"stage": "shortlisted"}).eq("id", app_id).execute()
+
+    # 5. Real Email Delivery via Resend API
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    email_sent = False
+    email_id = None
+    email_error = None
+
+    if resend_api_key and resend_api_key.strip():
+        try:
+            import requests
+            resend_payload = {
+                "from": "HireMind AI <onboarding@resend.dev>",
+                "to": [email],
+                "subject": "Your HireMind AI Candidate Portal Access Credentials",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+                    <h2 style="color: #6d28d9; margin-top: 0;">HireMind AI — Candidate Portal Access</h2>
+                    <p style="color: #334155; font-size: 14px;">Hello <strong>{name}</strong>,</p>
+                    <p style="color: #334155; font-size: 14px;">Your candidate application has been reviewed by HR and granted portal access!</p>
+                    <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8b5cf6;">
+                        <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Portal Link:</strong> <a href="http://127.0.0.1:3000" style="color: #7c3aed; font-weight: bold;">http://127.0.0.1:3000</a></p>
+                        <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Login Email:</strong> {email}</p>
+                        <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: monospace; color: #0f172a;">{generated_password}</code></p>
+                    </div>
+                    <p style="color: #475569; font-size: 13px;">Please log in to track your application stage, view your match evaluation, and complete assessment rounds.</p>
+                    <hr style="border: None; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                    <p style="font-size: 11px; color: #94a3b8; margin: 0;">HireMind AI Autonomous Recruitment System — Automated Notification</p>
+                </div>
+                """
+            }
+            r = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_api_key.strip()}",
+                    "Content-Type": "application/json"
+                },
+                json=resend_payload,
+                timeout=10
+            )
+            res_data = r.json() if r.content else {}
+            if r.status_code in (200, 201) and "id" in res_data:
+                email_sent = True
+                email_id = res_data["id"]
+                logger.info("Successfully sent credential email via Resend: %s", email_id)
+            else:
+                email_error = res_data.get("message") or str(res_data)
+                logger.warning("Resend email delivery returned error (status %s): %s", r.status_code, email_error)
+        except Exception as e:
+            email_error = str(e)
+            logger.error("Failed to execute Resend API request: %s", e)
+
+    return {
+        "success": True,
+        "message": "Portal access granted successfully." if email_sent else "Portal access granted, but email delivery was not completed.",
+        "candidate_id": candidate_id,
+        "email": email,
+        "password": generated_password,
+        "user_id": auth_user_id,
+        "email_sent": email_sent,
+        "email_id": email_id,
+        "email_error": email_error
+    }
+
+
 # ── Applications sub-resource ─────────────────────────────────────────────────
 
 @router.post(
@@ -402,7 +541,7 @@ async def update_application(application_id: str, body: ApplicationUpdate, user:
     return result.data[0]
 
 
-@router.delete("/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/api/candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_candidate(candidate_id: str, user: HRStaffDep):
     """Delete a candidate and their applications."""
     client = get_user_client(user.token)

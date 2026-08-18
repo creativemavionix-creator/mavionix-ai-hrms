@@ -8,13 +8,18 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-sans",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
 })
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   variable: "--font-mono",
+  display: "swap",
+  fallback: ["monospace"],
 })
+
 
 export const metadata: Metadata = {
   title: "HireMind AI - Recruitment Dashboard",

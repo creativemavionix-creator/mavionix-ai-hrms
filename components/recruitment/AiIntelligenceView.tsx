@@ -52,6 +52,33 @@ function VerifIcon({ status }: { status: VerificationStatus }) {
     return <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
   return <HelpCircle className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
 }
+function StatCards({ stats, loading }: { stats: AIReportStats | null; loading: boolean }) {
+  if (loading || !stats) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="h-24 bg-white/[0.02] border border-white/[0.08] rounded-xl animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="glass-panel border-white/[0.08] p-4">
+        <div className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">TOTAL AI DOSSIERS</div>
+        <div className="text-2xl font-bold text-white mt-1">{stats.total_reports}</div>
+      </Card>
+      <Card className="glass-panel border-white/[0.08] p-4">
+        <div className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">FLAGGED ANOMALIES</div>
+        <div className="text-2xl font-bold text-amber-400 mt-1">{stats.flagged_count}</div>
+      </Card>
+      <Card className="glass-panel border-white/[0.08] p-4">
+        <div className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">ACTIVE INGESTION SOURCES</div>
+        <div className="text-2xl font-bold text-emerald-400 mt-1">{stats.active_sources}</div>
+      </Card>
+    </div>
+  )
+}
 
 // ── Score bar ─────────────────────────────────────────────────────────────────
 function ScoreBar({

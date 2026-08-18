@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { candidatesApi, jobsApi, portalApi, assignmentsApi, ApiCandidate, CandidateStats, AppStage, ApiJob } from "@/lib/api"
+import { candidatesApi, jobsApi, portalApi, assignmentsApi, ApiCandidate, CandidateStats, AppStage, ApiJob, ApiAssignment } from "@/lib/api"
 import { supabase } from "@/lib/supabaseClient"
 import { logStageTransition } from "@/lib/stageHistory"
 import {
   Search, UserPlus, Flag, ShieldCheck, Mail, Phone, Tag,
   Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock, X, RefreshCw, Upload,
-  FileText, Brain, Star, Users, Calendar, XCircle, Briefcase, Award, Sliders, Link2,
+  FileText, Brain, Star, Users, Calendar, XCircle, Briefcase, Award, Sliders, Link2, Key, Copy, Check, Send
 } from "lucide-react"
 import PipelineView from "./PipelineView"
 import IntegrityWidget from "@/lib/integrity/ui/IntegrityWidget"
@@ -298,11 +298,13 @@ interface AssignProjectModalProps {
 }
 
 function AssignProjectModal({ candidateName, candidateId, applicationId, onClose, onAssigned, addToast }: AssignProjectModalProps) {
+  const defaultDeadline = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   const [projectTitle, setProjectTitle] = useState("Distributed Microservices Rate Limiter & Async Router")
   const [projectDescription, setProjectDescription] = useState(
     "Implement a high-throughput token bucket rate limiter middleware in Python FastAPI backed by Redis async pipelines. Include Docker Compose setup and documentation."
   )
-  const [deadlineDays, setDeadlineDays] = useState(3)
+  const [deadlineDate, setDeadlineDate] = useState(defaultDeadline)
+  const [deliverables, setDeliverables] = useState<string[]>(["github_link", "report"])
   const [assigning, setAssigning] = useState(false)
 
   const PRESET_PROJECTS = [
@@ -320,43 +322,68 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
     }
   ]
 
+  const toggleDeliverable = (key: string) => {
+    setDeliverables(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
+  const setPresetDeadlineDays = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    setDeadlineDate(`${yyyy}-${mm}-${dd}`)
+  }
+
+  const getPresetDateString = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    return `${yyyy}-${mm}-${dd}`
+  }
+
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!projectTitle.trim() || !projectDescription.trim()) {
       addToast("error", "Project Title and Description are required.")
       return
     }
+    if (deliverables.length === 0) {
+      addToast("error", "Please select at least one required deliverable.")
+      return
+    }
 
     setAssigning(true)
     try {
       if (applicationId && !applicationId.startsWith("app-")) {
+        const deadlineIso = new Date(`${deadlineDate}T23:59:59Z`).toISOString()
         await assignmentsApi.generate(applicationId, {
           title: projectTitle,
           description: projectDescription,
-          deadline_days: deadlineDays
+          requirements: projectDescription,
+          deadline_date: deadlineIso,
+          deliverables_required: deliverables
         })
       }
-
-      const res = await portalApi.generateToken({
-        candidate_id: candidateId,
-        application_id: applicationId || `app-${Date.now()}`,
-        round_type: "project"
-      })
-      const projectUrl = `${window.location.origin}/candidate?token=${res.token}&type=project`
 
       const assignedData = {
         title: projectTitle,
         description: projectDescription,
-        deadlineDays
+        deadlineDate,
+        deliverables
       }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("recruiter-assigned-project", { detail: assignedData }))
       }
 
-      await navigator.clipboard.writeText(projectUrl)
-      onAssigned(projectTitle, projectDescription, deadlineDays, projectUrl)
+      addToast("success", `🚀 Assignment sent to ${candidateName}! It will appear on their login dashboard.`)
+      onAssigned(projectTitle, projectDescription, 3, "")
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to generate project task assignment link.")
+      addToast("error", err?.message || "Failed to assign project task.")
     } finally {
       setAssigning(false)
     }
@@ -364,25 +391,25 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[150] p-4">
-      <Card className="glass-card border-cyan-500/30 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden bg-[#0d0f17] text-white">
-        <CardHeader className="p-6 border-b border-white/[0.08] flex flex-row items-center justify-between">
+      <Card className="glass-card border-cyan-500/40 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden bg-[#0a0c14] text-white">
+        <CardHeader className="p-6 border-b border-white/10 flex flex-row items-center justify-between bg-[#0e111d]">
           <div>
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-[10px] uppercase font-bold tracking-widest">
+            <div className="flex items-center gap-2 text-cyan-400 font-mono text-[11px] uppercase font-bold tracking-widest">
               <FileText className="w-4 h-4 text-cyan-400" />
               RECRUITER TASK ASSIGNMENT WORKSTATION
             </div>
             <CardTitle className="text-xl font-display font-extrabold text-white mt-1">
-              Assign 3-Day Project Task to {candidateName}
+              Send Assignment to {candidateName}
             </CardTitle>
           </div>
-          <button onClick={onClose} className="p-2 text-neutral-400 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+          <button onClick={onClose} className="p-2 text-neutral-400 hover:text-white rounded-xl hover:bg-white/10 transition-all">
             <X className="w-5 h-5" />
           </button>
         </CardHeader>
 
-        <form onSubmit={handleAssign} className="p-6 space-y-5">
+        <form onSubmit={handleAssign} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto bg-[#07090f]">
           <div className="space-y-2">
-            <label className="eyebrow text-neutral-400">SELECT PRESET PROJECT TEMPLATE</label>
+            <label className="eyebrow text-neutral-300 font-bold">SELECT PRESET PROJECT TEMPLATE</label>
             <div className="grid grid-cols-1 gap-2">
               {PRESET_PROJECTS.map((tmpl, idx) => (
                 <button
@@ -392,48 +419,114 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
                     setProjectTitle(tmpl.title)
                     setProjectDescription(tmpl.desc)
                   }}
-                  className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
                     projectTitle === tmpl.title
-                      ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-semibold shadow-lg shadow-cyan-500/10"
-                      : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-white/5"
+                      ? "bg-cyan-950/80 border-cyan-400 text-cyan-200 font-semibold shadow-lg shadow-cyan-500/20"
+                      : "bg-[#0f121e] border-white/10 text-neutral-200 hover:bg-white/10"
                   }`}
                 >
-                  <span className="font-bold block text-white">{tmpl.title}</span>
-                  <span className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">{tmpl.desc}</span>
+                  <span className="font-extrabold block text-white text-xs">{tmpl.title}</span>
+                  <span className="text-[11px] text-neutral-300 line-clamp-1 mt-0.5">{tmpl.desc}</span>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="eyebrow text-neutral-400">PROJECT ASSIGNMENT TITLE *</label>
+            <label className="eyebrow text-neutral-300 font-bold">PROJECT ASSIGNMENT TITLE *</label>
             <Input
               required
               value={projectTitle}
               onChange={e => setProjectTitle(e.target.value)}
               placeholder="e.g. Distributed Microservices Rate Limiter & Async Router"
-              className="bg-white/[0.03] border-white/10 text-white text-xs rounded-xl h-10 font-medium"
+              className="bg-[#0f121e] border-white/20 text-white text-xs rounded-xl h-10 font-bold placeholder:text-neutral-500 focus:border-cyan-400"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="eyebrow text-neutral-400">PROJECT SPECIFICATIONS & GROUND RULES *</label>
+            <label className="eyebrow text-neutral-300 font-bold">PROJECT SPECIFICATIONS & GROUND RULES *</label>
             <textarea
               required
               rows={4}
               value={projectDescription}
               onChange={e => setProjectDescription(e.target.value)}
               placeholder="Detail the technical requirements, architecture constraints, and expected deliverables..."
-              className="w-full bg-white/[0.03] border border-white/10 text-neutral-200 text-xs rounded-2xl p-3.5 outline-none focus:border-cyan-500 font-sans"
+              className="w-full bg-[#0f121e] border border-white/20 text-neutral-100 text-xs rounded-2xl p-3.5 outline-none focus:border-cyan-400 font-sans leading-relaxed shadow-inner placeholder:text-neutral-500"
             />
           </div>
 
-          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs">
-            <span className="text-neutral-400 font-mono">SUBMISSION DEADLINE:</span>
-            <span className="text-cyan-400 font-bold font-mono">3 DAYS (72 HOURS)</span>
+          {/* Deadline Picker */}
+          <div className="space-y-2.5 p-4 bg-[#0e111d] border border-cyan-500/30 rounded-2xl">
+            <label className="eyebrow text-cyan-300 uppercase font-extrabold tracking-wider block">CUSTOM SUBMISSION DEADLINE *</label>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="date"
+                required
+                value={deadlineDate}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={e => setDeadlineDate(e.target.value)}
+                className="bg-[#05060b] border border-cyan-500/40 text-white rounded-xl text-xs px-4 py-2.5 outline-none focus:border-cyan-400 font-mono font-bold w-full sm:w-auto cursor-pointer [color-scheme:dark] shadow-inner"
+              />
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {[3, 5, 7].map((days) => {
+                  const pDate = getPresetDateString(days)
+                  const isActive = deadlineDate === pDate
+                  return (
+                    <button
+                      type="button"
+                      key={days}
+                      onClick={() => setPresetDeadlineDays(days)}
+                      className={`px-3 py-2 rounded-xl border text-xs font-mono font-extrabold transition-all cursor-pointer ${
+                        isActive
+                          ? "bg-cyan-500/30 border-cyan-400 text-cyan-200 shadow-md shadow-cyan-500/20 scale-105"
+                          : "bg-white/[0.05] border-white/15 hover:bg-white/10 text-cyan-300"
+                      }`}
+                    >
+                      +{days} Days
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
+          {/* Configurable Deliverables Checkboxes */}
+          <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+            <label className="eyebrow text-emerald-400 uppercase font-bold">REQUIRED DELIVERABLES (SELECT ALL THAT APPLY) *</label>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { key: "github_link", label: "GitHub Repository URL", desc: "Candidate must provide a public repository link" },
+                { key: "deployment_link", label: "Live Deployment URL (Vercel / Render)", desc: "Candidate must provide a hosted live application URL" },
+                { key: "report", label: "Written Architecture Report / Notes", desc: "Candidate must write system design and trade-off notes" },
+              ].map(item => {
+                const checked = deliverables.includes(item.key)
+                return (
+                  <label
+                    key={item.key}
+                    onClick={() => toggleDeliverable(item.key)}
+                    className={`flex items-start gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+                      checked
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 shadow-md"
+                        : "bg-white/[0.02] border-white/[0.06] text-neutral-400 hover:bg-white/5"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {}}
+                      className="mt-0.5 rounded accent-emerald-500"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">{item.label}</span>
+                      <span className="text-[10px] text-neutral-400 block mt-0.5">{item.desc}</span>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
             <Button
               type="submit"
               disabled={assigning}
@@ -442,12 +535,12 @@ function AssignProjectModal({ candidateName, candidateId, applicationId, onClose
               {assigning ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Assigning & Generating Link...</span>
+                  <span>Sending Assignment...</span>
                 </>
               ) : (
                 <>
-                  <FileText className="w-4 h-4" />
-                  <span>🚀 ASSIGN TASK & COPY LINK TO CLIPBOARD</span>
+                  <Send className="w-4 h-4" />
+                  <span>🚀 SEND ASSIGNMENT TO CANDIDATE DASHBOARD</span>
                 </>
               )}
             </Button>
@@ -541,11 +634,147 @@ function ResumeViewerModal({
   )
 }
 
+function RejectApplicationModal({
+  candidateName,
+  onClose,
+  onConfirmReject,
+}: {
+  candidateName: string
+  onClose: () => void
+  onConfirmReject: (reason: string) => void
+}) {
+  const [reason, setReason] = useState("Does not meet minimum requirements.")
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-xl max-w-md w-full space-y-4 shadow-2xl">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Reject Application — {candidateName}</h3>
+        <p className="text-xs text-neutral-400">Provide a rejection reason or note for stage history audit log:</p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className="w-full h-24 bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-red-500"
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} className="text-xs text-neutral-400">Cancel</Button>
+          <Button onClick={() => onConfirmReject(reason)} className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Confirm Rejection</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Grant Portal Access Modal ───────────────────────────────────────────────
+interface GrantPortalAccessModalProps {
+  candidateName: string
+  email: string
+  password: string
+  emailSent: boolean
+  emailId?: string | null
+  emailError?: string | null
+  onClose: () => void
+}
+
+function GrantPortalAccessModal({
+  candidateName,
+  email,
+  password,
+  emailSent,
+  emailId,
+  emailError,
+  onClose
+}: GrantPortalAccessModalProps) {
+  const [copied, setCopied] = useState(false)
+
+  const copyCredentials = () => {
+    const credText = `HireMind AI Candidate Portal Access:\nLink: http://127.0.0.1:3000\nEmail: ${email}\nPassword: ${password}`
+    navigator.clipboard.writeText(credText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+      <Card className="glass-card border-violet-500/30 w-full max-w-md p-6 rounded-2xl shadow-2xl space-y-5 bg-[#0f111d] text-white">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2 text-violet-400 font-display font-extrabold text-sm uppercase tracking-wide">
+            <Key className="w-4 h-4 text-violet-400" />
+            <span>Candidate Portal Access Granted</span>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 hover:text-white p-1 rounded-lg">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-xs text-neutral-300">
+            Account credentials generated for <strong className="text-white">{candidateName}</strong>:
+          </p>
+        </div>
+
+        {/* Credentials Box */}
+        <div className="bg-white/[0.03] border border-white/10 p-4 rounded-xl space-y-3 font-mono text-xs">
+          <div>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold block">Portal Sign-In URL</span>
+            <span className="text-violet-300 font-bold">http://127.0.0.1:3000</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold block">Candidate Email</span>
+            <span className="text-white font-bold">{email}</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold block">Temporary Password</span>
+            <div className="flex items-center justify-between bg-black/40 p-2 rounded border border-white/10 mt-1">
+              <code className="text-emerald-400 font-bold">{password}</code>
+              <button
+                onClick={copyCredentials}
+                className="text-[10px] bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 px-2 py-1 rounded border border-violet-500/30 flex items-center gap-1 transition-all cursor-pointer"
+              >
+                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-violet-300" />}
+                <span>{copied ? "Copied!" : "Copy"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Email Delivery Status Banner */}
+        <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+          emailSent
+            ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+            : "bg-amber-500/10 border-amber-500/25 text-amber-300"
+        }`}>
+          {emailSent ? (
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          )}
+          <div className="space-y-0.5">
+            <span className="font-extrabold block">
+              {emailSent ? "Credentials Emailed via Resend" : "Manual Credential Relay Required"}
+            </span>
+            <p className="text-[11px] opacity-90 leading-relaxed">
+              {emailSent
+                ? `Transaction email successfully dispatched (Resend ID: ${emailId || "verified"}).`
+                : `Resend Notice: ${emailError || "Email could not be delivered"}. Please copy and relay credentials directly to candidate.`}
+            </p>
+          </div>
+        </div>
+
+        <Button
+          onClick={onClose}
+          className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded-xl text-xs cursor-pointer"
+        >
+          Done
+        </Button>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Candidate Dossier Modal ─────────────────────────────────────────────────
 function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addToast, sidebarCollapsed = false }: {
   candidateId: string
   onClose: () => void
-  onStageChange: (appId: string, stage: AppStage) => void
+  onStageChange: (appId: string, stage: AppStage, note?: string) => void
   onFlagChange:  (appId: string, flagged: boolean) => void
   addToast: (type: Toast["type"], msg: string) => void
   sidebarCollapsed?: boolean
@@ -556,12 +785,134 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showResumeModal, setShowResumeModal] = useState(false)
 
+  const [grantingAccess, setGrantingAccess] = useState(false)
+  const [portalCredentialsModal, setPortalCredentialsModal] = useState<{
+    email: string
+    password: string
+    email_sent: boolean
+    email_id?: string | null
+    email_error?: string | null
+  } | null>(null)
+
+  const handleGrantPortalAccess = async () => {
+    if (!c) return
+    setGrantingAccess(true)
+    try {
+      const res = await candidatesApi.grantPortalAccess(c.id)
+      if (res.success) {
+        setC(prev => prev ? { ...prev, user_id: res.user_id || "provisioned" } : prev)
+        setPortalCredentialsModal({
+          email: res.email,
+          password: res.password,
+          email_sent: res.email_sent,
+          email_id: res.email_id,
+          email_error: res.email_error
+        })
+        addToast(
+          res.email_sent ? "success" : "info",
+          res.email_sent
+            ? `🔑 Portal access granted & credentials emailed to ${res.email}!`
+            : `🔑 Portal access granted! (Manual credential relay required)`
+        )
+      } else {
+        addToast("error", res.message || "Failed to grant portal access.")
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to grant portal access.")
+    } finally {
+      setGrantingAccess(false)
+    }
+  }
+
+  const handleGenerateInterviewLink = async () => {
+    if (!c) return
+    try {
+      const res = await portalApi.generateToken({
+        candidate_id: c.id,
+        application_id: c.application_id || `app-${Date.now()}`,
+        round_type: "tech"
+      })
+      const interviewUrl = `${window.location.origin}/candidate?token=${res.token}&type=interview`
+      await navigator.clipboard.writeText(interviewUrl)
+
+      const apiRes = await fetch("/api/interviews/send-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateEmail: c.email,
+          candidateName: c.name,
+          jobTitle: c.job_title || "Senior Backend Engineer",
+          interviewLink: interviewUrl,
+          applicationId: c.application_id || `app-${Date.now()}`,
+          candidateId: c.id
+        })
+      })
+
+      const result = await apiRes.json()
+
+      onStageChange(c.application_id!, "tech_round", "Generated and sent live AI interview link")
+      setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
+
+      if (result.success) {
+        addToast("success", `🎙️ Interview link sent to ${c.email} & copied to clipboard!`)
+      } else {
+        addToast("error", `Notice: Link generated, but email notice failed: ${result.error}`)
+      }
+    } catch (err: any) {
+      addToast("error", `Failed to dispatch interview link: ${err?.message || "Unknown error"}`)
+    }
+  }
+
+  const [assignment, setAssignment] = useState<ApiAssignment | null>(null)
+  const [recruiterScore, setRecruiterScore] = useState<string>("85")
+  const [reviewNotes, setReviewNotes] = useState<string>("")
+  const [submittingReview, setSubmittingReview] = useState<boolean>(false)
+
   useEffect(() => {
     candidatesApi.get(candidateId)
-      .then(setC)
+      .then(res => {
+        setC(res)
+        if (res.application_id) {
+          assignmentsApi.getByApplication(res.application_id).then(asgn => {
+            if (asgn) {
+              setAssignment(asgn)
+              if (asgn.score) setRecruiterScore(String(asgn.score))
+            }
+          })
+        }
+      })
       .catch(() => addToast("error", "Failed to load candidate details."))
       .finally(() => setLoading(false))
   }, [candidateId])
+
+  const handleReviewSubmit = async (decision: "approved" | "rejected" = "approved") => {
+    if (!assignment) return
+    setSubmittingReview(true)
+    try {
+      const res = await assignmentsApi.recruiterReview(assignment.id, {
+        recruiter_score: Number(recruiterScore) || 85,
+        notes: reviewNotes,
+        decision: decision
+      })
+      
+      setAssignment((prev: ApiAssignment | null) => prev ? { ...prev, status: "reviewed", score: res.final_score } : prev)
+      if (c?.application_id) {
+        const nextStage = decision === "approved" ? "tech_round" : "rejected"
+        onStageChange(c.application_id, nextStage, `Assignment ${decision} by recruiter`)
+        setC(prev => prev ? { ...prev, stage: nextStage } : prev)
+      }
+
+      if (decision === "approved") {
+        addToast("success", `🎉 Assignment approved! Candidate advanced to Tech Round (${res.final_score}/100).`)
+      } else {
+        addToast("info", `Assignment rejected (${res.final_score}/100). Candidate application marked as rejected.`)
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to submit assignment review.")
+    } finally {
+      setSubmittingReview(false)
+    }
+  }
 
   if (loading) return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50">
@@ -638,195 +989,199 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
           </div>
         </CardHeader>
 
-        {/* Recruiter Screening & Pass-Ahead Decision Bar */}
-        <div className="bg-emerald-500/[0.04] border-b border-emerald-500/20 p-4 px-6 flex flex-wrap items-center justify-between gap-4 sticky top-[73px] bg-[#0c0e17] backdrop-blur-md z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
+        {/* Recruiter Action Workstation Controls (Consolidated & Categorized) */}
+        <div className="bg-[#0b0d17] border-b border-white/10 p-4 px-6 space-y-3 sticky top-[73px] backdrop-blur-xl z-20 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-violet-400 animate-ping" />
+              <span className="text-xs font-mono font-extrabold text-violet-300 uppercase tracking-wider">
+                RECRUITER WORKSTATION CONTROLS — STAGE: {c.stage?.replace(/_/g, " ").toUpperCase() || "APPLIED"}
+              </span>
             </div>
-            <div>
-              <span className="text-xs font-mono font-bold text-emerald-400 block uppercase">
-                RECRUITER DECISION WORKSTATION — STAGE: {c.stage?.replace(/_/g, " ").toUpperCase() || "APPLIED"}
-              </span>
-              <span className="text-[10px] text-neutral-400 block">
-                Review candidate's resume, system architecture answers, and match score below to pass ahead or reject.
-              </span>
+            <div className="flex items-center gap-2 text-[10px] text-neutral-400 font-mono">
+              <span>App ID:</span>
+              <span className="text-neutral-200 font-bold">{c.application_id ? c.application_id.slice(0, 8) : "N/A"}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onClick={() => {
-                onStageChange(c.application_id!, "approved", "Approved by recruiter during resume screening")
-                setC(prev => prev ? { ...prev, stage: "approved" } : prev)
-                addToast("success", `🎉 ${c.name} APPROVED! Moved candidate to next stage.`)
-              }}
-              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
-            >
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span>✅ APPROVE APPLICATION</span>
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            
+            {/* Group 1: Screening & Decision */}
+            <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2 flex flex-col justify-between">
+              <span className="text-[9px] font-mono font-extrabold text-emerald-400 uppercase tracking-widest block">
+                1. Screening Decision
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => {
+                    onStageChange(c.application_id!, "approved", "Approved by recruiter during resume screening")
+                    setC(prev => prev ? { ...prev, stage: "approved" } : prev)
+                    addToast("success", `🎉 ${c.name} APPROVED! Moved candidate to next stage.`)
+                  }}
+                  className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Approve</span>
+                </Button>
 
-            <Button
-              onClick={() => setShowRejectModal(true)}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-red-500/10"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              <span>❌ REJECT APPLICATION</span>
-            </Button>
+                <Button
+                  onClick={() => setShowRejectModal(true)}
+                  className="flex-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-[10px] font-bold py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Reject</span>
+                </Button>
+              </div>
+            </div>
 
-            {showRejectModal && (
-              <RejectApplicationModal
-                candidateName={c.name}
-                onClose={() => setShowRejectModal(false)}
-                onConfirmReject={(reason) => {
-                  onStageChange(c.application_id!, "decision_rejected", reason)
-                  setC(prev => prev ? { ...prev, stage: "decision_rejected" } : prev)
-                  setShowRejectModal(false)
-                  addToast("error", `Application rejected: note logged to stage_history.`)
-                }}
-              />
-            )}
+            {/* Group 2: Pipeline Operations & Portal Access */}
+            <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2 flex flex-col justify-between">
+              <span className="text-[9px] font-mono font-extrabold text-cyan-400 uppercase tracking-widest block">
+                2. Pipeline & Portal Operations
+              </span>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    onClick={() => setShowAssignModal(true)}
+                    className="flex-1 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>Send Task</span>
+                  </Button>
 
-            {(c.stage === "task_submitted" || c.stage === "assignment_submitted") && (
-              <Button
-                onClick={async () => {
-                  try {
-                    if (!c.application_id) {
-                      addToast("error", "Application ID missing. Cannot complete project review.")
-                      return
-                    }
+                  <Button
+                    onClick={handleGenerateInterviewLink}
+                    className="flex-1 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Brain className="w-3 h-3" />
+                    <span>Interview Link</span>
+                  </Button>
+                </div>
 
-                    const asgn = await assignmentsApi.getByApplication(c.application_id)
-                    if (!asgn || !asgn.id) {
-                      addToast("error", "Project assignment record not found for this candidate. Cannot complete review.")
-                      return
-                    }
+                {/* Grant Portal Access Action / Badge */}
+                {(c.user_id || parsed?.user_id) ? (
+                  <div className="p-1 bg-emerald-500/10 border border-emerald-500/25 rounded-lg flex items-center justify-between px-2">
+                    <span className="text-[10px] font-bold font-mono text-emerald-400 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-emerald-400" />
+                      <span>Portal Access Active</span>
+                    </span>
+                    <button
+                      onClick={handleGrantPortalAccess}
+                      disabled={grantingAccess}
+                      className="text-[9px] font-mono text-neutral-400 hover:text-emerald-300 underline cursor-pointer"
+                    >
+                      {grantingAccess ? "Resetting..." : "Re-provision"}
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleGrantPortalAccess}
+                    disabled={grantingAccess}
+                    className="w-full bg-violet-600/80 hover:bg-violet-600 text-white border border-violet-400/30 text-[10px] font-extrabold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-violet-500/20"
+                  >
+                    {grantingAccess ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Granting Access...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-3 h-3 text-violet-200" />
+                        <span>🔑 Grant Portal Access</span>
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
 
-                    await assignmentsApi.recruiterReview(asgn.id, {
-                      recruiter_score: 90,
-                      decision: "approved",
-                      notes: "Approved project task submission"
-                    })
+            {/* Group 3: Final Decision & Security Flag */}
+            <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2 flex flex-col justify-between">
+              <span className="text-[9px] font-mono font-extrabold text-amber-400 uppercase tracking-widest block">
+                3. Final Outcome & Security
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  onClick={() => {
+                    onStageChange(c.application_id!, "hired", "Recruiter hired candidate after final interview evaluation")
+                    setC(prev => prev ? { ...prev, stage: "hired" } : prev)
+                    addToast("success", `🎉 ${c.name} HIRED! Official offer issued.`)
+                  }}
+                  className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <Award className="w-3 h-3" />
+                  <span>Hire</span>
+                </Button>
 
-                    setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
-                    addToast("success", `🎉 Project task approved for ${c.name}! Advanced candidate to Tech Round.`)
-                  } catch (err: any) {
-                    addToast("error", err?.message || "Failed to submit recruiter project review.")
-                  }
-                }}
-                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                <span>✅ APPROVE PROJECT TASK</span>
-              </Button>
-            )}
+                <Button
+                  onClick={() => {
+                    onStageChange(c.application_id!, "waitlisted" as any)
+                    setC(prev => prev ? { ...prev, stage: "waitlisted" as any } : prev)
+                    addToast("info", `${c.name} moved to Waitlist.`)
+                  }}
+                  className="flex-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 text-[10px] font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>Hold</span>
+                </Button>
 
-            <Button
-              onClick={() => setShowAssignModal(true)}
-              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-500/10"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>📁 SEND 3-DAY PROJECT TASK LINK</span>
-            </Button>
+                <Button
+                  onClick={() => {
+                    onFlagChange(c.application_id!, !c.flagged)
+                    setC(prev => prev ? { ...prev, flagged: !prev.flagged } : prev)
+                  }}
+                  className={`flex-1 text-[10px] py-1 px-2 rounded-lg font-bold flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                    c.flagged ? "bg-red-500/15 border-red-500/30 text-red-400" : "bg-white/[0.02] border-white/10 text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <Flag className="w-3 h-3" />
+                  <span>{c.flagged ? "Unflag" : "Flag"}</span>
+                </Button>
+              </div>
+            </div>
 
-            {showAssignModal && (
-              <AssignProjectModal
-                candidateName={c.name}
-                candidateId={c.id}
-                applicationId={c.application_id || `app-${Date.now()}`}
-                onClose={() => setShowAssignModal(false)}
-                onAssigned={(title, desc, days, url) => {
-                  onStageChange(c.application_id!, "assignment_sent", `Assigned project: ${title}`)
-                  setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
-                  setShowAssignModal(false)
-                  addToast("success", `📁 Assigned "${title}" and copied link to clipboard!`)
-                }}
-                addToast={addToast}
-              />
-            )}
+          </div>
 
-            <Button
-              onClick={async () => {
-                try {
-                  const res = await portalApi.generateToken({
-                    candidate_id: c.id,
-                    application_id: c.application_id || `app-${Date.now()}`,
-                    round_type: "tech"
-                  })
-                  const interviewUrl = `${window.location.origin}/candidate?token=${res.token}&type=interview`
-                  await navigator.clipboard.writeText(interviewUrl)
-                  
-                  // Call Send Link API
-                  const apiRes = await fetch("/api/interviews/send-link", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      candidateEmail: c.email,
-                      candidateName: c.name,
-                      jobTitle: c.job_title || "Senior Backend Engineer",
-                      interviewLink: interviewUrl,
-                      applicationId: c.application_id || `app-${Date.now()}`,
-                      candidateId: c.id
-                    })
-                  })
-
-                  const result = await apiRes.json()
-
-                  onStageChange(c.application_id!, "tech_round", "Generated and sent live AI interview link")
-                  setC(prev => prev ? { ...prev, stage: "tech_round" } : prev)
-
-                  if (result.success) {
-                    addToast("success", `🎙️ Interview link sent to ${c.email} & copied to clipboard!`)
-                  } else {
-                    addToast("error", `Notice: Link generated, but email notice failed: ${result.error}`)
-                  }
-                } catch (err: any) {
-                  addToast("error", `Failed to dispatch interview link: ${err?.message || "Unknown error"}`)
-                }
-              }}
-              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-500/10"
-            >
-              <Brain className="w-3.5 h-3.5" />
-              <span>🎙️ GENERATE & EMAIL INTERVIEW LINK</span>
-            </Button>
-
-            <Button
-              onClick={() => {
-                onStageChange(c.application_id!, "hired", "Recruiter hired candidate after final interview evaluation")
-                setC(prev => prev ? { ...prev, stage: "hired" } : prev)
-                addToast("success", `🎉 ${c.name} HIRED! Official offer issued.`)
-              }}
-              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
-            >
-              <Award className="w-3.5 h-3.5" />
-              <span>🏆 HIRE CANDIDATE</span>
-            </Button>
-
-            <Button
-              onClick={() => {
-                onStageChange(c.application_id!, "waitlisted" as any)
-                setC(prev => prev ? { ...prev, stage: "waitlisted" as any } : prev)
-                addToast("info", `${c.name} moved to Waitlist.`)
-              }}
-              className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>⏳ HOLD</span>
-            </Button>
-
-            <Button
-              onClick={() => {
-                onStageChange(c.application_id!, "rejected")
+          {showRejectModal && (
+            <RejectApplicationModal
+              candidateName={c.name}
+              onClose={() => setShowRejectModal(false)}
+              onConfirmReject={(reason) => {
+                onStageChange(c.application_id!, "rejected", reason)
                 setC(prev => prev ? { ...prev, stage: "rejected" } : prev)
-                addToast("error", `${c.name} rejected.`)
+                setShowRejectModal(false)
+                addToast("info", `Application for ${c.name} marked as rejected.`)
               }}
-              className="bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              <span>❌ REJECT</span>
-            </Button>
-          </div>
+            />
+          )}
+
+          {showAssignModal && (
+            <AssignProjectModal
+              candidateName={c.name}
+              candidateId={c.id}
+              applicationId={c.application_id || `app-${Date.now()}`}
+              onClose={() => setShowAssignModal(false)}
+              onAssigned={(title, desc, days, url) => {
+                onStageChange(c.application_id!, "assignment_sent", `Assigned project: ${title}`)
+                setC(prev => prev ? { ...prev, stage: "assignment_sent" } : prev)
+                setShowAssignModal(false)
+                addToast("success", `📁 Assigned "${title}" and copied link to clipboard!`)
+              }}
+              addToast={addToast}
+            />
+          )}
+
+          {portalCredentialsModal && (
+            <GrantPortalAccessModal
+              candidateName={c.name}
+              email={portalCredentialsModal.email}
+              password={portalCredentialsModal.password}
+              emailSent={portalCredentialsModal.email_sent}
+              emailId={portalCredentialsModal.email_id}
+              emailError={portalCredentialsModal.email_error}
+              onClose={() => setPortalCredentialsModal(null)}
+            />
+          )}
         </div>
 
         {/* Dossier Body Content */}
@@ -835,6 +1190,179 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
             
             {/* Left Column: Profile & Candidate Answers Card (65% width) */}
             <div className="lg:col-span-8 space-y-6">
+
+              {/* Assignment & Submission Review Card (Task 4) */}
+              {assignment && (
+                <Card className="glass-card border-cyan-500/30 p-6 rounded-2xl shadow-xl space-y-4 bg-gradient-to-b from-cyan-950/20 to-transparent">
+                  <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-cyan-400" />
+                      <h3 className="font-display font-extrabold text-sm text-white uppercase tracking-wider">
+                        Take-Home Technical Assignment & Candidate Submission
+                      </h3>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold uppercase border ${
+                      assignment.status === "submitted" ? "bg-amber-500/15 border-amber-500/30 text-amber-400" :
+                      assignment.status === "reviewed" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" :
+                      "bg-white/[0.05] border-white/10 text-neutral-400"
+                    }`}>
+                      {assignment.status}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <h4 className="font-bold text-white text-sm">{assignment.title}</h4>
+                    <p className="text-neutral-300 text-xs leading-relaxed bg-white/[0.02] border border-white/[0.06] p-3.5 rounded-xl">
+                      {assignment.description}
+                    </p>
+                    {assignment.deadline && (
+                      <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-400">
+                        <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Deadline: {new Date(assignment.deadline).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submitted Deliverables Review */}
+                  {(assignment.status === "submitted" || assignment.status === "reviewed") ? (
+                    <div className="space-y-4 pt-3 border-t border-white/[0.08]">
+                      <span className="eyebrow text-emerald-400 uppercase font-extrabold block">
+                        ✓ CANDIDATE SUBMITTED DELIVERABLES
+                      </span>
+
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {(assignment.submission_data?.github_link || assignment.submission_url) && (
+                          <div className="p-3 bg-white/[0.03] border border-white/10 rounded-xl flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold">GitHub Repository:</span>
+                            <a
+                              href={assignment.submission_data?.github_link || assignment.submission_url || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-bold text-cyan-400 hover:underline flex items-center gap-1 font-mono"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                              <span>{assignment.submission_data?.github_link || assignment.submission_url} ↗</span>
+                            </a>
+                          </div>
+                        )}
+
+                        {assignment.submission_data?.deployment_link && (
+                          <div className="p-3 bg-white/[0.03] border border-white/10 rounded-xl flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Live Deployment:</span>
+                            <a
+                              href={assignment.submission_data.deployment_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1 font-mono"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                              <span>{assignment.submission_data.deployment_link} ↗</span>
+                            </a>
+                          </div>
+                        )}
+
+                        {(assignment.submission_data?.report || assignment.submission_text) && (
+                          <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-xl space-y-1.5">
+                            <span className="text-[10px] font-mono text-neutral-400 uppercase font-bold block">Written Architecture Report / Notes:</span>
+                            <p className="text-xs text-neutral-200 font-mono leading-relaxed whitespace-pre-wrap">
+                              {assignment.submission_data?.report || assignment.submission_text}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Recruiter Evaluation Form & Status Display */}
+                      {assignment.status === "reviewed" ? (
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2.5">
+                          <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-wider">
+                            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>✓ ASSIGNMENT REVIEWED & APPROVED (SCORE: {assignment.score || recruiterScore}/100)</span>
+                          </div>
+                          <p className="text-xs text-neutral-300">
+                            Candidate passed technical assignment evaluation and has been advanced to Tech Round.
+                          </p>
+                          {reviewNotes && (
+                            <div className="p-2.5 bg-black/30 border border-white/10 rounded-lg text-xs font-mono text-neutral-300">
+                              <span className="text-[9px] text-neutral-400 block font-bold uppercase">RECRUITER FEEDBACK:</span>
+                              <span>{reviewNotes}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-white/[0.03] border border-cyan-500/30 rounded-xl space-y-3">
+                          <span className="eyebrow text-cyan-400 uppercase font-extrabold block">
+                            RECRUITER ASSIGNMENT EVALUATION & SCORING
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Assignment Score (0 - 100) *</label>
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={recruiterScore}
+                                onChange={e => setRecruiterScore(e.target.value)}
+                                className="bg-white/[0.03] border-white/10 text-white rounded-xl text-xs py-2"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Review Decision</label>
+                              <div className="py-2 text-xs font-bold text-emerald-400">
+                                Approve & Advance to Tech Round
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Review Notes / Feedback</label>
+                            <textarea
+                              rows={2}
+                              value={reviewNotes}
+                              onChange={e => setReviewNotes(e.target.value)}
+                              placeholder="Enter notes on code architecture, test coverage, and design choices..."
+                              className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs p-2.5 outline-none focus:border-cyan-500"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                            <Button
+                              onClick={() => handleReviewSubmit("approved")}
+                              disabled={submittingReview}
+                              className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 py-3 rounded-xl font-bold text-xs uppercase text-white shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              {submittingReview ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4" />
+                              )}
+                              <span>APPROVE & ADVANCE TO TECH ROUND</span>
+                            </Button>
+
+                            <Button
+                              onClick={() => handleReviewSubmit("rejected")}
+                              disabled={submittingReview}
+                              variant="outline"
+                              className="w-full border-rose-500/40 hover:bg-rose-500/10 text-rose-300 py-3 rounded-xl font-bold text-xs uppercase shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              {submittingReview ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-rose-400" />
+                              )}
+                              <span>REJECT ASSIGNMENT</span>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl text-[11px] text-neutral-400 font-mono">
+                      ⏳ Pending candidate submission on login dashboard.
+                    </div>
+                  )}
+                </Card>
+              )}
+
               <Card className="glass-card border-white/[0.06] p-6 rounded-2xl shadow-lg space-y-6 relative overflow-hidden reveal-up">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
                 
@@ -1184,28 +1712,11 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
             </Card>
           )}
 
-          {/* Original Resume viewer text container */}
-          {c.resume_url && (
-            <Card className="glass-card border-white/[0.06] p-6 rounded-2xl shadow-lg relative overflow-hidden reveal-up">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
-              <h3 className="text-xs font-display font-extrabold text-neutral-400 tracking-widest uppercase mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <FileText className="w-3.5 h-3.5 text-signal" /> RESUME ATTACHMENT TEXT
-                </span>
-                <a href={c.resume_url} target="_blank" rel="noopener noreferrer" className="text-signal hover:text-signal-hover font-bold text-[10px] tracking-wide uppercase transition-colors">
-                  OPEN ORIGINAL PDF
-                </a>
-              </h3>
-              <div className="bg-white/[0.01] dark:bg-black/25 border border-white/[0.04] rounded-xl p-4 text-[11px] text-neutral-400 leading-relaxed font-mono whitespace-pre-wrap max-h-60 overflow-y-auto">
-                {summaryText}
-              </div>
-            </Card>
-          )}
-          {/* Stage + flag actions footer */}
+          {/* Stage Footer */}
           {c.application_id && (
-            <div className="pt-6 border-t border-white/[0.05] flex flex-wrap gap-4 items-center justify-between shrink-0">
+            <div className="pt-4 border-t border-white/[0.05] flex flex-wrap gap-4 items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <span className="eyebrow text-neutral-400">STAGE:</span>
+                <span className="eyebrow text-neutral-400">PIPELINE STAGE OVERRIDE:</span>
                 <select value={c.stage ?? "applied"}
                   onChange={e => { onStageChange(c.application_id!, e.target.value as AppStage); setC(prev => prev ? { ...prev, stage: e.target.value as AppStage } : prev) }}
                   className="bg-white/[0.02] dark:bg-black/25 border border-white/[0.08] text-[10px] text-neutral-400 p-2 px-3 rounded-xl cursor-pointer hover:border-signal/40 hover:text-neutral-200 transition-all outline-none uppercase font-bold">
@@ -1221,26 +1732,9 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
                   ))}
                 </select>
               </div>
-              <div className="flex flex-wrap gap-2.5">
-                <Button onClick={() => setShowAssignModal(true)}
-                  className="h-9 px-4 bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 rounded-xl text-[10px] font-extrabold transition-all active:scale-[0.99] flex items-center gap-1.5 shadow-lg shadow-cyan-500/10">
-                  <FileText className="w-3.5 h-3.5" /> 📁 ASSIGN 3-DAY PROJECT TASK & SET TEMPLATE
-                </Button>
-                <Button onClick={() => { onFlagChange(c.application_id!, !c.flagged); setC(prev => prev ? { ...prev, flagged: !prev.flagged } : prev) }}
-                  className={`h-9 px-4 text-[10px] rounded-xl font-bold flex items-center gap-1.5 transition-all border active:scale-[0.99] ${
-                    c.flagged 
-                      ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20" 
-                      : "bg-transparent border-white/[0.08] text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
-                  }`}>
-                  <Flag className="w-3.5 h-3.5" />{c.flagged ? "UNFLAG ANOMALY" : "FLAG ANOMALY"}
-                </Button>
-                <Button onClick={() => { onStageChange(c.application_id!, "rejected"); onClose() }}
-                  className="h-9 px-4 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-xl text-[10px] font-bold transition-all active:scale-[0.99]">REJECT</Button>
-                <Button onClick={() => { onStageChange(c.application_id!, "waitlisted" as any); onClose() }}
-                  className="h-9 px-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/20 rounded-xl text-[10px] font-bold transition-all active:scale-[0.99]">WAITLIST</Button>
-                <Button onClick={() => { onStageChange(c.application_id!, "hired"); onClose() }}
-                  className="h-9 px-4 bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-xl text-[10px] font-bold transition-all active:scale-[0.99]">HIRE</Button>
-              </div>
+              <Button onClick={onClose} variant="ghost" className="text-xs text-neutral-400 hover:text-white">
+                Close Dossier
+              </Button>
             </div>
           )}
         </CardContent>

@@ -14,6 +14,7 @@ import { useIntegrityEngine } from "@/lib/integrity/hooks/useIntegrityEngine"
 import CameraPreview from "@/lib/integrity/ui/CameraPreview"
 import ReadinessReportCard from "@/lib/integrity/ui/ReadinessReportCard"
 import InterviewHealthPanel from "@/lib/integrity/ui/InterviewHealthPanel"
+import { initMediaPipeEngine } from "@/lib/integrity/detectors/camera_detector"
 
 // ── Pipeline Stepper ─────────────────────────────────────────────────────────
 
@@ -254,10 +255,10 @@ export default function InterviewPage() {
 }
 
 function InterviewContent() {
-const searchParams = useSearchParams()
+  const searchParams = useSearchParams()
   const token = searchParams.get("token")
-  // Demo mode: skip token validation entirely
-  const demoMode = !token || token === "demo"
+  const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
+  const demoMode = token === "demo" ? isDemoAllowed : (!token && isDemoAllowed)
 
   const [state, setState] = useState<"loading" | "error" | "assignment" | "ready" | "complete" | "dashboard" | "rules" | "device_check" | "permission_prompt">("loading")
   const [rulesAgreed, setRulesAgreed] = useState(false)
@@ -287,11 +288,11 @@ const searchParams = useSearchParams()
   const pendingVoiceSendRef = useRef<string | null>(null)
 
   // ── Interview Integrity Engine Master Hook ─────────────────────────────
-  const cameraPresence = useIntegrityEngine(true, state === "ready")
+  const cameraPresence = useIntegrityEngine(true, state === "ready" || state === "rules" || state === "device_check")
 
-  // Auto-start camera after explicit permission consent
+  // Auto-start camera after explicit permission consent or during rules/device checks
   useEffect(() => {
-    if (state === "device_check" || state === "ready") {
+    if (state === "rules" || state === "device_check" || state === "ready" || state === "dashboard") {
       cameraPresence.startCamera()
     } else if (state === "complete") {
       cameraPresence.stopCamera()
@@ -492,6 +493,7 @@ const searchParams = useSearchParams()
   // ── Validate token on mount ──────────────────────────────────────────────
 
   useEffect(() => {
+    initMediaPipeEngine()
     // Both demo and real tokens go through the same validate → start flow
     const tokenToValidate = demoMode ? "demo" : token
     if (!tokenToValidate) {
@@ -523,11 +525,8 @@ const searchParams = useSearchParams()
       }
       setSession(sess)
 
-      // 1. If there is an active pending assignment, ALWAYS open assignment screen first!
-      if (sess.assignment && sess.assignment.status !== "submitted") {
-        setState("assignment")
-      } else if (sess.round && sess.round.status === "in_progress") {
-        // 2. Resuming an existing in-progress round
+      // 1. Check if resuming an existing in-progress round
+      if (sess.round && sess.round.status === "in_progress") {
         setRoundId(sess.round.id)
         setBrowserStrikes(sess.round.browser_strike_count || 0)
         const existingMessages: ChatMessage[] = (sess.round.transcript || []).map(
@@ -543,7 +542,7 @@ const searchParams = useSearchParams()
         setExchangeCount(existingMessages.filter((m) => m.role === "candidate").length)
         setState("ready")
       } else if (sess.round && sess.round.status === "completed") {
-        // 3. Round already done
+        // 2. Round already done
         setCompleteSummary({
           ai_score: sess.round.ai_score || 0,
           ai_summary: sess.round.ai_summary || "Round completed.",
@@ -552,7 +551,7 @@ const searchParams = useSearchParams()
         })
         setState("complete")
       } else {
-        // 4. Default to dashboard
+        // 3. Default to interview dashboard & evaluation rules
         setState("dashboard")
       }
     } catch (err) {
@@ -923,16 +922,16 @@ const searchParams = useSearchParams()
                   <div className="bg-white/[0.01] border border-white/[0.04] p-3 rounded-xl">
                     <div className="grid grid-cols-4 gap-1.5 text-center text-[8px] font-bold">
                       <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 p-2 rounded-lg">
-                        ✓ APPLIED
-                      </div>
-                      <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 p-2 rounded-lg">
                         ✓ SCREENED
                       </div>
                       <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 p-2 rounded-lg">
                         ✓ SHORTLISTED
                       </div>
+                      <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 p-2 rounded-lg">
+                        ✓ ASSIGNMENT
+                      </div>
                       <div className="border border-signal/40 bg-signal/15 text-signal p-2 rounded-lg animate-pulse">
-                        {isAssignmentPending ? "★ ASSIGNMENT" : "★ INTERVIEW"}
+                        ★ INTERVIEW
                       </div>
                     </div>
                   </div>
@@ -972,28 +971,24 @@ const searchParams = useSearchParams()
                     <Brain className="w-3.5 h-3.5 text-signal" /> EVALUATION PROTOCOLS
                   </div>
                   <ul className="text-[10px] text-neutral-400 space-y-1.5 list-disc pl-3.5 leading-relaxed font-medium">
-                    <li>Enable microphone if using voice responses.</li>
+                    <li>Enable camera & microphone for WebRTC proctoring.</li>
                     <li>Consists of progressive adaptive evaluation rounds.</li>
-                    <li>Evaluates depth, metrics, and technical correctness.</li>
+                    <li>Evaluates technical depth, architecture, and correctness.</li>
                   </ul>
                 </div>
 
                 {/* Action button */}
                 <div className="pt-3 border-t border-white/[0.06] flex flex-col gap-2.5">
                   <p className="text-[10px] text-neutral-400 font-medium">
-                    Click proceed to begin your active {isAssignmentPending ? "assignment" : "interview"} stage.
+                    Click proceed to begin your proctored AI technical interview session.
                   </p>
                   <button
                     onClick={async () => {
-                      if (isAssignmentPending) {
-                        setState("assignment")
-                      } else {
-                        setState("rules")
-                      }
+                      setState("rules")
                     }}
                     className="btn-primary flex items-center justify-center gap-2 w-full h-11 text-white text-xs font-display font-extrabold tracking-wider uppercase transition-transform hover:-translate-y-0.5 shadow-lg shadow-signal/20 rounded-xl"
                   >
-                    <span>PROCEED TO {isAssignmentPending ? "ASSIGNMENT" : "INTERVIEW"}</span>
+                    <span>PROCEED TO INTERVIEW</span>
                     <ChevronRight className="w-4 h-4 text-white" />
                   </button>
                 </div>
@@ -1467,14 +1462,16 @@ const searchParams = useSearchParams()
                   <p className="text-[10px] text-red-400 font-bold">
                     ASSESSMENT LOCKED. 3 CAMERA STRIKES EXCEEDED.
                   </p>
-                  <button
-                    onClick={() => {
-                      cameraPresence.resetStrikes()
-                    }}
-                    className="px-6 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs  font-bold uppercase tracking-wider rounded-radius-md transition-colors"
-                  >
-                    Reset Strikes & Resume (Dev Bypass)
-                  </button>
+                  {process.env.NODE_ENV === "development" && (
+                    <button
+                      onClick={() => {
+                        cameraPresence.resetStrikes()
+                      }}
+                      className="px-6 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 text-xs font-bold uppercase tracking-wider rounded-radius-md transition-colors"
+                    >
+                      Reset Strikes & Resume (Dev Bypass)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1820,6 +1817,19 @@ const searchParams = useSearchParams()
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Always-on WebCam Self-Preview Widget ── */}
+      {cameraPresence.isCameraActive && (
+        <CameraPreview
+          videoRef={cameraPresence.videoRef}
+          canvasRef={cameraPresence.canvasRef}
+          streamRef={cameraPresence.streamRef}
+          faceDetected={cameraPresence.cameraResult?.payload.faceDetected ?? true}
+          confidence={cameraPresence.cameraResult?.confidence ?? 0.95}
+          landmarks={cameraPresence.cameraResult?.payload.landmarksCount ?? 468}
+          hint={cameraPresence.guidance.hint}
+        />
       )}
     </div>
   )

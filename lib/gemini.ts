@@ -15,7 +15,9 @@ export async function generateGeminiChatResponse(payload: {
       },
       body: JSON.stringify({
         prompt: payload.prompt,
-        systemInstruction: payload.systemInstruction || "You are HireMind AI, an autonomous HR recruitment intelligence and candidate interviewing agent."
+        systemInstruction: payload.systemInstruction || "You are HireMind AI, an autonomous HR recruitment intelligence and candidate interviewing agent.",
+        modelName: payload.modelName,
+        history: payload.history,
       })
     })
 

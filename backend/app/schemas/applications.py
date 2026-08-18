@@ -3,8 +3,17 @@ from datetime import date
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-ApplicationStage = Literal["applied", "screened", "interview", "offered", "hired", "rejected"]
+ApplicationStage = Literal[
+    "applied", "screened", "shortlisted",
+    "assignment_sent", "assignment_submitted", "assignment_reviewed",
+    "tech_round", "tech_round_completed",
+    "interview_round", "interview_round_completed",
+    "speaking_round", "speaking_round_completed",
+    "hr_round", "hr_round_completed",
+    "interview", "offered", "hired", "rejected", "waitlisted"
+]
 MatchQuality     = Literal["excellent", "strong", "good", "fair", "low"]
+
 
 
 class ApplicationBase(BaseModel):

@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     )
 
     # Demo mode — when True, uses in-memory store instead of Supabase
-    # and bypasses JWT authentication entirely.
-    demo_mode: bool = True
+    # and bypasses JWT authentication entirely. Defaults to False for production safety.
+    demo_mode: bool = False
 
     # Supabase (only needed when demo_mode=False)
     supabase_url: str = "https://placeholder.supabase.co"
@@ -58,22 +58,37 @@ class Settings(BaseSettings):
                 "CRITICAL SECURITY CONFIGURATION ERROR: demo_mode cannot be enabled when app_env is 'production' or 'staging'. Set DEMO_MODE=false."
             )
 
-        if is_production_env:
+        def _is_placeholder(val: str) -> bool:
+            if not val or not val.strip():
+                return True
+            lower_val = val.lower().strip()
+            return (
+                "placeholder" in lower_val
+                or "your_" in lower_val
+                or lower_val in ("none", "null", "false", "")
+            )
+
+        if not self.demo_mode:
             jwt_secret = (self.supabase_jwt_secret or "").strip()
             service_key = (self.supabase_service_role_key or "").strip()
+            deepseek_key = (self.deepseek_api_key or "").strip()
 
-            def _is_placeholder(val: str) -> bool:
-                if not val:
-                    return True
-                lower_val = val.lower()
-                return "placeholder" in lower_val or lower_val == "your_supabase_service_role_key_here"
+            missing = []
+            if _is_placeholder(jwt_secret):
+                missing.append("SUPABASE_JWT_SECRET")
+            if _is_placeholder(service_key):
+                missing.append("SUPABASE_SERVICE_ROLE_KEY")
+            if _is_placeholder(deepseek_key):
+                missing.append("DEEPSEEK_API_KEY")
 
-            if _is_placeholder(jwt_secret) or _is_placeholder(service_key):
+            if missing:
                 raise ValueError(
-                    "CRITICAL SECURITY CONFIGURATION ERROR: Production deployment requires valid non-placeholder values for supabase_jwt_secret and supabase_service_role_key."
+                    f"CRITICAL CONFIGURATION ERROR: DEMO_MODE=false requires valid non-placeholder values for: {', '.join(missing)}. "
+                    "Update backend/.env with valid credentials or enable DEMO_MODE=true for local testing."
                 )
 
         return self
 
 
 settings = Settings()
+

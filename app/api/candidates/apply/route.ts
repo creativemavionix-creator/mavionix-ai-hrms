@@ -3,8 +3,11 @@ import { createClient } from "@supabase/supabase-js"
 import { analyzeCandidateResume } from "@/lib/geminiScoring"
 import { logStageTransition } from "@/lib/stageHistory"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ukwmhwgchscvyvzsbcxk.supabase.co"
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrd21od2djaHNjdnl2enNiY3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTY4OTYsImV4cCI6MjEwMjAzMjg5Nn0.TkYjSEd5CF85NpY9v2XM_btJUtDBqHas9gKhjb3oiDw"
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
+const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseKey = (rawServiceKey && !rawServiceKey.startsWith("YOUR_") && !rawServiceKey.includes("placeholder"))
+  ? rawServiceKey
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
@@ -16,9 +19,6 @@ async function runAsyncAiScoring(
   userApiKey?: string
 ) {
   try {
-    // 1. Update status to 'processing'
-    await supabase.from("applications").update({ ai_processing_status: "processing" }).eq("id", applicationId)
-
     const aiAnalysis = await analyzeCandidateResume({
       name: (body.name || "").trim(),
       jobTitle: body.jobId || "Senior Backend Engineer",
@@ -31,7 +31,7 @@ async function runAsyncAiScoring(
       userApiKey
     })
 
-    // 2. Upsert AI report to public.ai_reports table
+    // Upsert AI report to public.ai_reports table
     const { error: rError } = await supabase.from("ai_reports").upsert({
       application_id: applicationId,
       candidate_id: candidateId,
@@ -50,17 +50,14 @@ async function runAsyncAiScoring(
       console.warn("AI Report Upsert Warning:", rError.message)
     }
 
-    // 3. Update application with score, match quality, and set ai_processing_status = 'completed'
-    const matchQuality = aiAnalysis.overall_score >= 85 ? "excellent" : aiAnalysis.overall_score >= 70 ? "strong" : "moderate"
+    // Update application with score and match quality (valid Postgres match_quality ENUM)
+    const matchQuality = aiAnalysis.overall_score >= 85 ? "excellent" : aiAnalysis.overall_score >= 70 ? "strong" : aiAnalysis.overall_score >= 55 ? "good" : aiAnalysis.overall_score >= 40 ? "fair" : "low"
     await supabase.from("applications").update({
       ai_score: aiAnalysis.overall_score,
-      match_quality: matchQuality,
-      ai_processing_status: "completed"
+      match_quality: matchQuality
     }).eq("id", applicationId)
   } catch (err: any) {
     console.error("Async AI Scoring Failure:", err?.message || err)
-    // AI failure must NOT crash application; mark status as 'failed' for recruiter manual review
-    await supabase.from("applications").update({ ai_processing_status: "failed" }).eq("id", applicationId)
   }
 }
 
@@ -68,7 +65,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const {
-      name, email, phone, jobId, location, linkedInUrl, githubUrl,
+      name, email, password, phone, jobId, location, linkedInUrl, githubUrl,
       yearsExp, workPreference, noticePeriod, statementOfIntent,
       technicalImpact, outageLesson, skills, resumeText, resumeFileName,
       authUserId: providedAuthUserId
@@ -89,57 +86,38 @@ export async function POST(req: Request) {
       .toUpperCase()
       .substring(0, 2) || "CN"
 
-    // 1. Authenticate Request via Supabase Auth Session Token or Provided authUserId
+    // 1. Candidate Application Submission (No Auth Account Created at Apply Time)
     let authUserId: string | null = providedAuthUserId || null
-    const authHeader = req.headers.get("authorization")
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "").trim()
-      try {
-        const { data: { user } } = await supabase.auth.getUser(token)
-        if (user) {
-          authUserId = user.id
+
+    if (!authUserId) {
+      const authHeader = req.headers.get("authorization")
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.replace("Bearer ", "").trim()
+        try {
+          const { data: { user } } = await supabase.auth.getUser(token)
+          if (user) {
+            authUserId = user.id
+          }
+        } catch (authErr) {
+          console.warn("Supabase Auth Token Verification Notice:", authErr)
         }
-      } catch (authErr) {
-        console.warn("Supabase Auth Token Verification Notice:", authErr)
       }
     }
 
-    // 2. Candidate Resolution (by auth_user_id or normalized email)
+    // 2. Candidate Resolution & Persistence
     let candidateId: string | null = null
     let candidateRecord: any = null
 
-    // First try lookup by auth_user_id if available
-    if (authUserId) {
-      const { data: candsByAuth } = await supabase
-        .from("candidates")
-        .select("*")
-        .eq("auth_user_id", authUserId)
-        .limit(1)
+    // First try lookup by email
+    const { data: candsByEmail } = await supabase
+      .from("candidates")
+      .select("*")
+      .eq("email", normalizedEmail)
+      .limit(1)
 
-      if (candsByAuth && candsByAuth.length > 0) {
-        candidateRecord = candsByAuth[0]
-        candidateId = candidateRecord.id
-      }
-    }
-
-    // Fallback lookup by email
-    if (!candidateRecord) {
-      const { data: candsByEmail } = await supabase
-        .from("candidates")
-        .select("*")
-        .eq("email", normalizedEmail)
-        .limit(1)
-
-      if (candsByEmail && candsByEmail.length > 0) {
-        candidateRecord = candsByEmail[0]
-        candidateId = candidateRecord.id
-
-        // Link auth_user_id if available and not set
-        if (authUserId && !candidateRecord.auth_user_id) {
-          await supabase.from("candidates").update({ auth_user_id: authUserId }).eq("id", candidateId)
-          candidateRecord.auth_user_id = authUserId
-        }
-      }
+    if (candsByEmail && candsByEmail.length > 0) {
+      candidateRecord = candsByEmail[0]
+      candidateId = candidateRecord.id
     }
 
     const parsedDataObj = {
@@ -154,38 +132,75 @@ export async function POST(req: Request) {
       outageLesson: outageLesson || "",
       skills: Array.isArray(skills) ? skills : (skills ? skills.split(",").map((s: string) => s.trim()) : []),
       resumeText: resumeText || "",
-      resumeFileName: resumeFileName || "uploaded_resume.pdf"
+      resumeFileName: resumeFileName || "uploaded_resume.pdf",
+      user_id: authUserId
     }
 
     if (candidateRecord) {
       // Update existing candidate profile details
-      const { data: updatedCand } = await supabase
+      const existingParsed = candidateRecord.parsed_data || {}
+      const mergedParsed = { ...existingParsed, ...parsedDataObj, user_id: authUserId }
+      
+      const updatePayload: any = {
+        name: name.trim(),
+        phone: phone || candidateRecord.phone,
+        parsed_data: mergedParsed
+      }
+      if (authUserId) updatePayload.user_id = authUserId
+
+      let { data: updatedCand, error: updateErr } = await supabase
         .from("candidates")
-        .update({
-          name: name.trim(),
-          phone: phone || candidateRecord.phone,
-          parsed_data: parsedDataObj,
-          ...(authUserId ? { auth_user_id: authUserId } : {})
-        })
+        .update(updatePayload)
         .eq("id", candidateId)
         .select()
         .single()
 
+      if (updateErr && updateErr.message && updateErr.message.includes("user_id")) {
+        delete updatePayload.user_id
+        const fallbackUp = await supabase
+          .from("candidates")
+          .update(updatePayload)
+          .eq("id", candidateId)
+          .select()
+          .single()
+        updatedCand = fallbackUp.data
+      }
+
       if (updatedCand) candidateRecord = updatedCand
     } else {
-      // Create new candidate record
-      const { data: newCand, error: createCandErr } = await supabase
+      // Create new candidate record with real user_id foreign key column
+      const insertPayload: any = {
+        name: name.trim(),
+        email: normalizedEmail,
+        phone: phone || null,
+        initials,
+        parsed_data: parsedDataObj
+      }
+      if (authUserId) insertPayload.user_id = authUserId
+
+      let newCand: any = null
+      let createCandErr: any = null
+
+      const resInsert = await supabase
         .from("candidates")
-        .insert({
-          name: name.trim(),
-          email: normalizedEmail,
-          phone: phone || null,
-          initials,
-          ...(authUserId ? { auth_user_id: authUserId } : {}),
-          parsed_data: parsedDataObj
-        })
+        .insert(insertPayload)
         .select()
         .single()
+      
+      newCand = resInsert.data
+      createCandErr = resInsert.error
+
+      if (createCandErr && createCandErr.message && createCandErr.message.includes("user_id")) {
+        // Fall back if user_id root column is missing in DB schema
+        delete insertPayload.user_id
+        const fallbackRes = await supabase
+          .from("candidates")
+          .insert(insertPayload)
+          .select()
+          .single()
+        newCand = fallbackRes.data
+        createCandErr = fallbackRes.error
+      }
 
       if (createCandErr || !newCand) {
         console.error("Database Candidate creation error:", createCandErr?.message || createCandErr)
@@ -255,14 +270,13 @@ export async function POST(req: Request) {
     }
 
     if (!applicationRecord && candidateId && targetJobUuid) {
-      // Set application_stage = 'applied' and ai_processing_status = 'pending'
+      // Set application stage = 'applied'
       const { data: newApp, error: createAppErr } = await supabase
         .from("applications")
         .insert({
           job_id: targetJobUuid,
           candidate_id: candidateId,
           stage: "applied",
-          ai_processing_status: "pending",
           flagged: false,
           applied_date: new Date().toISOString().split("T")[0]
         })

@@ -32,7 +32,7 @@ function clamp(val: any, defaultVal: number = 75): number {
 }
 
 export async function analyzeCandidateResume(input: CandidateScoringInput): Promise<AiScoringResult> {
-  const apiKey = input.userApiKey || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY
+  const apiKey = input.userApiKey || process.env.GEMINI_API_KEY
 
   const skillsList = Array.isArray(input.skills)
     ? input.skills.join(", ")
@@ -92,7 +92,19 @@ Evaluate the candidate's resume and responses thoroughly. Return valid JSON matc
 
       const result = await model.generateContent(prompt)
       const text = result.response.text()
-      const json = JSON.parse(text)
+      const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
+      let json: any = {}
+      try {
+        json = JSON.parse(cleaned)
+      } catch {
+        const match = cleaned.match(/\{[\s\S]*\}/)
+        if (match) {
+          json = JSON.parse(match[0])
+        } else {
+          throw new Error("Failed to parse Gemini scoring JSON response")
+        }
+      }
+
 
       const skill_score = clamp(json.skill_score, 82)
       const exp_score   = clamp(json.exp_score, 80)

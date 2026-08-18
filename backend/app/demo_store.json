@@ -337,6 +337,22 @@
       "log_type": "info",
       "id": "f7f2ca5f-1ccd-4dbd-9260-f3f6823078d7",
       "created_at": "2026-08-04T16:38:15.123154+00:00"
+    },
+    {
+      "actor_name": "Candidate",
+      "action": "started AI tech round for",
+      "context_label": "Software Engineer",
+      "log_type": "info",
+      "id": "caa14bca-c983-4c8b-87f2-f10937dd9c7c",
+      "created_at": "2026-08-15T16:00:40.281194+00:00"
+    },
+    {
+      "actor_name": "Candidate",
+      "action": "started AI tech round for",
+      "context_label": "Software Engineer",
+      "log_type": "info",
+      "id": "d0049774-32b9-49e8-b1b7-b53516dcacd9",
+      "created_at": "2026-08-15T16:27:00.402594+00:00"
     }
   ],
   "settings": [
@@ -405,7 +421,38 @@
       "submission_url": null
     }
   ],
-  "ai_interview_rounds": [],
+  "ai_interview_rounds": [
+    {
+      "application_id": "demo-app-001",
+      "round_type": "tech",
+      "transcript": [
+        {
+          "role": "ai",
+          "message": "Welcome to the technical round for Software Engineer. Let's start: Welcome to the technical round. Can you walk me through a challenging project you worked on recently and the technical decisions you made?",
+          "timestamp": "2026-08-15T16:00:40.276136+00:00"
+        }
+      ],
+      "status": "in_progress",
+      "started_at": "2026-08-15T16:00:40.276136+00:00",
+      "id": "839952f2-70ad-4db7-8fb9-99a455a01c20",
+      "created_at": "2026-08-15T16:00:40.276136+00:00"
+    },
+    {
+      "application_id": "nonexistent-app-123",
+      "round_type": "tech",
+      "transcript": [
+        {
+          "role": "ai",
+          "message": "Welcome to the technical round for Software Engineer. Let's start: Welcome to the technical round. Can you walk me through a challenging project you worked on recently and the technical decisions you made?",
+          "timestamp": "2026-08-15T16:27:00.388550+00:00"
+        }
+      ],
+      "status": "in_progress",
+      "started_at": "2026-08-15T16:27:00.388550+00:00",
+      "id": "4364bd1f-7990-49ff-8cff-7bb64b8c8dbb",
+      "created_at": "2026-08-15T16:27:00.388550+00:00"
+    }
+  ],
   "final_recommendations": [],
   "candidate_tokens": [
     {

@@ -1,0 +1,11 @@
+"use client"
+
+import AiIntelligenceView from "@/components/recruitment/AiIntelligenceView"
+
+export default function PlatformAiIntelligencePage() {
+  return (
+    <div className="min-h-screen bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] p-6">
+      <AiIntelligenceView />
+    </div>
+  )
+}

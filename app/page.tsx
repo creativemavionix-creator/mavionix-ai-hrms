@@ -67,13 +67,120 @@ export default function RecruitmentDashboard() {
   const theme = themeObj?.resolved || "dark"
   const setTheme = themeObj?.setMode || (() => {})
 
+  // Helper to verify if an authenticated email belongs to HR Recruiter
+  const isRecruiterEmail = (email?: string | null): boolean => {
+    if (!email) return false
+    const e = email.toLowerCase().trim()
+    const savedHrEmail = (typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : "")?.toLowerCase() || ""
+    return e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai")
+  }
+
+  // Recruiter Auth State
+  const [session, setSession] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [hrEmail, setHrEmail] = useState("")
+  const [hrPassword, setHrPassword] = useState("")
+  const [hrLoggingIn, setHrLoggingIn] = useState(false)
+  const [hrLoginError, setHrLoginError] = useState<string | null>(null)
+
   useEffect(() => {
     setMounted(true)
-  }, [])
+
+    const syncRecruiterSession = (sess: any) => {
+      if (sess?.user?.email && isRecruiterEmail(sess.user.email)) {
+        setSession(sess)
+        if (typeof window !== "undefined") {
+          localStorage.setItem("hiremind_recruiter_token", sess.access_token)
+          localStorage.setItem("hiremind_recruiter_email", sess.user.email)
+          if (portalViewMode === "recruiter") {
+            localStorage.setItem("hiremind_token", sess.access_token)
+          }
+        }
+      } else {
+        // Fall back to saved recruiter token if available so Candidate actions do not wipe Recruiter session
+        const savedToken = typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_token") : null
+        const savedEmail = typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : null
+        if (savedToken && savedEmail) {
+          setSession({ access_token: savedToken, user: { email: savedEmail } })
+          if (portalViewMode === "recruiter") {
+            localStorage.setItem("hiremind_token", savedToken)
+          }
+        } else {
+          setSession(null)
+        }
+      }
+      setAuthLoading(false)
+    }
+
+    supabase.auth.getSession().then(({ data: { session: currentSess } }) => {
+      syncRecruiterSession(currentSess)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSess) => {
+      syncRecruiterSession(currentSess)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [portalViewMode])
+
+  const handleHrLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setHrLoggingIn(true)
+    setHrLoginError(null)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: hrEmail.trim().toLowerCase(),
+        password: hrPassword,
+      })
+
+      if (error || !data.session) {
+        setHrLoginError(error?.message || "Invalid HR recruiter credentials. Access denied.")
+        setHrLoggingIn(false)
+        return
+      }
+
+      if (data.session.access_token) {
+        const email = data.session.user.email || hrEmail.trim().toLowerCase()
+        localStorage.setItem("hiremind_recruiter_token", data.session.access_token)
+        localStorage.setItem("hiremind_recruiter_email", email)
+        localStorage.setItem("hiremind_token", data.session.access_token)
+      }
+
+      setSession(data.session)
+      setHrEmail("")
+      setHrPassword("")
+    } catch (err: any) {
+      setHrLoginError(err?.message || "Authentication service error")
+    } finally {
+      setHrLoggingIn(false)
+    }
+  }
+
+  const handleHrSignOut = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {}
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("hiremind_recruiter_token")
+      localStorage.removeItem("hiremind_recruiter_email")
+      if (localStorage.getItem("hiremind_portal_view_mode") === "recruiter") {
+        localStorage.removeItem("hiremind_token")
+      }
+    }
+    setSession(null)
+  }
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("hiremind_portal_view_mode", portalViewMode)
+      if (portalViewMode === "recruiter") {
+        const recruiterTok = localStorage.getItem("hiremind_recruiter_token")
+        if (recruiterTok) localStorage.setItem("hiremind_token", recruiterTok)
+      } else if (portalViewMode === "candidate") {
+        const candTok = localStorage.getItem("hiremind_candidate_token")
+        if (candTok) localStorage.setItem("hiremind_token", candTok)
+      }
     }
   }, [portalViewMode])
 
@@ -126,7 +233,7 @@ export default function RecruitmentDashboard() {
         "postgres_changes",
         { event: "*", schema: "public", table: "ai_reports" },
         (payload) => {
-          const report = payload.new
+          const report = payload.new as Record<string, any>
           const alertMsg = `✨ Real Gemini AI Scoring Completed! Skill Score: ${report?.skill_score || "N/A"}%`
           setNotifications((prev) => [alertMsg, ...prev])
         }
@@ -253,34 +360,6 @@ export default function RecruitmentDashboard() {
 
   return (
     <>
-      {/* GLOBAL FLOATING PORTAL SWITCHER */}
-      <div className="fixed top-3 right-4 z-50 flex items-center gap-2 bg-[#0d0f17]/90 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl shadow-2xl">
-        <button
-          onClick={() => setPortalViewMode("landing")}
-          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
-            portalViewMode === "landing" ? "bg-violet-600 text-white shadow-md shadow-violet-500/25" : "text-neutral-400 hover:text-white"
-          }`}
-        >
-          🏠 Landing
-        </button>
-        <button
-          onClick={() => setPortalViewMode("recruiter")}
-          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
-            portalViewMode === "recruiter" ? "bg-violet-600 text-white shadow-md shadow-violet-500/25" : "text-neutral-400 hover:text-white"
-          }`}
-        >
-          💼 Recruiter
-        </button>
-        <button
-          onClick={() => setPortalViewMode("candidate")}
-          className={`px-3 py-1 rounded-xl text-[10px] font-bold font-mono tracking-wider uppercase transition-all ${
-            portalViewMode === "candidate" ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/25" : "text-neutral-400 hover:text-white"
-          }`}
-        >
-          🚀 Candidate
-        </button>
-      </div>
-
       {portalViewMode === "landing" && (
         <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
       )}
@@ -289,7 +368,100 @@ export default function RecruitmentDashboard() {
         <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("recruiter")} />
       )}
 
-      {portalViewMode === "recruiter" && (
+      {portalViewMode === "recruiter" && !session && (
+        <div className="min-h-screen bg-[#090A10] text-white font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
+
+          <header className="relative z-10 max-w-4xl w-full mx-auto flex items-center justify-between py-4 border-b border-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/25 border border-white/20">
+                <Brain className="w-5 h-5 text-white animate-pulse" />
+              </div>
+              <div>
+                <span className="font-display font-extrabold text-lg tracking-wider bg-gradient-to-r from-violet-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+                  HIREMIND RECRUITER WORKSTATION
+                </span>
+                <span className="block text-[9px] text-neutral-400 font-mono tracking-widest uppercase">
+                  Autonomous Talent Intelligence Gate
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setPortalViewMode("landing")}
+              className="p-2.5 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Landing Page</span>
+            </button>
+          </header>
+
+          <main className="relative z-10 max-w-md w-full mx-auto my-auto py-12">
+            <div className="glass-card border border-white/[0.08] p-8 rounded-3xl shadow-2xl bg-gradient-to-b from-white/[0.03] to-transparent">
+              <div className="text-center space-y-2 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/25 mx-auto flex items-center justify-center text-violet-400 mb-3">
+                  <Briefcase className="w-6 h-6" />
+                </div>
+                <h2 className="text-xl font-display font-extrabold text-white">HR Recruiter Sign In</h2>
+                <p className="text-xs text-neutral-400">Authenticate to access live candidate dossiers, AI telemetry, and application pipeline.</p>
+              </div>
+
+              {hrLoginError && (
+                <div className="mb-6 p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-2 shadow-lg">
+                  <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                  <span>{hrLoginError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleHrLogin} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Recruiter Email</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. alex.recruiter@hiremind.ai"
+                    value={hrEmail}
+                    onChange={(e) => setHrEmail(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Enter Recruiter Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter recruiter password"
+                    value={hrPassword}
+                    onChange={(e) => setHrPassword(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/10 text-white rounded-xl text-xs px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={hrLoggingIn}
+                  className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
+                >
+                  {hrLoggingIn ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Authenticating Recruiter...</span>
+                    </>
+                  ) : (
+                    <span>Sign In to Recruiter Workspace</span>
+                  )}
+                </button>
+              </form>
+            </div>
+          </main>
+
+          <footer className="relative z-10 max-w-4xl w-full mx-auto text-center py-4 border-t border-white/[0.06] text-[10px] text-neutral-500 font-mono">
+            HireMind AI Enterprise Security Gate — Restricted Access
+          </footer>
+        </div>
+      )}
+
+      {portalViewMode === "recruiter" && session && (
         <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
@@ -403,17 +575,17 @@ export default function RecruitmentDashboard() {
 
           <div className="flex items-center gap-3 text-xs">
             <button
-              onClick={() => setPortalViewMode("candidate")}
-              className="px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 rounded-full text-[9px] font-extrabold tracking-wider uppercase transition-all shrink-0 shadow-md shadow-emerald-500/10 cursor-pointer"
-            >
-              Candidate Portal View
-            </button>
-
-            <button
               onClick={() => setPortalViewMode("landing")}
               className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[9px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer"
             >
               Landing Page
+            </button>
+
+            <button
+              onClick={handleHrSignOut}
+              className="px-3 py-1.5 bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-400 rounded-full text-[9px] font-extrabold tracking-wider uppercase transition-all shrink-0 shadow-md shadow-red-500/10 cursor-pointer"
+            >
+              Sign Out (HR)
             </button>
 
             <button

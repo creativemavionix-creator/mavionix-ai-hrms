@@ -16,7 +16,7 @@ DROP TYPE IF EXISTS job_priority CASCADE;
 CREATE TYPE job_priority AS ENUM ('low', 'medium', 'high');
 
 DROP TYPE IF EXISTS application_stage CASCADE;
-CREATE TYPE application_stage AS ENUM ('applied', 'screened', 'shortlisted', 'assignment_sent', 'assignment_submitted', 'assignment_reviewed', 'tech_round', 'tech_round_completed', 'interview_round', 'interview_round_completed', 'speaking_round', 'speaking_round_completed', 'hr_round', 'hr_round_completed', 'offered', 'hired', 'rejected');
+CREATE TYPE application_stage AS ENUM ('applied', 'screened', 'shortlisted', 'assignment_sent', 'assignment_submitted', 'assignment_reviewed', 'tech_round', 'tech_round_completed', 'interview_round', 'interview_round_completed', 'speaking_round', 'speaking_round_completed', 'hr_round', 'hr_round_completed', 'offered', 'hired', 'rejected', 'waitlisted');
 
 DROP TYPE IF EXISTS match_quality CASCADE;
 CREATE TYPE match_quality AS ENUM ('excellent', 'strong', 'good', 'fair', 'low');
@@ -53,7 +53,7 @@ CREATE TYPE recommendation_level AS ENUM ('strongly_recommended', 'recommended',
 
 -- TABLES
 CREATE TABLE public.users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
     email TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     role user_role NOT NULL DEFAULT 'recruiter',

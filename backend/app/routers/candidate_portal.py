@@ -52,8 +52,8 @@ async def generate_portal_token(body: GenerateTokenRequest, user: HRStaffDep):
     Generate a short-lived access token for the candidate portal.
     Returns the token and a ready-to-share URL.
     """
-    if body.round_type not in ("tech", "interview", "hr"):
-        raise HTTPException(status_code=422, detail="round_type must be: tech, interview, hr")
+    if body.round_type not in ("tech", "interview", "speaking", "hr"):
+        raise HTTPException(status_code=422, detail="round_type must be: tech, interview, speaking, hr")
 
     # Validate application exists
     app_result = supabase.table("applications").select("id, candidate_id").eq("id", body.application_id).maybe_single().execute()
@@ -262,17 +262,13 @@ async def validate_portal_token(token: str, request: Request):
         .maybe_single()
         .execute()
     )
-    existing_round = round_result.data if round_result else None
-
-    # Mark token as used
-    if not token_row.get("used"):
-        supabase.table("candidate_tokens").update({"used": True}).eq("id", token_row["id"]).execute()
-
+    existing_round = round_result.data if round_result and round_result.data else None
     # Extract skills from parsed_data
     skills = []
     parsed = candidate.get("parsed_data")
     if parsed and isinstance(parsed, dict):
         skills = parsed.get("tags", []) or parsed.get("skills", [])
+
 
     # Check for assignment
     assignment = None
@@ -326,3 +322,17 @@ async def validate_portal_token(token: str, request: Request):
             "round_blueprints": bp,
         }
     }
+
+
+@router.get("/api/portal/job-profiles")
+async def get_job_profiles():
+    """Public candidate portal endpoint providing benchmark job profiles from backend storage."""
+    import json, os
+    profiles_path = os.path.join(os.path.dirname(__file__), "..", "job_profiles.json")
+    if os.path.exists(profiles_path):
+        try:
+            with open(profiles_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as exc:
+            logger.warning(f"Could not load job_profiles.json: {exc}")
+    return {}

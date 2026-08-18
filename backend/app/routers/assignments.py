@@ -49,11 +49,15 @@ class AssignmentGenerateRequest(BaseModel):
     description: str | None = None
     requirements: str | None = None
     deadline_days: int | None = Field(default=3, ge=1, le=30)
+    deadline_date: str | None = None
+    deliverables_required: list[str] | None = None
 
 
 class SubmitRequest(BaseModel):
     submission_text: str | None = None
     submission_url: str | None = None
+    submission_data: dict | None = None
+
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -102,9 +106,21 @@ async def generate_and_send_assignment(
         raise HTTPException(status_code=404, detail="Candidate not found.")
     candidate = cand_result.data
 
-    # 2. Determine assignment title, description, requirements, and deadline
-    days = (body.deadline_days if body and body.deadline_days and body.deadline_days > 0 else 3)
-    deadline = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    # 2. Determine assignment title, description, requirements, deadline, and deliverables
+    if body and body.deadline_date:
+        try:
+            parsed_dl = datetime.fromisoformat(body.deadline_date.replace("Z", "+00:00"))
+            if parsed_dl.tzinfo is None:
+                parsed_dl = parsed_dl.replace(tzinfo=timezone.utc)
+            deadline = parsed_dl.isoformat()
+        except Exception:
+            days = (body.deadline_days if body and body.deadline_days and body.deadline_days > 0 else 3)
+            deadline = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    else:
+        days = (body.deadline_days if body and body.deadline_days and body.deadline_days > 0 else 3)
+        deadline = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+    deliverables = body.deliverables_required if body and body.deliverables_required else ["github_link", "report"]
 
     if body and body.title and body.description:
         # Use recruiter-provided custom assignment details
@@ -157,22 +173,38 @@ async def generate_and_send_assignment(
         "requirements": requirements,
         "status": "pending",
         "deadline": deadline,
+        "deliverables_required": deliverables,
     }
 
     if existing_asgn and existing_asgn.get("status") == "pending":
         # Update existing pending assignment in-place to preserve UUID & prevent duplicates
-        update_res = (
-            supabase.table("assignments")
-            .update(assignment_payload)
-            .eq("id", existing_asgn["id"])
-            .execute()
-        )
+        try:
+            update_res = (
+                supabase.table("assignments")
+                .update(assignment_payload)
+                .eq("id", existing_asgn["id"])
+                .execute()
+            )
+        except Exception as e:
+            logger.warning("Updating deliverables_required column failed, falling back without column: %s", e)
+            assignment_payload.pop("deliverables_required", None)
+            update_res = (
+                supabase.table("assignments")
+                .update(assignment_payload)
+                .eq("id", existing_asgn["id"])
+                .execute()
+            )
         if not update_res.data:
             raise HTTPException(status_code=500, detail="Failed to update existing assignment.")
         assignment = update_res.data[0]
     else:
         # Insert new assignment when no prior assignment exists
-        insert_result = supabase.table("assignments").insert(assignment_payload).execute()
+        try:
+            insert_result = supabase.table("assignments").insert(assignment_payload).execute()
+        except Exception as e:
+            logger.warning("Inserting deliverables_required column failed, falling back without column: %s", e)
+            assignment_payload.pop("deliverables_required", None)
+            insert_result = supabase.table("assignments").insert(assignment_payload).execute()
         if not insert_result.data:
             raise HTTPException(status_code=500, detail="Failed to save assignment.")
         assignment = insert_result.data[0]
@@ -245,8 +277,12 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, candidate: 
     Candidate submits their assignment work (text and/or URL).
     Sets assignment status to 'submitted' and stage to 'assignment_submitted'.
     """
-    if not body.submission_text and not body.submission_url:
-        raise HTTPException(status_code=422, detail="Provide either submission_text or submission_url.")
+    sub_data = body.submission_data or {}
+    sub_text = body.submission_text or sub_data.get("report") or ""
+    sub_url = body.submission_url or sub_data.get("github_link") or sub_data.get("deployment_link") or ""
+
+    if not sub_text and not sub_url and not sub_data:
+        raise HTTPException(status_code=422, detail="Provide submission_data, submission_text, or submission_url.")
 
     # Fetch assignment
     assign_result = (
@@ -282,11 +318,17 @@ async def submit_assignment(assignment_id: str, body: SubmitRequest, candidate: 
 
     # Update assignment with submission
     update_payload = {
-        "submission_text": body.submission_text,
-        "submission_url": body.submission_url,
+        "submission_text": sub_text,
+        "submission_url": sub_url,
+        "submission_data": sub_data,
         "status": "submitted",
     }
-    supabase.table("assignments").update(update_payload).eq("id", assignment_id).execute()
+    try:
+        supabase.table("assignments").update(update_payload).eq("id", assignment_id).execute()
+    except Exception as e:
+        logger.warning("Updating submission_data column failed, falling back without column: %s", e)
+        update_payload.pop("submission_data", None)
+        supabase.table("assignments").update(update_payload).eq("id", assignment_id).execute()
 
     # Advance stage
     try:
@@ -476,17 +518,6 @@ async def recruiter_review_assignment(assignment_id: str, body: RecruiterReviewR
         "final_score": final_score,
         "review": review_audit,
     }
-    """Fetch a single assignment by ID."""
-    result = (
-        supabase.table("assignments")
-        .select("*")
-        .eq("id", assignment_id)
-        .maybe_single()
-        .execute()
-    )
-    if not result or not result.data:
-        raise HTTPException(status_code=404, detail="Assignment not found.")
-    return result.data
 
 
 @router.get("/api/applications/{application_id}/assignment")
@@ -571,3 +602,18 @@ async def manual_shortlist_and_assign(application_id: str, user: HRStaffDep):
     }).execute()
 
     return {"message": f"Shortlisted and assignment sent to {candidate['name']}", "assignment": assignment, "already_exists": False}
+
+
+@router.get("/api/applications/{application_id}/assignment")
+async def get_assignment_by_application(application_id: str):
+    """Fetch assignment for a given application ID (candidate & recruiter accessible)."""
+    result = (
+        supabase.table("assignments")
+        .select("*")
+        .eq("application_id", application_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    if not result or not result.data:
+        raise HTTPException(status_code=404, detail="No assignment found for application.")
+    return result.data[0]

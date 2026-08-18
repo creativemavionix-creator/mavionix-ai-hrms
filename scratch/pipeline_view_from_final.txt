@@ -1,0 +1,998 @@
+"use client"
+
+import { useState, useEffect, useCallback, useRef } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  pipelineApi, assignmentsApi, aiRoundsApi, recommendationApi, portalApi,
+  PipelineHistory, ApiAssignment, ApiAIRound, ApiFinalRecommendation,
+  RoundType, TranscriptEntry,
+} from "@/lib/api"
+import {
+  CheckCircle, Circle, XCircle, ChevronDown, ChevronRight,
+  Loader2, AlertTriangle, Send, Brain, FileText, Award,
+  MessageSquare, ClipboardCheck, Star, ThumbsUp, ThumbsDown, Shield, Link2, Copy, Mic,
+} from "lucide-react"
+
+// ── Pipeline Stepper ─────────────────────────────────────────────────────────
+const STEPPER_STAGES = [
+  { key: "applied", label: "Applied" },
+  { key: "screened", label: "Screened" },
+  { key: "shortlisted", label: "Shortlisted" },
+  { key: "assignment_sent", label: "Assignment" },
+  { key: "tech_round", label: "Tech Round" },
+  { key: "interview_round", label: "Interview" },
+  { key: "speaking_round", label: "Speaking" },
+  { key: "hr_round", label: "HR Round" },
+  { key: "offered", label: "Offered" },
+]
+
+function PipelineStepper({ stages, activityHistory }: { stages: PipelineHistory["stages"]; activityHistory?: PipelineHistory["activity_history"] }) {
+  const getStageDate = (stageKey: string) => {
+    if (!activityHistory) return null
+    const entry = activityHistory.find(h => 
+      h.action.toLowerCase().includes(stageKey.toLowerCase()) ||
+      h.context_label.toLowerCase().includes(stageKey.toLowerCase())
+    )
+    if (entry) {
+      return new Date(entry.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
+    }
+    if (stageKey === "applied" && activityHistory.length > 0) {
+      const earliest = activityHistory[activityHistory.length - 1]
+      return new Date(earliest.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
+    }
+    return null
+  }
+
+  return (
+    <div className="overflow-x-auto scrollbar-none py-6">
+      <div className="flex items-start justify-between min-w-[950px] px-4 relative">
+        {STEPPER_STAGES.map((step, i) => {
+          const stageData = stages.find(s => s.stage === step.key || s.stage === step.key + "_completed")
+          const status = stageData?.status ?? "upcoming"
+          const isCompleted = status === "completed"
+          const isCurrent = status === "current"
+          const dateStr = getStageDate(step.key)
+
+          return (
+            <div key={step.key} className="flex-1 flex flex-col items-center text-center relative">
+              {/* Connector line behind the nodes */}
+              {i < STEPPER_STAGES.length - 1 && (
+                <div className={`absolute left-[50%] right-[-50%] top-4 h-[2px] z-0 transition-all duration-300 ${
+                  isCompleted ? "bg-emerald-500" : "bg-white/[0.08]"
+                }`} />
+              )}
+
+              {/* Step Circle */}
+              <div className={`w-8 h-8 rounded-radius-full border-2 flex items-center justify-center transition-all duration-300 relative z-10
+                ${isCompleted ? "bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/15" : ""}
+                ${isCurrent ? "bg-violet-500/10 border-violet-500 text-violet-400 shadow-lg shadow-violet-500/20 scale-110" : ""}
+                ${!isCompleted && !isCurrent ? "bg-[#111321] border-white/[0.08] text-neutral-600" : ""}
+              `}>
+                {isCompleted ? (
+                  <span className="text-[10px] font-black">✔</span>
+                ) : isCurrent ? (
+                  <div className="w-2.5 h-2.5 rounded-radius-full bg-violet-400 animate-pulse" />
+                ) : (
+                  <div className="w-1.5 h-1.5 rounded-radius-full bg-neutral-700" />
+                )}
+              </div>
+
+              {/* Content Label */}
+              <span className={`text-[10px] font-black uppercase tracking-wider whitespace-nowrap mt-3 transition-colors ${
+                isCompleted ? "text-emerald-400" : isCurrent ? "text-violet-400" : "text-neutral-500"
+              }`}>{step.label}</span>
+
+              {/* Status & Date */}
+              {isCompleted && (
+                <div className="mt-1 space-y-0.5">
+                  <span className="text-[8px] text-emerald-500 font-bold uppercase block tracking-wider">COMPLETED</span>
+                  {dateStr && <span className="text-[8.5px] text-neutral-500 font-medium block">{dateStr}</span>}
+                </div>
+              )}
+              {isCurrent && (
+                <div className="mt-1 space-y-0.5">
+                  <span className="text-[8px] text-violet-400 font-bold uppercase block tracking-wider animate-pulse">ACTIVE</span>
+                  <span className="text-[8.5px] text-neutral-400 font-medium block">In Progress</span>
+                </div>
+              )}
+              {!isCompleted && !isCurrent && (
+                <div className="mt-1">
+                  <span className="text-[8px] text-neutral-600 font-semibold uppercase block tracking-wider">UPCOMING</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Collapsible Section ──────────────────────────────────────────────────────
+function Section({ title, icon: Icon, children, defaultOpen = false, badge }: {
+  title: string; icon: any; children: React.ReactNode; defaultOpen?: boolean; badge?: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <Card className="glass-card border-white/[0.04] rounded-radius-lg overflow-hidden shadow-lg">
+      <button onClick={() => setOpen(!open)}
+        className="w-full p-5 flex items-center justify-between text-left hover:bg-white/[0.02] dark:hover:bg-white/[0.01] transition-all">
+        <div className="flex items-center gap-2.5">
+          <Icon className="w-4 h-4 text-violet-400" />
+          <span className="text-xs font-extrabold text-neutral-900 dark:text-white uppercase tracking-wider">{title}</span>
+          {badge}
+        </div>
+        {open ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronRight className="w-4 h-4 text-neutral-400" />}
+      </button>
+      {open && (
+        <CardContent className="p-5 pt-0 border-t border-white/[0.04] animate-slide-in">
+          <div className="pt-5">{children}</div>
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+// ── Score Badge ──────────────────────────────────────────────────────────────
+function ScorePill({ score, max = 10 }: { score: number; max?: number }) {
+  const pct = (score / max) * 100
+  const color = pct >= 70 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
+                pct >= 50 ? "text-amber-400 bg-amber-500/10 border-amber-500/20" :
+                            "text-red-400 bg-red-500/10 border-red-500/20"
+  return <span className={`text-[9px] px-2 py-0.5 rounded-radius-full border font-bold uppercase tracking-wider ${color}`}>{score}/{max}</span>
+}
+
+// ── Assignment Panel ─────────────────────────────────────────────────────────
+function AssignmentPanel({ applicationId, onStageChanged }: { applicationId: string; onStageChanged?: () => void }) {
+  const [assignment, setAssignment] = useState<ApiAssignment | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [evaluating, setEvaluating] = useState(false)
+
+  useEffect(() => {
+    assignmentsApi.getByApplication(applicationId)
+      .then(setAssignment)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [applicationId])
+
+  if (loading) return <div className="h-24 bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] animate-pulse rounded-radius-lg" />
+  if (!assignment) return <p className="text-neutral-500 text-xs font-semibold py-4 uppercase tracking-wider">Assignment not yet generated.</p>
+
+  const eval_ = assignment.ai_evaluation
+  const statusColor = assignment.status === "reviewed" ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
+                      assignment.status === "submitted" ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
+                      "text-neutral-400 border-white/[0.08] bg-white/[0.02]"
+
+  const handleEvaluate = async () => {
+    setEvaluating(true)
+    try {
+      const r = await assignmentsApi.evaluate(assignment.id)
+      setAssignment({ ...assignment, ai_evaluation: r.evaluation, score: r.score, status: "reviewed" })
+      onStageChanged?.()
+    } catch {} finally { setEvaluating(false) }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-extrabold text-neutral-900 dark:text-white tracking-wide">{assignment.title}</h4>
+        <span className={`text-[9px] px-2.5 py-0.5 rounded-radius-full border font-bold uppercase tracking-wider ${statusColor}`}>{assignment.status}</span>
+      </div>
+
+      {/* Description */}
+      <div className="bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] rounded-radius-lg p-4 text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap">
+        {assignment.description}
+      </div>
+
+      {/* Requirements */}
+      {assignment.requirements && (
+        <div className="text-[10px] text-neutral-500 space-y-1">
+          <span className="font-bold uppercase tracking-wider block">REQUIREMENTS:</span>
+          <pre className="whitespace-pre-wrap bg-white/[0.01] dark:bg-black/20 p-3 rounded-radius-md border border-white/[0.04] text-[10px] text-neutral-400 leading-relaxed">{assignment.requirements}</pre>
+        </div>
+      )}
+
+      {/* Deadline */}
+      {assignment.deadline && (
+        <div className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider">
+          DEADLINE: {new Date(assignment.deadline).toLocaleString()}
+        </div>
+      )}
+
+      {/* Waiting for candidate submission */}
+      {assignment.status === "pending" && (
+        <div className="border border-dashed border-white/[0.08] bg-white/[0.01] dark:bg-black/10 rounded-radius-lg p-4">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-neutral-500" />
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">AWAITING CANDIDATE SUBMISSION VIA PORTAL</span>
+          </div>
+          <p className="text-[9px] text-neutral-500 leading-relaxed mt-1.5 pl-6">
+            The candidate will submit their work through the candidate portal link. Their submission will appear here once received.
+          </p>
+        </div>
+      )}
+
+      {/* Existing submission */}
+      {assignment.submission_text && assignment.status !== "pending" && (
+        <div className="bg-white/[0.02] dark:bg-black/25 border border-white/[0.06] rounded-radius-lg p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-white/[0.05] pb-2">
+            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-violet-400" /> CANDIDATE SUBMISSION (LOCKED v1)
+            </span>
+            <span className="text-[9px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-radius-full font-bold uppercase tracking-wider">
+              {assignment.submission_type || "TEXT SOLUTION"}
+            </span>
+          </div>
+          <pre className="text-[11px] text-neutral-300 font-mono leading-relaxed whitespace-pre-wrap bg-white/[0.01] dark:bg-black/30 p-4 border border-white/[0.04] rounded-radius-md overflow-x-auto max-h-60">
+            {assignment.submission_text}
+          </pre>
+          {assignment.submission_url && (
+            <a href={assignment.submission_url} target="_blank" rel="noopener noreferrer"
+              className="text-violet-400 text-[10px] font-semibold hover:underline inline-flex items-center gap-1.5 mt-1 transition-colors">
+              <Link2 className="w-3.5 h-3.5" /> {assignment.submission_url}
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Run AI Evaluation button */}
+      {assignment.status === "submitted" && !eval_ && (
+        <Button onClick={handleEvaluate} disabled={evaluating}
+          className="bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:opacity-95 text-white text-[10px] font-semibold rounded-radius-md flex items-center gap-2 px-4 h-9 shadow-lg shadow-violet-500/10 transition-all active:scale-[0.99]">
+          {evaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Brain className="w-3.5 h-3.5" />}
+          {evaluating ? "EVALUATING SUBMISSION..." : "RUN AI PRE-EVALUATION"}
+        </Button>
+      )}
+
+      {/* Structured AI Evaluation results */}
+      {eval_ && (
+        <div className="bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] rounded-radius-lg p-4 space-y-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+          <div className="flex items-center justify-between border-b border-white/[0.05] pb-3 shrink-0">
+            <div>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">AI CRITERION EVALUATION</span>
+              <span className="text-[9px] text-violet-400 font-bold">{(eval_.confidence ? eval_.confidence * 100 : 92).toFixed(0)}% AI CONFIDENCE</span>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{eval_.score ?? eval_.overall_score ?? 75}<span className="text-xs text-neutral-500">/100</span></span>
+            </div>
+          </div>
+
+          {/* 4 Criterion score bars */}
+          {eval_.criteria && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/[0.02] dark:bg-black/20 p-4 border border-white/[0.04] rounded-radius-md relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+              {[
+                { label: "ARCHITECTURE", val: eval_.criteria.architecture, barColor: "bg-blue-500" },
+                { label: "CORRECTNESS",  val: eval_.criteria.correctness,  barColor: "bg-emerald-500" },
+                { label: "CODE QUALITY",  val: eval_.criteria.code_quality,  barColor: "bg-purple-500" },
+                { label: "DOCUMENTATION", val: eval_.criteria.documentation, barColor: "bg-violet-500" },
+              ].map(({ label, val, barColor }) => (
+                <div key={label} className="space-y-1.5">
+                  <div className="flex justify-between text-[9px] font-semibold">
+                    <span className="text-neutral-400 uppercase tracking-wider">{label}</span>
+                    <span className="text-neutral-900 dark:text-neutral-200 font-bold">{val ?? 75}/100</span>
+                  </div>
+                  <div className="w-full bg-white/[0.02] dark:bg-black/20 h-2 rounded-radius-full overflow-hidden border border-white/[0.03]">
+                    <div className={`${barColor} h-full rounded-radius-full transition-all duration-1000`} style={{ width: `${val ?? 75}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Strengths & Weaknesses */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider block mb-2">STRENGTHS</span>
+              <div className="space-y-1.5">
+                {(eval_.strengths || []).map((s: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-[10px] text-neutral-600 dark:text-neutral-300">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider block mb-2">CONCERNS</span>
+              <div className="space-y-1.5">
+                {(eval_.weaknesses || eval_.concerns || []).map((w: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-[10px] text-neutral-600 dark:text-neutral-300">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+                    <span className="leading-relaxed">{w}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-neutral-400 italic leading-relaxed pt-2 border-t border-white/[0.05]">{eval_.recommendation}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Chat UI (read-only transcript viewer for HR dashboard) ───────────────────
+function ChatRound({ applicationId, roundType, readOnly = false, onRoundComplete }: {
+  applicationId: string; roundType: RoundType; readOnly?: boolean; onRoundComplete?: () => void
+}) {
+  const [round, setRound] = useState<ApiAIRound | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [resetting, setResetting] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const handleResetRound = async () => {
+    if (!window.confirm(`Are you sure you want to completely restart this candidate's ${roundType.toUpperCase()} round? This will clear all transcript history, scores, and tab-leave strikes.`)) {
+      return
+    }
+    setResetting(true)
+    try {
+      await aiRoundsApi.resetRound(applicationId, roundType)
+      setRound(null)
+      if (onRoundComplete) {
+        onRoundComplete()
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to reset round")
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const fetchRound = useCallback(() => {
+    aiRoundsApi.listRounds(applicationId).then(rounds => {
+      const r = rounds.find(r => r.round_type === roundType)
+      if (r) {
+        setRound(prev => {
+          // If round just completed, notify parent
+          if (prev?.status === "in_progress" && r.status === "completed") {
+            setTimeout(() => onRoundComplete?.(), 500)
+          }
+          return r
+        })
+      }
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [applicationId, roundType, onRoundComplete])
+
+  useEffect(() => { fetchRound() }, [fetchRound])
+
+  // Auto-poll every 10s while round is in progress
+  useEffect(() => {
+    if (round?.status === "in_progress") {
+      pollRef.current = setInterval(fetchRound, 10000)
+    } else if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [round?.status, fetchRound])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [round?.transcript?.length])
+
+  if (loading) return <div className="h-32 bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] animate-pulse rounded-radius-lg" />
+
+  if (!round) {
+    return <p className="text-neutral-500 text-xs font-semibold py-4 uppercase tracking-wider">Round not started yet. Waiting for candidate to begin.</p>
+  }
+
+  const transcript = round.transcript || []
+  const exchangeCount = transcript.filter(t => t.role === "candidate").length
+  const isComplete = round.status === "completed"
+
+  const rAny = round as any
+  const offlineData = rAny.compact_offline_data || {}
+  const resumeIntegrityScore = rAny.resume_integrity_score !== undefined && rAny.resume_integrity_score !== null
+    ? rAny.resume_integrity_score
+    : (offlineData.resume_integrity_score !== undefined ? offlineData.resume_integrity_score : null)
+
+  const probeQuestions = rAny.probe_questions || offlineData.probe_questions || []
+  const speakingEval = rAny.speaking_eval || offlineData.speaking_eval
+  const hasFallback = transcript.some(t => t.speaking_metrics?.microphone_fallback === true)
+
+  return (
+    <div className="space-y-4">
+      {/* Summary header (if completed) */}
+      {isComplete && round.ai_score !== null && (
+        <div className="bg-white/[0.02] dark:bg-black/20 border border-white/[0.04] rounded-radius-lg p-5 space-y-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+          <div className="flex items-center justify-between border-b border-white/[0.05] pb-3 shrink-0">
+            <span className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-1.5">
+              <CheckCircle className="w-4 h-4" /> ROUND COMPLETE
+            </span>
+            <div className="flex items-center gap-2">
+              {resumeIntegrityScore !== null && (
+                <span className={`text-[9px] px-2.5 py-0.5 rounded-radius-full border font-bold uppercase tracking-wider
+                  ${resumeIntegrityScore >= 80 ? "text-purple-400 bg-purple-500/10 border-purple-500/25" :
+                    resumeIntegrityScore >= 55 ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/25" :
+                    "text-red-400 bg-red-500/10 border-red-500/25"
+                  }`}
+                >
+                  RESUME INTEGRITY: {resumeIntegrityScore}%
+                </span>
+              )}
+              <ScorePill score={round.ai_score} max={100} />
+            </div>
+          </div>
+          {round.ai_summary && <p className="text-[10.5px] text-neutral-600 dark:text-neutral-300 leading-relaxed font-medium">{round.ai_summary}</p>}
+          <div className="flex flex-col sm:flex-row gap-4 pt-1">
+            {round.strengths?.length ? (
+              <div className="flex-1">
+                <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">STRENGTHS</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {round.strengths.map((s, i) => <span key={i} className="text-[8.5px] px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-radius-full font-bold uppercase tracking-wider">{s}</span>)}
+                </div>
+              </div>
+            ) : null}
+            {round.concerns?.length ? (
+              <div className="flex-1">
+                <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">CONCERNS</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {round.concerns.map((c, i) => <span key={i} className="text-[8.5px] px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-radius-full font-bold uppercase tracking-wider">{c}</span>)}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Speaking Scorecard Panel */}
+          {roundType === "speaking" && speakingEval && (
+            <div className="bg-white/[0.01] dark:bg-black/25 border border-white/[0.04] rounded-radius-lg p-5 mt-4 space-y-4 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+              <div className="flex items-center justify-between border-b border-white/[0.05] pb-3 shrink-0">
+                <span className="text-[10px] font-bold text-violet-400 uppercase flex items-center gap-1.5">
+                  <Mic className="w-4 h-4" /> COMMUNICATION SCORECARD
+                </span>
+                {hasFallback && (
+                  <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] font-bold px-2.5 py-0.5 rounded-radius-full tracking-wider uppercase flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5" /> MICROPHONE FALLBACK DETECTED
+                  </span>
+                )}
+              </div>
+
+              {/* Progress Rings Grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 pt-1 justify-items-center">
+                {[
+                  { label: "Confidence", val: speakingEval.confidence },
+                  { label: "Structure", val: speakingEval.structure },
+                  { label: "Conciseness", val: speakingEval.conciseness },
+                  { label: "Pace", val: speakingEval.pace },
+                  { label: "Vocabulary", val: speakingEval.vocabulary },
+                ].map((item, idx) => {
+                  const percent = item.val || 0
+                  const circumference = 2 * Math.PI * 14
+                  const strokeOffset = circumference - (percent / 100) * circumference
+                  return (
+                    <div key={idx} className="flex flex-col items-center space-y-2">
+                      <div className="relative w-12 h-12 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="24" cy="24" r="14" stroke="rgba(255,255,255,0.04)" strokeWidth="2.5" fill="transparent" />
+                          <circle cx="24" cy="24" r="14" stroke="rgb(139, 92, 246)" strokeWidth="2.5" fill="transparent"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeOffset}
+                            strokeLinecap="round"
+                            className="transition-all duration-500"
+                          />
+                        </svg>
+                        <span className="absolute text-[8.5px] font-extrabold text-neutral-900 dark:text-white">{percent}%</span>
+                      </div>
+                      <span className="text-[8.5px] text-neutral-500 font-bold uppercase tracking-wider text-center">{item.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/[0.05] pt-4 text-[9px] font-bold text-neutral-400">
+                <div className="flex justify-between items-center bg-white/[0.01] px-4 py-3 border border-white/[0.04] rounded-radius-lg relative overflow-hidden">
+                  <span>AVERAGE RESPONSE DURATION:</span>
+                  <span className="font-extrabold text-violet-400 text-xs">{speakingEval.avg_answer_length || 0}s</span>
+                </div>
+                <div className="flex justify-between items-center bg-white/[0.01] px-4 py-3 border border-white/[0.04] rounded-radius-lg relative overflow-hidden">
+                  <span>TOTAL FILLER WORDS DETECTED:</span>
+                  <span className={`font-extrabold text-xs ${speakingEval.fillers > 5 ? "text-amber-400" : "text-emerald-400"}`}>
+                    {speakingEval.fillers || 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Asynchronous Verification Status Alert Panel */}
+          {round.evaluation_status === "pending_ai_review" ? (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-yellow-400 font-bold">
+                <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+                <span>EVALUATION STATUS: 🟡 PRELIMINARY (RULE-BASED)</span>
+              </div>
+              <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
+                This interview was completed using the offline evaluation engine. A full AI verification will automatically become available when AI services are restored.
+              </p>
+            </div>
+          ) : round.evaluation_status === "failed" ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-red-400 font-bold">
+                <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>EVALUATION STATUS: 🔴 AI VERIFICATION FAILED</span>
+              </div>
+              <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
+                AI verification failed to complete after multiple retries. Recruiter manual review is recommended.
+              </p>
+            </div>
+          ) : round.evaluation_status === "verified" ? (
+            <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-radius-lg p-4 mt-4 space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>EVALUATION STATUS: 🟢 AI VERIFIED</span>
+              </div>
+              {round.compact_offline_data?.evaluation_history && round.compact_offline_data.evaluation_history.length > 1 && (
+                <p className="text-[9.5px] text-neutral-500 leading-relaxed pl-6 italic font-medium">
+                  Originally evaluated using offline fallback (Model: {round.compact_offline_data.evaluation_history[0].model}). Automatically verified by AI (Model: {round.evaluation_model || "Gemini"}).
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {/* Browser Strike Cheating Alerts */}
+          {round.browser_strike_count && round.browser_strike_count > 0 && round.browser_strike_count < 3 ? (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-amber-400 font-bold">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                <span>SECURITY ALERT: ⚠️ CANDIDATE TAB NAVIGATED (STRIKE {round.browser_strike_count}/3)</span>
+              </div>
+              <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
+                The candidate has navigated away from the interview tab or minimized the browser window.
+              </p>
+            </div>
+          ) : round.browser_strike_count && round.browser_strike_count >= 3 ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-red-400 font-bold">
+                <XCircle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
+                <span>SECURITY ALERT: 🚫 INTERVIEW TERMINATED (STRIKES EXCEEDED)</span>
+              </div>
+              <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
+                This interview session was terminated automatically because the candidate navigated away from the browser window 3 times.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Smart Probe Questions (Prep panel) */}
+          {probeQuestions && probeQuestions.length > 0 && (
+            <div className="border-t border-white/[0.05] pt-4 mt-4 space-y-2">
+              <span className="text-[9px] text-violet-400 font-bold tracking-wider flex items-center gap-1.5 uppercase">
+                <Brain className="w-4 h-4 animate-pulse" /> SMART PROBE INTERVIEW PREP (FOLLOW-UP QUESTIONS)
+              </span>
+              <p className="text-[9.5px] text-neutral-500 leading-relaxed font-semibold">
+                Based on claims from the resume that weren't fully verified during the technical interview, ask these tailored questions to audit core skills:
+              </p>
+              <div className="space-y-3 bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] p-4 rounded-radius-lg">
+                {probeQuestions.map((q: string, idx: number) => (
+                  <div key={idx} className="flex items-start justify-between gap-4 text-[10px] text-neutral-600 dark:text-neutral-300 border-b border-white/[0.04] pb-3 last:border-b-0 last:pb-0 font-medium">
+                    <div className="flex items-start gap-2 flex-1">
+                      <span className="text-violet-400 font-extrabold">{idx + 1}.</span>
+                      <p className="leading-relaxed">{q}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(q)
+                      }}
+                      className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-white/5 border border-transparent rounded-lg transition-all shrink-0"
+                      title="Copy Question"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Progress counter + refresh (only while in progress) */}
+      {!isComplete && transcript.length > 0 && (
+        <div className="flex items-center justify-between shrink-0">
+          <div className="text-[9px] text-neutral-400 font-bold flex items-center gap-2">
+            <span className="w-2 h-2 bg-violet-500 rounded-radius-full animate-pulse" />
+            QUESTION {exchangeCount + 1} OF ~7 · {roundType.toUpperCase()} ROUND IN PROGRESS
+          </div>
+          <button onClick={fetchRound} className="text-[9px] text-neutral-500 hover:text-violet-400 font-bold uppercase flex items-center gap-1.5 transition-colors">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> REFRESH
+          </button>
+        </div>
+      )}
+
+      {/* Chat messages (read-only transcript) */}
+      <div className="bg-white/[0.01] dark:bg-black/25 border border-white/[0.05] rounded-radius-lg p-4 max-h-[450px] overflow-y-auto space-y-4">
+        {transcript.length === 0 && (
+          <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider text-center py-4">Waiting for first exchange...</p>
+        )}
+        {transcript.map((t, i) => {
+          const isSuspect = t.role === "candidate" && t.suspected_copy_paste;
+          return (
+            <div key={i} className={`flex ${t.role === "candidate" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] p-4 rounded-radius-lg text-[11px] leading-relaxed relative ${
+                t.role === "ai"
+                  ? "bg-white/[0.02] dark:bg-white/[0.01] border border-white/[0.04] text-neutral-700 dark:text-neutral-200"
+                  : isSuspect
+                    ? "bg-amber-500/10 border-2 border-amber-500/30 text-neutral-900 dark:text-neutral-100 shadow-md shadow-amber-500/10"
+                    : "bg-violet-500/10 border border-violet-500/20 text-neutral-900 dark:text-neutral-100"
+              }`}>
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {t.role === "ai" ? <Brain className="w-3.5 h-3.5 text-violet-400" /> : null}
+                  <span className="text-[8.5px] text-neutral-400 font-extrabold uppercase tracking-wider">
+                    {t.role === "ai" ? "AI INTERVIEWER" : "CANDIDATE"}
+                  </span>
+                  {t.speaking_metrics && (
+                    <span className={`text-[7.5px] px-2.5 py-0.5 rounded-radius-full font-bold flex items-center gap-1 border
+                      ${t.speaking_metrics.microphone_fallback
+                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      }`}
+                    >
+                      <Mic className="w-2.5 h-2.5 shrink-0" />
+                      {t.speaking_metrics.microphone_fallback ? "MICROPHONE FALLBACK" : `SPEAKING (${t.speaking_metrics.audio_duration}s | ${t.speaking_metrics.words_per_minute} WPM)`}
+                    </span>
+                  )}
+                  {t.answer_score !== undefined && t.role === "ai" && (
+                    <ScorePill score={t.answer_score} />
+                  )}
+                  {isSuspect && (
+                    <span className="text-[7.5px] px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-radius-full font-bold flex items-center gap-1 animate-pulse">
+                      <AlertTriangle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                      SUSPECTED COPY-PASTE (RISK: {Math.round((t.copy_paste_risk_score || 0) * 100)}%)
+                    </span>
+                  )}
+                </div>
+                <div className="whitespace-pre-wrap font-medium">{t.message}</div>
+                {isSuspect && t.copy_paste_reasons && t.copy_paste_reasons.length > 0 && (
+                  <div className="border-t border-amber-500/20 pt-2 mt-2 text-[8.5px] text-amber-400/90 font-medium space-y-1">
+                    <span className="font-extrabold uppercase tracking-wider block">Risk Factors:</span>
+                    {t.copy_paste_reasons.map((r, rIdx) => (
+                      <div key={rIdx} className="flex items-center gap-1.5 pl-1">
+                        <span className="text-amber-500/50">•</span>
+                        <span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Recruiter controls: Reset and Live Notice */}
+      <div className="flex items-center justify-between gap-3 mt-3 shrink-0">
+        <button
+          onClick={handleResetRound}
+          disabled={resetting}
+          className="text-[9px] px-3.5 py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 font-bold uppercase tracking-wider rounded-radius-md transition-all flex items-center gap-1.5 active:scale-95"
+        >
+          {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+          Reset Assessment Session
+        </button>
+        {!isComplete && (
+          <div className="flex items-center gap-1.5 text-[9px] text-neutral-500 font-bold uppercase tracking-wider">
+            <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>Live Transcript (Auto-polls)</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Scorecard ────────────────────────────────────────────────────────────────
+function Scorecard({ applicationId }: { applicationId: string }) {
+  const [rec, setRec] = useState<ApiFinalRecommendation | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [acting, setActing] = useState(false)
+
+  useEffect(() => {
+    recommendationApi.get(applicationId)
+      .then(setRec)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [applicationId])
+
+  if (loading) return <div className="h-24 bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] animate-pulse rounded-radius-lg" />
+  if (!rec) return null
+
+  const recColors: Record<string, string> = {
+    strongly_recommended: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    recommended: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+    consider: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    not_recommended: "text-red-400 bg-red-500/10 border-red-500/20",
+  }
+
+  const scores = [
+    { label: "Resume Mapping", score: rec.resume_score, color: "bg-purple-500" },
+    { label: "Technical Assignment", score: rec.assignment_score, color: "bg-blue-500" },
+    { label: "Tech Session", score: rec.tech_score, color: "bg-violet-500" },
+    { label: "STAR Interview", score: rec.interview_score, color: "bg-emerald-500" },
+    { label: "HR Assessment", score: rec.hr_score, color: "bg-cyan-500" },
+  ]
+
+  return (
+    <div className="space-y-5">
+      {/* Final score + badge */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-3xl font-extrabold text-neutral-900 dark:text-white tracking-tight">{rec.final_score}</span>
+          <span className="text-xs text-neutral-500">/100</span>
+        </div>
+        <span className={`text-[10px] px-3.5 py-0.5 rounded-radius-full border font-bold uppercase tracking-wider ${recColors[rec.recommendation] ?? ""}`}>
+          {rec.recommendation.replace(/_/g, " ")}
+        </span>
+      </div>
+
+      {/* Score bars */}
+      <div className="space-y-3 bg-white/[0.02] dark:bg-black/20 p-4 border border-white/[0.04] rounded-radius-lg relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+        {scores.map(({ label, score, color }) => (
+          <div key={label} className="space-y-1.5">
+            <div className="flex justify-between text-[9px] font-bold">
+              <span className="text-neutral-400 uppercase tracking-wider">{label}</span>
+              <span className="text-neutral-900 dark:text-neutral-200">{score ?? "—"}/100</span>
+            </div>
+            <div className="w-full h-2 bg-white/[0.02] dark:bg-black/20 rounded-radius-full overflow-hidden border border-white/[0.03]">
+              <div className={`h-full ${color} rounded-radius-full transition-all duration-1000`} style={{ width: `${score ?? 0}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Reasoning */}
+      {rec.reasoning && (
+        <div className="bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] p-4 rounded-radius-lg relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+          <span className="text-[9px] text-violet-400 font-bold uppercase tracking-wider block mb-1.5">AI REASONING SUMMARY</span>
+          <p className="text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed font-semibold">{rec.reasoning}</p>
+        </div>
+      )}
+
+      {/* HR Action buttons */}
+      <div className="flex gap-3.5 pt-4 border-t border-white/[0.05]">
+        <Button onClick={async () => { setActing(true); await recommendationApi.approveOffer(applicationId); setActing(false) }}
+          disabled={acting}
+          className="flex-1 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:opacity-95 text-white text-xs font-semibold rounded-radius-md h-10 flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 transition-all active:scale-[0.99]">
+          <ThumbsUp className="w-4 h-4" /> APPROVE FOR OFFER
+        </Button>
+        <Button onClick={async () => { setActing(true); await recommendationApi.reject(applicationId); setActing(false) }}
+          disabled={acting}
+          className="flex-1 bg-transparent hover:bg-white/5 border border-white/[0.08] text-neutral-400 hover:text-red-400 hover:border-red-500/30 text-xs font-semibold rounded-radius-md h-10 flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+          <ThumbsDown className="w-4 h-4" /> REJECT CANDIDATE
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Pipeline View ───────────────────────────────────────────────────────
+export default function PipelineView({ applicationId }: { applicationId: string }) {
+  const [pipeline, setPipeline] = useState<PipelineHistory | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [portalLink, setPortalLink] = useState<string | null>(null)
+
+  const refresh = useCallback(() => {
+    pipelineApi.history(applicationId)
+      .then(setPipeline)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [applicationId])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  if (loading) return (
+    <div className="space-y-3">
+      {[1,2,3].map(i => <div key={i} className="h-16 bg-[var(--hm-bg-inset)] animate-pulse rounded-sm" />)}
+    </div>
+  )
+
+  if (!pipeline) return <p className="text-[var(--hm-text-muted)] text-xs font-mono py-4">Pipeline data unavailable.</p>
+
+  const stage = pipeline.current_stage
+  const stageReached = (s: string) => {
+    const found = pipeline.stages.find(st => st.stage === s)
+    return found?.status === "completed" || found?.status === "current"
+  }
+
+  const hasAssignment = stageReached("assignment_sent")
+  const hasTech = stageReached("tech_round")
+  const hasInterview = stageReached("interview_round")
+  const hasSpeaking = stageReached("speaking_round")
+  const hasHR = stageReached("hr_round")
+  const hasRecommendation = stageReached("hr_round_completed") || stage === "offered"
+
+  // ── Action button handler ──────────────────────────────────────────────────
+  const handleAction = async (action: string) => {
+    setActionLoading(action); setActionMsg(null)
+    try {
+      if (action === "generate_link_full") {
+        // Determine which round to generate a link for based on current stage
+        let roundType: RoundType = "tech"
+        if (stage === "interview_round") roundType = "interview"
+        else if (stage === "speaking_round") roundType = "speaking"
+        else if (stage === "hr_round") roundType = "hr"
+
+        // If candidate is pre-assignment, shortlist and generate assignment first
+        const preAssignmentStages = ["applied", "screened", "shortlisted"]
+        if (preAssignmentStages.includes(stage)) {
+          try {
+            await assignmentsApi.manualShortlistAndAssign(applicationId)
+          } catch {
+            // May already have assignment — continue
+          }
+        }
+
+        // If still at assignment stages, advance to assignment_sent
+        const assignmentStages = ["assignment_sent", "assignment_submitted", "assignment_reviewed"]
+        if (preAssignmentStages.includes(stage) || assignmentStages.includes(stage)) {
+          roundType = "tech" // Token is for tech but portal will show assignment first
+        }
+
+        // Generate the portal token
+        const res = await portalApi.generateToken({
+          candidate_id: "",
+          application_id: applicationId,
+          round_type: roundType,
+        })
+        setPortalLink(res.url)
+        setActionMsg("Portal link generated — candidate will start with the assignment, then proceed through all interview rounds.")
+      } else if (action === "generate_rec") {
+        await recommendationApi.generate(applicationId)
+        setActionMsg("Final recommendation generated.")
+      }
+      // Refresh pipeline state
+      setTimeout(refresh, 500)
+    } catch (err: unknown) {
+      setActionMsg(err instanceof Error ? err.message : "Action failed.")
+    } finally { setActionLoading(null) }
+  }
+
+  // ── Determine which action button to show ──────────────────────────────────
+  type ActionDef = { key: string; label: string; desc: string; warning?: string }
+  const actions: ActionDef[] = []
+
+  actions.push({ 
+    key: "generate_link_full", 
+    label: portalLink ? "RE-GENERATE CANDIDATE PORTAL LINK" : "GENERATE CANDIDATE PORTAL LINK", 
+    desc: "Create a single link for the candidate to complete all remaining interview stages" 
+  })
+
+  if (stage === "hr_round_completed" && !hasRecommendation) {
+    actions.push({ key: "generate_rec", label: "GENERATE FINAL RECOMMENDATION", desc: "Compute weighted score and AI recommendation" })
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Pipeline Stepper */}
+      <Card className="glass-card border-white/[0.04] p-5 rounded-radius-lg shadow-lg relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+        <PipelineStepper stages={pipeline.stages} activityHistory={pipeline.activity_history} />
+      </Card>
+
+      {/* Action buttons */}
+      {actions.length > 0 && (
+        <Card className="glass-card border-white/[0.04] border-l-4 border-l-violet-500 rounded-radius-lg shadow-lg relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+          <CardContent className="p-5 space-y-3">
+            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-widest block">NEXT PIPELINE ACTION</span>
+            {actions.map(a => (
+              <div key={a.key} className="space-y-3">
+                {a.warning && (
+                  <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-radius-md p-3.5 text-[10px] text-red-400 font-bold">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{a.warning}</span>
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider">{a.desc}</p>
+                  <Button onClick={() => {
+                    if (a.warning && !confirm("Are you sure? " + a.warning)) return
+                    handleAction(a.key)
+                  }} disabled={actionLoading !== null}
+                    className={`text-[10px] font-bold rounded-radius-md flex items-center gap-2 shrink-0 px-4 py-2 h-9 transition-all active:scale-[0.99] shadow-sm ${
+                      a.warning
+                        ? "bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20"
+                        : "bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:opacity-95 text-white"
+                    }`}>
+                    {actionLoading === a.key ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : null}
+                    {a.warning ? "OVERRIDE & " : ""}{a.label}
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {actionMsg && (
+              <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-radius-md p-3 flex items-center gap-2 animate-in fade-in shrink-0">
+                <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{actionMsg}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Portal Link */}
+      {portalLink && (
+        <Card className="glass-card border-white/[0.04] border-l-4 border-l-emerald-500 rounded-radius-lg shadow-lg relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2 text-[9px] text-emerald-400 font-bold uppercase tracking-wider">
+              <Link2 className="w-4 h-4" /> CANDIDATE PORTAL LINK
+            </div>
+            <div className="flex items-center gap-3.5">
+              <input
+                readOnly
+                value={portalLink}
+                className="flex-1 bg-white/[0.02] dark:bg-black/25 border border-white/[0.08] text-[10px] text-neutral-200 p-2.5 px-3 rounded-radius-md outline-none"
+              />
+              <Button
+                onClick={() => { navigator.clipboard.writeText(portalLink); setActionMsg("Link copied to clipboard!") }}
+                className="h-10 px-4 bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] hover:opacity-95 text-white text-[10px] font-bold rounded-radius-md flex items-center gap-1.5 transition-all active:scale-[0.99] shadow-md shadow-violet-500/10"
+              >
+                <Copy className="w-3.5 h-3.5" /> COPY LINK
+              </Button>
+            </div>
+            <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider">
+              Share this portal link with the candidate to let them complete interview rounds.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Scorecard (if recommendation exists) */}
+      {hasRecommendation && (
+        <Section title="FINAL AI RECOMMENDATION" icon={Award} defaultOpen={true}
+          badge={<span className="text-[8px] px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-radius-full font-bold ml-2">COMPLETE</span>}>
+          <Scorecard applicationId={applicationId} />
+        </Section>
+      )}
+
+      {/* Assignment */}
+      {hasAssignment && (
+        <Section title="ASSIGNMENT" icon={ClipboardCheck} defaultOpen={!hasTech}
+          badge={pipeline.assignments.length > 0 ? <span className="text-[8px] ml-2 text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2.5 py-0.5 rounded-radius-full font-bold uppercase tracking-wider">{pipeline.assignments[0]?.status}</span> : undefined}>
+          <AssignmentPanel applicationId={applicationId} onStageChanged={refresh} />
+        </Section>
+      )}
+
+      {/* Tech Round */}
+      {hasTech && (
+        <Section title="TECHNICAL ROUND" icon={Brain} defaultOpen={!hasInterview}>
+          <ChatRound applicationId={applicationId} roundType="tech" readOnly onRoundComplete={refresh} />
+        </Section>
+      )}
+
+      {/* Interview Round */}
+      {hasInterview && (
+        <Section title="BEHAVIORAL INTERVIEW" icon={MessageSquare} defaultOpen={!hasSpeaking}>
+          <ChatRound applicationId={applicationId} roundType="interview" readOnly onRoundComplete={refresh} />
+        </Section>
+      )}
+
+      {/* Speaking Round */}
+      {hasSpeaking && (
+        <Section title="SPEAKING ROUND" icon={Mic} defaultOpen={!hasHR}>
+          <ChatRound applicationId={applicationId} roundType="speaking" readOnly onRoundComplete={refresh} />
+        </Section>
+      )}
+
+      {/* HR Round */}
+      {hasHR && (
+        <Section title="HR ROUND" icon={Star} defaultOpen={true}>
+          <ChatRound applicationId={applicationId} roundType="hr" readOnly onRoundComplete={refresh} />
+        </Section>
+      )}
+    </div>
+  )
+}

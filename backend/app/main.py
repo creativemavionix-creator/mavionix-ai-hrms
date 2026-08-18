@@ -42,6 +42,20 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# ── Global Error Standardization Handler ──────────────────────────────────────
+from fastapi.exceptions import HTTPException
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    headers = getattr(exc, "headers", None)
+    detail_str = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail_str, "error": detail_str},
+        headers=headers,
+    )
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,

@@ -26,10 +26,16 @@ else:
         settings.supabase_service_role_key,
     )
 
+    from fastapi import HTTPException, status
+
     def get_user_client(user_jwt: str) -> Client:
-        """Return a Supabase client authenticated as the requesting user."""
+        """Return a Supabase client authenticated as the requesting user. Fails closed on invalid credentials."""
         if not user_jwt or user_jwt == "demo-token" or user_jwt.count(".") != 2:
-            return supabase
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate user database credentials.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         try:
             client: Client = create_client(
@@ -39,4 +45,8 @@ else:
             client.postgrest.auth(user_jwt)
             return client
         except Exception:
-            return supabase
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Failed to authenticate database client for requesting user.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )

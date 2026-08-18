@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { TranscriptEntry } from "@/lib/types"
-import fs from "fs"
-import path from "path"
 
-function loadJobProfiles(): any {
+const ADMIN_API = (process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
+
+async function loadJobProfiles(): Promise<any> {
   try {
-    const jobProfilesPath = path.join(process.cwd(), "..", "backend", "app", "job_profiles.json")
-    if (fs.existsSync(jobProfilesPath)) {
-      return JSON.parse(fs.readFileSync(jobProfilesPath, "utf-8"))
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`${ADMIN_API}/api/portal/job-profiles`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      return await res.json()
     }
   } catch (e) {
-    console.error("Failed to load job_profiles.json:", e)
+    console.error("Failed to fetch job profiles from backend API:", e)
   }
   return {}
 }
@@ -42,8 +49,6 @@ function matchJobProfile(jobTitle: string, profiles: any): any {
   }
   return profiles["default"] || {}
 }
-
-const ADMIN_API = process.env.ADMIN_API_URL || "http://127.0.0.1:8000"
 const deepseekKey = process.env.DEEPSEEK_API_KEY || ""
 const geminiKey = process.env.GEMINI_API_KEY || ""
 const groqKey = process.env.GROQ_API_KEY || ""
@@ -144,47 +149,8 @@ Your role:
 }
 
 async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  if (geminiKey) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
-        })
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-        if (text && text.trim()) return text
-      }
-    } catch (e) {
-      console.warn("Gemini API error:", e)
-    }
-  }
-
-  if (groqKey) {
-    try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          temperature: 0.7,
-        })
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const text = data.choices?.[0]?.message?.content
-        if (text && text.trim()) return text
-      }
-    } catch (e) {
-      console.warn("Groq API error:", e)
-    }
-  }
-
-  if (deepseekKey) {
+  // Primary LLM Provider: DeepSeek AI
+  if (deepseekKey && !deepseekKey.includes("YOUR_")) {
     try {
       const res = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
@@ -203,6 +169,48 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
       }
     } catch (e) {
       console.warn("DeepSeek API exception:", e)
+    }
+  }
+
+  // Secondary LLM Provider: Gemini 2.0 Flash
+  if (geminiKey && !geminiKey.includes("YOUR_")) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+        if (text && text.trim()) return text
+      }
+    } catch (e) {
+      console.warn("Gemini API error:", e)
+    }
+  }
+
+  // Tertiary LLM Provider: Groq Llama 3.3 70B
+  if (groqKey && !groqKey.includes("YOUR_")) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          temperature: 0.7,
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const text = data.choices?.[0]?.message?.content
+        if (text && text.trim()) return text
+      }
+    } catch (e) {
+      console.warn("Groq API error:", e)
     }
   }
 
@@ -252,7 +260,7 @@ export async function POST(req: NextRequest) {
       if (customQuestions.length > 0) {
         firstQ = customQuestions[0].text
       } else {
-        const profiles = loadJobProfiles()
+        const profiles = await loadJobProfiles()
         const matchedProfile = matchJobProfile(body.jobTitle, profiles)
         firstQ = matchedProfile?.questions?.easy?.[0] || "Welcome to the technical round. To begin: Can you describe your recent technical projects and architectural decisions?"
       }
@@ -357,7 +365,7 @@ export async function POST(req: NextRequest) {
           aiMessage = `${ack}${nextQuestionText}`
         }
       } else {
-        const profiles = loadJobProfiles()
+        const profiles = await loadJobProfiles()
         const matchedProfile = matchJobProfile(jobTitle, profiles)
         const qList = matchedProfile?.questions?.intermediate || []
         nextQuestionText = qList[substantiveCount % qList.length] || "Could you walk me through your system design trade-offs?"

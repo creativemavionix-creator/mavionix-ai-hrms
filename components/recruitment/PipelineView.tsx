@@ -379,7 +379,21 @@ function ChatRound({ applicationId, roundType, readOnly = false, onRoundComplete
   if (loading) return <div className="h-32 bg-white/[0.01] dark:bg-black/20 border border-white/[0.04] animate-pulse rounded-radius-lg" />
 
   if (!round) {
-    return <p className="text-neutral-500 text-xs font-semibold py-4 uppercase tracking-wider">Round not started yet. Waiting for candidate to begin.</p>
+    return (
+      <div className="p-4 bg-white/[0.02] border border-white/[0.08] rounded-xl flex items-center justify-between">
+        <p className="text-neutral-400 text-xs font-semibold uppercase tracking-wider">
+          ⏳ Round not started yet. Waiting for candidate to begin.
+        </p>
+        <Button
+          onClick={handleResetRound}
+          disabled={resetting}
+          className="bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer"
+        >
+          {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5 text-indigo-400" />}
+          <span>🔄 RESTART / RESET ROUND</span>
+        </Button>
+      </div>
+    )
   }
 
   const transcript = round.transcript || []
@@ -550,13 +564,23 @@ function ChatRound({ applicationId, roundType, readOnly = false, onRoundComplete
               </p>
             </div>
           ) : round.browser_strike_count && round.browser_strike_count >= 3 ? (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
-              <div className="flex items-center gap-2 text-[10px] text-red-400 font-bold">
-                <XCircle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
-                <span>SECURITY ALERT: 🚫 INTERVIEW TERMINATED (STRIKES EXCEEDED)</span>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-radius-lg p-4 mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[10px] text-red-400 font-bold">
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
+                  <span>SECURITY ALERT: 🚫 INTERVIEW TERMINATED (STRIKES EXCEEDED)</span>
+                </div>
+                <Button
+                  onClick={handleResetRound}
+                  disabled={resetting}
+                  className="bg-red-500/20 hover:bg-red-500/30 text-white border border-red-500/40 text-[10px] font-extrabold py-1 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5 text-red-300" />}
+                  <span>🔄 RESTART & RE-ALLOW INTERVIEW</span>
+                </Button>
               </div>
-              <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
-                This interview session was terminated automatically because the candidate navigated away from the browser window 3 times.
+              <p className="text-[9.5px] text-neutral-400 leading-relaxed font-medium">
+                This interview session was terminated automatically because the candidate navigated away from the browser window 3 times. Click <strong>Restart</strong> above to reset strikes and allow candidate to retake.
               </p>
             </div>
           ) : null}

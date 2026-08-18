@@ -70,6 +70,47 @@ async def get_current_candidate(
         token_row = None
 
     if not token_row:
+        # Fallback: Attempt Supabase Auth user token resolution for logged in portal candidates
+        try:
+            auth_res = supabase.auth.get_user(token)
+            if auth_res and getattr(auth_res, "user", None) and auth_res.user:
+                u_id = auth_res.user.id
+                u_email = (auth_res.user.email or "").strip().lower()
+
+                cand_rec = None
+                # Lookup candidate by user_id first
+                cand_res1 = supabase.table("candidates").select("id, email").eq("user_id", u_id).limit(1).execute()
+                if cand_res1 and cand_res1.data and len(cand_res1.data) > 0:
+                    cand_rec = cand_res1.data[0]
+                elif u_email:
+                    # Fallback lookup by candidate email
+                    cand_res2 = supabase.table("candidates").select("id, email").eq("email", u_email).limit(1).execute()
+                    if cand_res2 and cand_res2.data and len(cand_res2.data) > 0:
+                        cand_rec = cand_res2.data[0]
+
+                if cand_rec:
+                    c_id = cand_rec["id"]
+                    app_res = (
+                        supabase.table("applications")
+                        .select("id")
+                        .eq("candidate_id", c_id)
+                        .order("created_at", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    app_id = app_res.data[0]["id"] if app_res and app_res.data else ""
+                    return CandidateSession(
+                        token=token,
+                        token_id=f"sb_auth_{u_id}",
+                        candidate_id=c_id,
+                        application_id=app_id,
+                        round_type="all",
+                        expires_at="2099-01-01T00:00:00+00:00",
+                        used=False,
+                    )
+        except Exception as exc:
+            logger.warning("Candidate Supabase Auth JWT token resolution notice: %s", exc)
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate candidate credentials.",
