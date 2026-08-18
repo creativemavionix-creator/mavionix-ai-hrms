@@ -5,11 +5,13 @@ import { logStageTransition } from "@/lib/stageHistory"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
 const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const fallbackAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.placeholder"
 const supabaseKey = (rawServiceKey && !rawServiceKey.startsWith("YOUR_") && !rawServiceKey.includes("placeholder"))
   ? rawServiceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || fallbackAnonKey)
 
 const supabase = createClient(supabaseUrl, supabaseKey)
+
 
 // Asynchronous Gemini AI Resume Scoring (Non-blocking)
 async function runAsyncAiScoring(
