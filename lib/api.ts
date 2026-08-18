@@ -273,7 +273,25 @@ async function uploadCandidate(payload: {
 
 export const candidatesApi = {
   list: async (params?: { stage?: string; search?: string }): Promise<ApiCandidate[]> => {
-    // 1. Query public.applications directly first (holds all 66 candidate application records)
+    // 1. Fetch via Next.js Server API Route /api/candidates (bypasses RLS on Vercel and local)
+    try {
+      const qs = new URLSearchParams()
+      if (params?.stage && params.stage !== "all") qs.set("stage", params.stage)
+      if (params?.search) qs.set("search", params.search)
+      const query = qs.toString() ? `?${qs.toString()}` : ""
+      
+      const serverRes = await fetch(`/api/candidates${query}`)
+      if (serverRes.ok) {
+        const cands = await serverRes.json()
+        if (Array.isArray(cands) && cands.length > 0) {
+          return cands
+        }
+      }
+    } catch (e) {
+      console.warn("Next.js /api/candidates route fetch notice:", e)
+    }
+
+    // 2. Query public.applications directly fallback
     try {
       const { data: appData } = await supabase
         .from("applications")
@@ -340,6 +358,7 @@ export const candidatesApi = {
     } catch (sbErr) {
       console.warn("Supabase applications query notice:", sbErr)
     }
+
 
     // 2. Query candidates table fallback
     try {
