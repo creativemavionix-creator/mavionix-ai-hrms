@@ -17,7 +17,8 @@ const BASE_URL =
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null
-  const mode = localStorage.getItem("hiremind_portal_view_mode")
+  const mode = sessionStorage.getItem("hiremind_portal_view_mode") || localStorage.getItem("hiremind_portal_view_mode")
+
   if (mode === "candidate") {
     return localStorage.getItem("hiremind_candidate_token") || localStorage.getItem("hiremind_token") || "demo-token"
   }

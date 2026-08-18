@@ -50,8 +50,10 @@ export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
   const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("hiremind_portal_view_mode")
-      if (saved === "recruiter" || saved === "candidate" || saved === "landing") return saved
+      const savedSession = sessionStorage.getItem("hiremind_portal_view_mode")
+      if (savedSession === "recruiter" || savedSession === "candidate" || savedSession === "landing") {
+        return savedSession
+      }
     }
     return "landing"
   })
@@ -173,6 +175,7 @@ export default function RecruitmentDashboard() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      sessionStorage.setItem("hiremind_portal_view_mode", portalViewMode)
       localStorage.setItem("hiremind_portal_view_mode", portalViewMode)
       if (portalViewMode === "recruiter") {
         const recruiterTok = localStorage.getItem("hiremind_recruiter_token")

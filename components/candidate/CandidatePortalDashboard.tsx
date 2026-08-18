@@ -104,7 +104,8 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         if (userEmail && !isHrRecruiter) {
           localStorage.setItem("hiremind_candidate_email", userEmail)
         }
-        if (localStorage.getItem("hiremind_portal_view_mode") === "candidate") {
+        const currentPortalMode = sessionStorage.getItem("hiremind_portal_view_mode") || localStorage.getItem("hiremind_portal_view_mode")
+        if (currentPortalMode === "candidate") {
           localStorage.setItem("hiremind_token", token)
         }
       }
