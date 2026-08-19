@@ -126,7 +126,7 @@ def _load_lookup_maps(client) -> tuple[dict, dict, dict]:
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats", response_model=AIReportStats)
-async def get_ai_report_stats(user: CurrentUserDep):
+async def get_ai_report_stats(user: HRStaffDep):
     """
     Returns the three stat-card values for AiIntelligenceView:
       total_reports, flagged_count, active_sources (always 4)
@@ -144,7 +144,7 @@ async def get_ai_report_stats(user: CurrentUserDep):
 
 @router.get("", response_model=list[AIReportRead])
 async def list_ai_reports(
-    user: CurrentUserDep,
+    user: HRStaffDep,
     filter: Optional[str] = None,   # "flagged" | "verified" | None (all)
     limit:  int = 100,
     offset: int = 0,
@@ -177,7 +177,7 @@ async def list_ai_reports(
 
 
 @router.get("/application/{application_id}", response_model=AIReportRead)
-async def get_ai_report_by_application(application_id: str, user: CurrentUserDep):
+async def get_ai_report_by_application(application_id: str, user: HRStaffDep):
     """Fetch the AI report for a specific application (1-to-1 relationship)."""
     client = get_user_client(user.token)
     result = (
@@ -195,7 +195,7 @@ async def get_ai_report_by_application(application_id: str, user: CurrentUserDep
 
 
 @router.get("/{report_id}", response_model=AIReportRead)
-async def get_ai_report(report_id: str, user: CurrentUserDep):
+async def get_ai_report(report_id: str, user: HRStaffDep):
     """Fetch a single AI report by its UUID."""
     client = get_user_client(user.token)
     result = (

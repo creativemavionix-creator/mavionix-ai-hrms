@@ -19,23 +19,28 @@ function getToken(): string | null {
   if (typeof window === "undefined") return null
   const mode = sessionStorage.getItem("hiremind_portal_view_mode") || localStorage.getItem("hiremind_portal_view_mode")
 
-  // Check Supabase Auth session token in localStorage
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i) || ""
-    if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
-      try {
-        const sess = JSON.parse(localStorage.getItem(key) || "{}")
-        if (sess?.access_token) return sess.access_token
-      } catch (e) {}
-    }
+  if (mode === "candidate") {
+    return localStorage.getItem("hiremind_candidate_token") || "demo-token"
   }
 
-  if (mode === "candidate") {
-    return localStorage.getItem("hiremind_candidate_token") || localStorage.getItem("hiremind_token") || "demo-token"
-  }
   if (mode === "recruiter") {
-    return localStorage.getItem("hiremind_recruiter_token") || localStorage.getItem("hiremind_token") || "demo-token"
+    const recruiterTok = localStorage.getItem("hiremind_recruiter_token") || localStorage.getItem("hiremind_token")
+    if (recruiterTok && recruiterTok !== "demo-token") return recruiterTok
+
+    // Check Supabase Auth session token in localStorage for recruiter
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) || ""
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        try {
+          const sess = JSON.parse(localStorage.getItem(key) || "{}")
+          if (sess?.access_token) return sess.access_token
+        } catch (e) {}
+      }
+    }
+
+    return recruiterTok || "demo-token"
   }
+
   return (
     localStorage.getItem("hiremind_recruiter_token") ||
     localStorage.getItem("hiremind_candidate_token") ||

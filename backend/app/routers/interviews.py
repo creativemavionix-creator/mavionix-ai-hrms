@@ -97,7 +97,7 @@ def _advance_application(application_id: str, score: int, session_type: str) -> 
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats", response_model=InterviewStats)
-async def get_interview_stats(user: CurrentUserDep):
+async def get_interview_stats(user: HRStaffDep):
     """
     Returns the four stat-card values for InterviewCenterView:
       scheduled, completed (this week), avg_score, no_shows
@@ -130,7 +130,7 @@ async def get_interview_stats(user: CurrentUserDep):
 
 @router.get("", response_model=list[InterviewRead])
 async def list_interviews(
-    user: CurrentUserDep,
+    user: HRStaffDep,
     search:       Optional[str] = None,
     status_filter:Optional[str] = None,   # scheduled | completed | cancelled | no_show
     session_type: Optional[str] = None,
@@ -176,7 +176,7 @@ async def list_interviews(
 
 
 @router.get("/{interview_id}", response_model=InterviewRead)
-async def get_interview(interview_id: str, user: CurrentUserDep):
+async def get_interview(interview_id: str, user: HRStaffDep):
     """Fetch a single interview by UUID."""
     client = get_user_client(user.token)
     result = (

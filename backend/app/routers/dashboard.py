@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.database import get_user_client
 from app.schemas.dashboard import DashboardStats, PipelineFunnel
 from app.schemas.users import CurrentUser
@@ -16,10 +16,11 @@ from app.schemas.users import CurrentUser
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+HRStaffDep     = Annotated[CurrentUser, Depends(require_role("super_admin", "hr_manager", "recruiter", "interviewer"))]
 
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(user: CurrentUserDep):
+async def get_dashboard_stats(user: HRStaffDep):
     """Returns aggregate counts for stat cards and hiring funnel."""
     client = get_user_client(user.token)
 
@@ -62,7 +63,7 @@ async def get_dashboard_stats(user: CurrentUserDep):
 
 
 @router.get("/activity-logs")
-async def get_activity_logs(user: CurrentUserDep, limit: int = 20, offset: int = 0):
+async def get_activity_logs(user: HRStaffDep, limit: int = 20, offset: int = 0):
     """Returns the most recent activity log entries, newest first."""
     client = get_user_client(user.token)
     result = (

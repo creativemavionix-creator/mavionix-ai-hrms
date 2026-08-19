@@ -20,7 +20,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.database import get_user_client
 from app.schemas.users import CurrentUser
 
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+HRStaffDep     = Annotated[CurrentUser, Depends(require_role("super_admin", "hr_manager", "recruiter", "interviewer"))]
 
 MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -110,7 +111,7 @@ def _safe_date(value: str | None) -> date | None:
 # ── Route ─────────────────────────────────────────────────────────────────────
 
 @router.get("/summary", response_model=AnalyticsSummary)
-async def get_analytics_summary(user: CurrentUserDep):
+async def get_analytics_summary(user: HRStaffDep):
     """
     Returns all four analytics datasets in a single response.
     The frontend AnalyticsView calls this once on mount.

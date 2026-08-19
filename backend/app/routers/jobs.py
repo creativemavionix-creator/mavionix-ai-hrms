@@ -24,6 +24,7 @@ from app.schemas.users import CurrentUser
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+HRStaffDep     = Annotated[CurrentUser, Depends(require_role("super_admin", "hr_manager", "recruiter", "interviewer"))]
 HRManagerDep   = Annotated[CurrentUser, Depends(require_role("super_admin", "hr_manager"))]
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ def _next_job_code() -> str:
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats", response_model=JobStats)
-async def get_job_stats(user: CurrentUserDep):
+async def get_job_stats(user: HRStaffDep):
     """
     Returns the three stat-card counts shown at the top of JobManagementView:
       - active_roles       (status = 'active')
@@ -91,7 +92,7 @@ async def get_job_stats(user: CurrentUserDep):
 
 @router.get("", response_model=list[JobRead])
 async def list_jobs(
-    user: CurrentUserDep,
+    user: HRStaffDep,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     search: Optional[str] = None,
@@ -148,7 +149,7 @@ async def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobRead)
-async def get_job(job_id: str, user: CurrentUserDep):
+async def get_job(job_id: str, user: HRStaffDep):
     """Fetch a single job by UUID."""
     client = get_user_client(user.token)
     result = (

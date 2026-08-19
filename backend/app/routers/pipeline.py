@@ -55,7 +55,7 @@ class TransitionResult(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/stages", response_model=StageInfo)
-async def list_stages(user: CurrentUserDep):
+async def list_stages(user: HRStaffDep):
     """
     Returns the ordered list of all valid pipeline stages
     and the set of terminal stages.
@@ -110,7 +110,7 @@ async def advance_application_stage(
 
 
 @router.get("/{application_id}/next-stage")
-async def get_next_valid_stage(application_id: str, user: CurrentUserDep):
+async def get_next_valid_stage(application_id: str, user: HRStaffDep):
     """
     Returns the next valid stage for an application,
     plus a list of all reachable stages from the current position.
@@ -142,7 +142,7 @@ async def get_next_valid_stage(application_id: str, user: CurrentUserDep):
 
 
 @router.get("/{application_id}/history")
-async def get_pipeline_history(application_id: str, user: CurrentUserDep):
+async def get_pipeline_history(application_id: str, user: HRStaffDep):
     """
     Returns the full pipeline view for a specific application:
       - current_stage

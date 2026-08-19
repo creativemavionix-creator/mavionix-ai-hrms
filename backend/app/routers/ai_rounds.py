@@ -590,7 +590,7 @@ async def reset_round(application_id: str, round_type: str, user: CurrentUserDep
 # ── Get rounds ────────────────────────────────────────────────────────────────
 
 @router.get("/api/applications/{application_id}/rounds")
-async def list_rounds(application_id: str, user: CurrentUserDep):
+async def list_rounds(application_id: str, user: HRStaffDep):
     """List all AI interview rounds for an application."""
     result = (
         supabase.table("ai_interview_rounds")
@@ -603,7 +603,7 @@ async def list_rounds(application_id: str, user: CurrentUserDep):
 
 
 @router.get("/api/rounds/{round_id}")
-async def get_round(round_id: str, user: CurrentUserDep):
+async def get_round(round_id: str, user: HRStaffDep):
     """Fetch a single round with full transcript."""
     result = supabase.table("ai_interview_rounds").select("*").eq("id", round_id).maybe_single().execute()
     if not result.data:
@@ -614,7 +614,7 @@ async def get_round(round_id: str, user: CurrentUserDep):
 # ── Final Recommendation ──────────────────────────────────────────────────────
 
 @router.get("/api/applications/{application_id}/recommendation")
-async def get_recommendation(application_id: str, user: CurrentUserDep):
+async def get_recommendation(application_id: str, user: HRStaffDep):
     """Fetch the final recommendation for an application (if it exists)."""
     result = supabase.table("final_recommendations").select("*").eq("application_id", application_id).maybe_single().execute()
     if not result.data:

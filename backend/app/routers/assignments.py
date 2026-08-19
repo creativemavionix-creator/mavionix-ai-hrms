@@ -454,7 +454,7 @@ class RecruiterReviewRequest(BaseModel):
 
 
 @router.get("/api/assignments/{assignment_id}")
-async def get_assignment(assignment_id: str, user: CurrentUserDep):
+async def get_assignment(assignment_id: str, user: HRStaffDep):
     """Fetch assignment details."""
     result = supabase.table("assignments").select("*").eq("id", assignment_id).maybe_single().execute()
     if not result or not result.data:
@@ -521,7 +521,7 @@ async def recruiter_review_assignment(assignment_id: str, body: RecruiterReviewR
 
 
 @router.get("/api/applications/{application_id}/assignment")
-async def get_assignment_by_application(application_id: str, user: CurrentUserDep):
+async def get_assignment_by_application(application_id: str, user: HRStaffDep):
     """Fetch the assignment for a specific application."""
     result = (
         supabase.table("assignments")

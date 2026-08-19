@@ -97,7 +97,7 @@ def _build_candidate_with_app(c_row: dict, app_row: dict | None, report_row: dic
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/api/candidates/stats", response_model=CandidateStats)
-async def get_candidate_stats(user: CurrentUserDep):
+async def get_candidate_stats(user: HRStaffDep):
     """
     Returns the four stat-card counts for CandidateManagementView:
       total, shortlisted (screened+), in_interview, rejected
@@ -117,7 +117,7 @@ async def get_candidate_stats(user: CurrentUserDep):
 
 @router.get("/api/candidates", response_model=list[CandidateWithApplication])
 async def list_candidates(
-    user: CurrentUserDep,
+    user: HRStaffDep,
     stage:  Optional[str] = None,   # applied | screened | interview | offered | hired | rejected
     search: Optional[str] = None,   # name / email / tag substring
     limit:  int = 100,
@@ -188,7 +188,7 @@ async def list_candidates(
 
 
 @router.get("/api/candidates/{candidate_id}", response_model=CandidateWithApplication)
-async def get_candidate(candidate_id: str, user: CurrentUserDep):
+async def get_candidate(candidate_id: str, user: HRStaffDep):
     """Fetch a full candidate dossier including application and AI report."""
     client = get_user_client(user.token)
 

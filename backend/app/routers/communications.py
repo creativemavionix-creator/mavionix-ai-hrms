@@ -63,7 +63,7 @@ def _enrich_message(msg: dict, cand_map: dict) -> dict:
 # ── Channels ──────────────────────────────────────────────────────────────────
 
 @router.get("/channels", response_model=list[ChannelRead])
-async def list_channels(user: CurrentUserDep):
+async def list_channels(user: HRStaffDep):
     """List all configured dispatch channels ordered by channel_id_code."""
     client = get_user_client(user.token)
     try:
@@ -75,7 +75,7 @@ async def list_channels(user: CurrentUserDep):
 
 
 @router.get("/channels/{channel_id}", response_model=ChannelRead)
-async def get_channel(channel_id: str, user: CurrentUserDep):
+async def get_channel(channel_id: str, user: HRStaffDep):
     """Fetch a single channel by UUID."""
     client = get_user_client(user.token)
     result = (
@@ -117,7 +117,7 @@ async def update_channel(channel_id: str, body: ChannelUpdate, user: AdminDep):
 # ── Messages ──────────────────────────────────────────────────────────────────
 
 @router.get("/messages/stats", response_model=MessageStats)
-async def get_message_stats(user: CurrentUserDep):
+async def get_message_stats(user: HRStaffDep):
     """
     Returns stat-card counts for CommunicationView:
       sent_today, pending_count, response_rate (avg delivered_pct across active channels),
@@ -217,7 +217,7 @@ async def send_message(body: MessageCreate, user: HRStaffDep):
 
 @router.get("/messages", response_model=list[MessageRead])
 async def list_messages(
-    user: CurrentUserDep,
+    user: HRStaffDep,
     candidate_id: Optional[str] = None,
     channel_id:   Optional[str] = None,
     msg_status:   Optional[str] = None,
@@ -248,7 +248,7 @@ async def list_messages(
 
 
 @router.get("/messages/{message_id}", response_model=MessageRead)
-async def get_message(message_id: str, user: CurrentUserDep):
+async def get_message(message_id: str, user: HRStaffDep):
     """Fetch a single message by UUID."""
     client = get_user_client(user.token)
     result = (
