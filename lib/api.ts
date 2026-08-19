@@ -19,6 +19,17 @@ function getToken(): string | null {
   if (typeof window === "undefined") return null
   const mode = sessionStorage.getItem("hiremind_portal_view_mode") || localStorage.getItem("hiremind_portal_view_mode")
 
+  // Check Supabase Auth session token in localStorage
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i) || ""
+    if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+      try {
+        const sess = JSON.parse(localStorage.getItem(key) || "{}")
+        if (sess?.access_token) return sess.access_token
+      } catch (e) {}
+    }
+  }
+
   if (mode === "candidate") {
     return localStorage.getItem("hiremind_candidate_token") || localStorage.getItem("hiremind_token") || "demo-token"
   }
@@ -453,87 +464,82 @@ export const candidatesApi = {
 
 
   get: async (id: string): Promise<ApiCandidate> => {
-    // 1. Query Next.js server route /api/candidates/[id] first (bypasses RLS on Vercel)
     try {
-      const serverRes = await fetch(`/api/candidates/${id}`)
-      if (serverRes.ok) {
-        const cand = await serverRes.json()
-        if (cand && cand.id) return cand
-      }
-    } catch (e) {}
+      return await api.get<ApiCandidate>(`/api/candidates/${id}`)
+    } catch (err) {
+      // Fallback query directly via Supabase if backend API is unreachable
+      try {
+        const { data: c } = await supabase
+          .from("candidates")
+          .select(`
+            id, name, email, phone, initials, parsed_data, user_id, created_at,
+            applications ( id, job_id, stage, ai_score, match_quality, flagged, applied_date, created_at, jobs ( title ) ),
+            ai_reports ( skill_score, exp_score, edu_score, proj_score, insights, verification_status, tags, confidence, sentiment_score )
+          `)
+          .eq("id", id)
+          .maybeSingle()
 
-    // 2. Query Supabase directly
-    try {
-      const { data: c } = await supabase
-        .from("candidates")
-        .select(`
-          id, name, email, phone, initials, parsed_data, user_id, created_at,
-          applications ( id, job_id, stage, ai_score, match_quality, flagged, applied_date, created_at, jobs ( title ) ),
-          ai_reports ( skill_score, exp_score, edu_score, proj_score, insights, verification_status, tags, confidence, sentiment_score )
-        `)
-        .or(`id.eq.${id},applications.id.eq.${id}`)
-        .maybeSingle()
+        if (c) {
+          const app = Array.isArray(c.applications) ? c.applications[0] : (c.applications || {})
+          const report = Array.isArray(c.ai_reports) ? c.ai_reports[0] : (c.ai_reports || {})
+          const job = Array.isArray(app?.jobs) ? app.jobs[0] : (app?.jobs || {})
 
-      if (c) {
-        const app = Array.isArray(c.applications) ? c.applications[0] : (c.applications || {})
-        const report = Array.isArray(c.ai_reports) ? c.ai_reports[0] : (c.ai_reports || {})
-        const job = Array.isArray(app.jobs) ? app.jobs[0] : (app.jobs || {})
-
-        return {
-          id: c.id,
-          name: c.name,
-          email: c.email,
-          phone: c.phone || null,
-          initials: c.initials || (c.name ? c.name.slice(0, 2).toUpperCase() : "CN"),
-          user_id: c.user_id || null,
-          application_id: app?.id || null,
-          job_id: app?.job_id || null,
-          job_title: job?.title || "Senior Backend Engineer",
-          stage: app?.stage || "applied",
-          flagged: app?.flagged || false,
-          applied_date: app?.applied_date || c.created_at?.split("T")[0] || new Date().toISOString().split("T")[0],
-          ai_score: app?.ai_score ?? 85,
-          match_quality: app?.match_quality || "strong",
-          skill_score: report?.skill_score ?? 88,
-          exp_score: report?.exp_score ?? 85,
-          edu_score: report?.edu_score ?? 86,
-          proj_score: report?.proj_score ?? 88,
-          confidence: report?.confidence ?? 92,
-          sentiment_score: report?.sentiment_score ?? 90,
-          insights: report?.insights || "Candidate dossier loaded from Supabase.",
-          verification_status: report?.verification_status || "verified",
-          tags: report?.tags || ["Python", "FastAPI", "PostgreSQL"],
-          parsed_data: c.parsed_data || {}
+          return {
+            id: c.id,
+            name: c.name,
+            email: c.email,
+            phone: c.phone || null,
+            initials: c.initials || (c.name ? c.name.slice(0, 2).toUpperCase() : "CN"),
+            user_id: c.user_id || null,
+            application_id: app?.id || null,
+            job_id: app?.job_id || null,
+            job_title: job?.title || "Senior Backend Engineer",
+            stage: app?.stage || "applied",
+            flagged: app?.flagged || false,
+            applied_date: app?.applied_date || c.created_at?.split("T")[0] || new Date().toISOString().split("T")[0],
+            ai_score: app?.ai_score ?? 85,
+            match_quality: app?.match_quality || "strong",
+            skill_score: report?.skill_score ?? 88,
+            exp_score: report?.exp_score ?? 85,
+            edu_score: report?.edu_score ?? 86,
+            proj_score: report?.proj_score ?? 88,
+            confidence: report?.confidence ?? 92,
+            sentiment_score: report?.sentiment_score ?? 90,
+            insights: report?.insights || "Candidate dossier loaded from Supabase.",
+            verification_status: report?.verification_status || "verified",
+            tags: report?.tags || ["Python", "FastAPI", "PostgreSQL"],
+            parsed_data: c.parsed_data || {}
+          }
         }
-      }
-    } catch (sbErr) {}
+      } catch (sbErr) {}
 
-    // 3. Fallback mock object for UI stability
-    return {
-      id,
-      name: `Candidate #${id.slice(0, 6)}`,
-      email: `candidate-${id.slice(0, 6)}@hiremind.ai`,
-      phone: null,
-      initials: "CN",
-      user_id: null,
-      application_id: `app-${id}`,
-      job_id: "job-101",
-      job_title: "Senior Backend Engineer",
-      stage: "applied",
-      flagged: false,
-      applied_date: new Date().toISOString().split("T")[0],
-      ai_score: 85,
-      match_quality: "strong",
-      skill_score: 88,
-      exp_score: 85,
-      edu_score: 86,
-      proj_score: 88,
-      confidence: 92,
-      sentiment_score: 90,
-      insights: "Candidate dossier record.",
-      verification_status: "verified",
-      tags: ["Python", "Backend"],
-      parsed_data: {}
+      // Fallback mock object for UI stability
+      return {
+        id,
+        name: `Candidate #${id.slice(0, 6)}`,
+        email: `candidate-${id.slice(0, 6)}@hiremind.ai`,
+        phone: null,
+        initials: "CN",
+        user_id: null,
+        application_id: `app-${id}`,
+        job_id: "job-101",
+        job_title: "Senior Backend Engineer",
+        stage: "applied",
+        flagged: false,
+        applied_date: new Date().toISOString().split("T")[0],
+        ai_score: 85,
+        match_quality: "strong",
+        skill_score: 88,
+        exp_score: 85,
+        edu_score: 86,
+        proj_score: 88,
+        confidence: 92,
+        sentiment_score: 90,
+        insights: "Candidate dossier record.",
+        verification_status: "verified",
+        tags: ["Python", "Backend"],
+        parsed_data: {}
+      }
     }
   },
 
