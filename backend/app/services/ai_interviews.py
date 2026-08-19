@@ -10,6 +10,7 @@ import json
 import os
 import logging
 import re
+import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -56,7 +57,7 @@ def _match_job_profile(job_title: str, profiles: dict) -> dict:
 
 def _record_fallback_metric(job_title: str, round_type: str, exchange_count: int) -> None:
     try:
-        metrics_file = r"C:\Users\Pramod\.gemini\antigravity\scratch\fallback_metrics.json"
+        metrics_file = os.path.join(tempfile.gettempdir(), "fallback_metrics.json")
         metrics = {"executions": 0, "matched_roles": {}, "avg_exchanges": 0}
         if os.path.exists(metrics_file):
             try:
