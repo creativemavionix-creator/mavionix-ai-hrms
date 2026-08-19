@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # App
     app_env: str = "development"
-    allowed_origins: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://*.vercel.app"
+    allowed_origins: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://mavionix-ai-hrms.vercel.app"
     portal_base_url: str = "http://localhost:3001"
     internal_service_secret: str = ""
 
