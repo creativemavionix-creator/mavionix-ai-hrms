@@ -40,11 +40,6 @@ async function request<T>(
   path: string,
   body?: unknown
 ): Promise<T> {
-  // If running in cloud production (e.g. Vercel) and BASE_URL points to localhost, fast-fail to trigger fallback
-  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" && BASE_URL.includes("localhost")) {
-    throw new Error("Backend API offline in cloud production environment")
-  }
-
   const token = getToken()
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

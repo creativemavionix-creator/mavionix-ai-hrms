@@ -684,9 +684,10 @@ function GrantPortalAccessModal({
   onClose
 }: GrantPortalAccessModalProps) {
   const [copied, setCopied] = useState(false)
+  const portalUrl = process.env.NEXT_PUBLIC_CANDIDATE_PORTAL_URL || (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:3000")
 
   const copyCredentials = () => {
-    const credText = `HireMind AI Candidate Portal Access:\nLink: http://127.0.0.1:3000\nEmail: ${email}\nPassword: ${password}`
+    const credText = `HireMind AI Candidate Portal Access:\nLink: ${portalUrl}\nEmail: ${email}\nPassword: ${password}`
     navigator.clipboard.writeText(credText)
     setCopied(true)
     setTimeout(() => setCopied(false), 3000)
@@ -715,7 +716,7 @@ function GrantPortalAccessModal({
         <div className="bg-white/[0.03] border border-white/10 p-4 rounded-xl space-y-3 font-mono text-xs">
           <div>
             <span className="text-[10px] text-neutral-400 uppercase font-bold block">Portal Sign-In URL</span>
-            <span className="text-violet-300 font-bold">http://127.0.0.1:3000</span>
+            <span className="text-violet-300 font-bold">{portalUrl}</span>
           </div>
           <div>
             <span className="text-[10px] text-neutral-400 uppercase font-bold block">Candidate Email</span>
