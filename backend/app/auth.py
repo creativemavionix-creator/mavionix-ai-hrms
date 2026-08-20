@@ -127,56 +127,26 @@ async def require_internal_or_hr(
 
 async def _verify_bearer_credentials(token: str) -> CurrentUser:
     """Internal helper to verify JWT token or demo token."""
-    if settings.demo_mode and token == _DEMO_USER.token:
+    if is_demo_mode_active() and token == _DEMO_USER.token:
         return _DEMO_USER
 
-    from jose import JWTError, jwt
-
-    _JWT_ALGORITHM = "HS256"
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    jwt_secret = (settings.supabase_jwt_secret or "").strip()
-    if not jwt_secret or "placeholder" in jwt_secret.lower() or "your_" in jwt_secret.lower():
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error: SUPABASE_JWT_SECRET is not configured with a valid secret key.",
-        )
-
     user_id: str | None = None
-    payload: dict = {}
     try:
-        # First verify via Supabase Auth API natively
+        # Verify via Supabase Auth API natively (cryptographic verification)
         auth_user_res = supabase.auth.get_user(token)
-        if auth_user_res and auth_user_res.user:
+        if auth_user_res and getattr(auth_user_res, "user", None) and auth_user_res.user:
             user_id = auth_user_res.user.id
-            payload = {
-                "sub": auth_user_res.user.id,
-                "email": auth_user_res.user.email,
-                "name": auth_user_res.user.user_metadata.get("full_name") or auth_user_res.user.email
-            }
     except Exception:
-        pass
-
-    if not user_id:
-        try:
-            # Fallback to local JOSE decode with supported algorithms
-            payload = jwt.decode(
-                token,
-                jwt_secret,
-                algorithms=["HS256", "ES256", "RS256"],
-                options={"verify_aud": False, "verify_signature": False},
-            )
-            user_id = payload.get("sub")
-        except Exception:
-            pass
+        user_id = None
 
     if not user_id:
         raise credentials_exception
-
 
     result = None
     try:
@@ -192,15 +162,6 @@ async def _verify_bearer_credentials(token: str) -> CurrentUser:
         pass
 
     if not result:
-        if settings.demo_mode:
-            role = payload.get("role", "super_admin")
-            return CurrentUser(
-                id=user_id,
-                email=payload.get("email", "demo@hiremind.test"),
-                name=payload.get("name", "Demo User"),
-                role=role,
-                token=token,
-            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User profile not found. Contact your administrator.",

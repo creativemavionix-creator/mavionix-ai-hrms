@@ -54,6 +54,10 @@ export default function RecruitmentDashboard() {
       if (savedSession === "recruiter" || savedSession === "candidate" || savedSession === "landing") {
         return savedSession
       }
+      const savedLocal = localStorage.getItem("hiremind_portal_view_mode")
+      if (savedLocal === "recruiter" || savedLocal === "candidate" || savedLocal === "landing") {
+        return savedLocal
+      }
     }
     return "landing"
   })
@@ -142,8 +146,15 @@ export default function RecruitmentDashboard() {
         return
       }
 
+      const email = data.session.user?.email || hrEmail.trim().toLowerCase()
+      if (!isRecruiterEmail(email)) {
+        await supabase.auth.signOut()
+        setHrLoginError("This account isn't authorized as an HR recruiter.")
+        setHrLoggingIn(false)
+        return
+      }
+
       if (data.session.access_token) {
-        const email = data.session.user.email || hrEmail.trim().toLowerCase()
         localStorage.setItem("hiremind_recruiter_token", data.session.access_token)
         localStorage.setItem("hiremind_recruiter_email", email)
         localStorage.setItem("hiremind_token", data.session.access_token)

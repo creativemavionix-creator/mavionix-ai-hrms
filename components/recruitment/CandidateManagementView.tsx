@@ -819,7 +819,12 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
         addToast("error", res.message || "Failed to grant portal access.")
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to grant portal access.")
+      const errMsg = err?.message || ""
+      if (errMsg.includes("401") || errMsg.includes("Unauthorized") || errMsg.includes("credentials")) {
+        addToast("error", "🔒 Sign In Required: Please log into HR Recruiter Workstation with valid HR credentials to grant portal access.")
+      } else {
+        addToast("error", errMsg || "Failed to grant portal access.")
+      }
     } finally {
       setGrantingAccess(false)
     }

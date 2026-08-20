@@ -17,17 +17,16 @@ const BASE_URL =
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null
-  const mode = sessionStorage.getItem("hiremind_portal_view_mode") || localStorage.getItem("hiremind_portal_view_mode")
 
-  if (mode === "candidate") {
-    return localStorage.getItem("hiremind_candidate_token") || "demo-token"
-  }
+  const isDemoAllowed =
+    process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" ||
+    process.env.NODE_ENV === "development"
 
-  if (mode === "recruiter") {
-    const recruiterTok = localStorage.getItem("hiremind_recruiter_token") || localStorage.getItem("hiremind_token")
-    if (recruiterTok && recruiterTok !== "demo-token") return recruiterTok
+  const mode =
+    sessionStorage.getItem("hiremind_portal_view_mode") ||
+    localStorage.getItem("hiremind_portal_view_mode")
 
-    // Check Supabase Auth session token in localStorage for recruiter
+  const getSupabaseToken = (): string | null => {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i) || ""
       if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
@@ -37,16 +36,38 @@ function getToken(): string | null {
         } catch (e) {}
       }
     }
-
-    return recruiterTok || "demo-token"
+    return null
   }
 
-  return (
+  if (mode === "candidate") {
+    const candTok = localStorage.getItem("hiremind_candidate_token")
+    if (candTok && candTok !== "demo-token") return candTok
+    return isDemoAllowed ? "demo-token" : null
+  }
+
+  if (mode === "recruiter") {
+    const recruiterTok =
+      localStorage.getItem("hiremind_recruiter_token") ||
+      localStorage.getItem("hiremind_token")
+    if (recruiterTok && recruiterTok !== "demo-token") return recruiterTok
+
+    const sbTok = getSupabaseToken()
+    if (sbTok) return sbTok
+
+    return isDemoAllowed ? "demo-token" : null
+  }
+
+  const tok =
     localStorage.getItem("hiremind_recruiter_token") ||
     localStorage.getItem("hiremind_candidate_token") ||
-    localStorage.getItem("hiremind_token") ||
-    "demo-token"
-  )
+    localStorage.getItem("hiremind_token")
+
+  if (tok && tok !== "demo-token") return tok
+
+  const sbTok = getSupabaseToken()
+  if (sbTok) return sbTok
+
+  return isDemoAllowed ? "demo-token" : null
 }
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
