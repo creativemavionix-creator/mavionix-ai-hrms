@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 candidate-portal/node_modules
+package-lock.json
 
 # next.js
 /.next/
