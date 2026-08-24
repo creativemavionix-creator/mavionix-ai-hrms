@@ -1,16 +1,19 @@
 import { NextResponse, NextRequest } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("Missing required Supabase environment variables.")
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Missing required Supabase environment variables.")
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey)
 }
 
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
-
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const supabaseAdmin = getSupabaseAdmin()
   const { id: candidateId } = await context.params
 
   try {

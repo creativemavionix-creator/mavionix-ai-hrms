@@ -14,10 +14,9 @@ function getApiUrl(): string {
   return (url || "").replace(/\/$/, "")
 }
 
-const ADMIN_API = getApiUrl()
-
 async function loadJobProfiles(): Promise<any> {
   try {
+    const ADMIN_API = getApiUrl()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000)
     const res = await fetch(`${ADMIN_API}/api/portal/job-profiles`, {

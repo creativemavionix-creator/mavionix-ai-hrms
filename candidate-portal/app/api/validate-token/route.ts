@@ -13,8 +13,6 @@ function getApiUrl(): string {
   return (url || "").replace(/\/$/, "")
 }
 
-const ADMIN_API = getApiUrl()
-
 /**
  * POST /api/validate-token
  *
@@ -52,6 +50,7 @@ function checkIpRateLimit(ip: string, maxHits = 10, windowMs = 60000): { allowed
 
 export async function POST(req: NextRequest) {
   try {
+    const ADMIN_API = getApiUrl()
     // ── Enforce 10 req/min IP Rate Limit ───────────────────────────────────
     const xff = req.headers.get("x-forwarded-for")
     const clientIp = xff ? xff.split(",")[0].trim() : (req.headers.get("x-real-ip") || "127.0.0.1")

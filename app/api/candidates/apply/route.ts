@@ -3,15 +3,16 @@ import { createClient } from "@supabase/supabase-js"
 import { analyzeCandidateResume } from "@/lib/geminiScoring"
 import { logStageTransition } from "@/lib/stageHistory"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error("Missing required Supabase environment variables.")
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing required Supabase environment variables.")
+  }
+
+  return createClient(supabaseUrl, supabaseKey)
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey)
-
 
 // Asynchronous Gemini AI Resume Scoring (Non-blocking)
 async function runAsyncAiScoring(
@@ -21,6 +22,7 @@ async function runAsyncAiScoring(
   userApiKey?: string
 ) {
   try {
+    const supabase = getSupabase()
     const aiAnalysis = await analyzeCandidateResume({
       name: (body.name || "").trim(),
       jobTitle: body.jobId || "Senior Backend Engineer",
@@ -65,6 +67,7 @@ async function runAsyncAiScoring(
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabase()
     const body = await req.json()
     const {
       name, email, password, phone, jobId, location, linkedInUrl, githubUrl,

@@ -13,8 +13,6 @@ function getApiUrl(): string {
   return (url || "").replace(/\/$/, "")
 }
 
-const ADMIN_API = getApiUrl()
-
 /**
  * POST /api/assignment
  * Submits assignment work via the backend using the candidate's authorization token.
@@ -22,6 +20,7 @@ const ADMIN_API = getApiUrl()
  */
 export async function POST(req: NextRequest) {
   try {
+    const ADMIN_API = getApiUrl()
     const body = await req.json()
     const { assignmentId, submissionText, submissionUrl, submissionType } = body
     const token = body.token || body.session?.token || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
