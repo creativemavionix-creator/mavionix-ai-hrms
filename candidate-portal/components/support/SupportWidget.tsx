@@ -100,8 +100,19 @@ export function SupportWidget() {
     setIsTyping(true);
     
     try {
-      // Connect to SSE backend
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL || "http://localhost:8000").replace(/\/$/, "")
+      const getApiUrl = (): string => {
+        const url = process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL
+        if (!url) {
+          const errorMsg = "Missing required environment variable: NEXT_PUBLIC_API_URL or ADMIN_API_URL"
+          if (process.env.NODE_ENV === "development") {
+            console.error(errorMsg)
+          } else {
+            throw new Error(errorMsg)
+          }
+        }
+        return (url || "").replace(/\/$/, "")
+      }
+      const apiBase = getApiUrl()
       const res = await fetch(`${apiBase}/api/support/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

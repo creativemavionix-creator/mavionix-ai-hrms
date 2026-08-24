@@ -3,12 +3,12 @@ import { createClient } from "@supabase/supabase-js"
 import { analyzeCandidateResume } from "@/lib/geminiScoring"
 import { logStageTransition } from "@/lib/stageHistory"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
-const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const fallbackAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.placeholder"
-const supabaseKey = (rawServiceKey && !rawServiceKey.startsWith("YOUR_") && !rawServiceKey.includes("placeholder"))
-  ? rawServiceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || fallbackAnonKey)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("Missing required Supabase environment variables.")
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 

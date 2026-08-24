@@ -12,8 +12,20 @@ import { generateGeminiChatResponse } from "./gemini"
 import { supabase } from "./supabaseClient"
 import { toDbStage } from "./stageHistory"
 
-const BASE_URL =
-  (process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
+function getApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL
+  if (!url) {
+    const errorMsg = "Missing required environment variable: NEXT_PUBLIC_API_URL or ADMIN_API_URL"
+    if (process.env.NODE_ENV === "development") {
+      console.error(errorMsg)
+    } else {
+      throw new Error(errorMsg)
+    }
+  }
+  return (url || "").replace(/\/$/, "")
+}
+
+const BASE_URL = getApiUrl()
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null

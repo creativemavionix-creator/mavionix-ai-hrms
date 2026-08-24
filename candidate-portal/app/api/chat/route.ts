@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { TranscriptEntry } from "@/lib/types"
 
-const ADMIN_API = (process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")
+function getApiUrl(): string {
+  const url = process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL
+  if (!url) {
+    const errorMsg = "Missing required environment variable: ADMIN_API_URL or NEXT_PUBLIC_API_URL"
+    if (process.env.NODE_ENV === "development") {
+      console.error(errorMsg)
+    } else {
+      throw new Error(errorMsg)
+    }
+  }
+  return (url || "").replace(/\/$/, "")
+}
+
+const ADMIN_API = getApiUrl()
 
 async function loadJobProfiles(): Promise<any> {
   try {
