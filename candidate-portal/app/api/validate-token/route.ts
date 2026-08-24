@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ session: backendSession })
     }
 
-    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
     if (!isDemoAllowed) {
       return NextResponse.json({ error: "Invalid or unauthorized portal access token" }, { status: 401 })
     }

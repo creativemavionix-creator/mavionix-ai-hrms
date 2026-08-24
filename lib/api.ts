@@ -351,8 +351,9 @@ export const candidatesApi = {
           const report = Array.isArray(app.ai_reports) ? app.ai_reports[0] : (app.ai_reports || {})
           const job = Array.isArray(app.jobs) ? app.jobs[0] : (app.jobs || {})
 
-          const candName = cand?.name || `Candidate #${app.id.slice(0, 6)}`
-          const candEmail = cand?.email || `candidate-${app.id.slice(0, 6)}@hiremind.ai`
+          const appIdSlice = app?.id ? String(app.id).slice(0, 6) : "000000"
+          const candName = cand?.name || `Candidate #${appIdSlice}`
+          const candEmail = cand?.email || `candidate-${appIdSlice}@hiremind.ai`
           const initials = cand?.initials || (candName ? candName.slice(0, 2).toUpperCase() : "CN")
 
           return {

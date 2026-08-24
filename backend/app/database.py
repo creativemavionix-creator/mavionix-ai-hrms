@@ -40,7 +40,7 @@ else:
         try:
             client: Client = create_client(
                 settings.supabase_url,
-                settings.supabase_service_role_key,
+                settings.supabase_anon_key,
             )
             client.postgrest.auth(user_jwt)
             return client

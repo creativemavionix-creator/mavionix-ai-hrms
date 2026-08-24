@@ -38,3 +38,5 @@ next-env.d.ts
 # archives & scratch
 *.zip
 scratch/
+scratch_schema*.js
+backend/scratch/

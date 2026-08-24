@@ -59,7 +59,7 @@ export default function RecruitmentDashboard() {
         return savedLocal
       }
     }
-    return "landing"
+    return "recruiter"
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(() => {
