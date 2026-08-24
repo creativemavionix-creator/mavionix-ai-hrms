@@ -18,9 +18,7 @@ const BASE_URL =
 function getToken(): string | null {
   if (typeof window === "undefined") return null
 
-  const isDemoAllowed =
-    process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" ||
-    process.env.NODE_ENV === "development"
+  const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
 
   const mode =
     sessionStorage.getItem("hiremind_portal_view_mode") ||
