@@ -1,4 +1,8 @@
+packages:
+  - '.'
+  - 'candidate-portal'
 allowBuilds:
+  esbuild: true
   sharp: true
 minimumReleaseAgeExclude:
   - '@supabase/auth-js@2.112.3'
