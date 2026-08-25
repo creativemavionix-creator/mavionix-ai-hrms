@@ -177,11 +177,22 @@ export default function RecruitmentDashboard() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("hiremind_recruiter_token")
       localStorage.removeItem("hiremind_recruiter_email")
-      if (localStorage.getItem("hiremind_portal_view_mode") === "recruiter") {
-        localStorage.removeItem("hiremind_token")
-      }
+      localStorage.removeItem("hiremind_token")
+      localStorage.removeItem("hiremind_recruiter_active_tab")
+      localStorage.removeItem("hiremind_portal_view_mode")
+      sessionStorage.removeItem("hiremind_portal_view_mode")
     }
     setSession(null)
+    setActiveTab("dashboard")
+    setPortalViewMode("landing")
+  }
+
+  const handleGoToLanding = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("hiremind_recruiter_active_tab")
+    }
+    setActiveTab("dashboard")
+    setPortalViewMode("landing")
   }
 
   useEffect(() => {
@@ -402,7 +413,7 @@ export default function RecruitmentDashboard() {
               </div>
             </div>
             <button
-              onClick={() => setPortalViewMode("landing")}
+              onClick={handleGoToLanding}
               className="p-2.5 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <span>Landing Page</span>
@@ -494,8 +505,8 @@ export default function RecruitmentDashboard() {
           {/* Logo header */}
           <div className="flex items-center justify-between mb-8 px-1">
             {!sidebarCollapsed && (
-              <div>
-                <h1 className="text-sm font-extrabold tracking-widest bg-gradient-to-r from-violet-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent">
+              <div onClick={() => setActiveTab("dashboard")} className="cursor-pointer group">
+                <h1 className="text-sm font-extrabold tracking-widest bg-gradient-to-r from-violet-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">
                   HIREMIND AI
                 </h1>
                 <p className="text-[8px] text-neutral-500 font-medium tracking-widest uppercase mt-0.5">
@@ -504,13 +515,13 @@ export default function RecruitmentDashboard() {
               </div>
             )}
             {sidebarCollapsed && (
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+              <button onClick={() => setActiveTab("dashboard")} className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20 hover:scale-105 transition-transform cursor-pointer">
                 <Brain className="w-4 h-4 text-white" />
-              </div>
+              </button>
             )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-all ml-auto"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-all ml-auto cursor-pointer"
             >
               <ChevronRight
                 className={`w-4 h-4 transition-transform duration-300 ${sidebarCollapsed ? "" : "rotate-180"}`}
@@ -575,9 +586,17 @@ export default function RecruitmentDashboard() {
         {/* Top bar toolbar */}
         <div className="h-20 border-b border-white/[0.05] flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-2.5 text-xs">
-            <span className="text-neutral-500 font-medium tracking-wider uppercase">RECRUITMENT</span>
+            <span
+              onClick={() => setActiveTab("dashboard")}
+              className="text-neutral-500 hover:text-neutral-300 font-medium tracking-wider uppercase cursor-pointer transition-colors"
+            >
+              RECRUITMENT
+            </span>
             <span className="text-neutral-600">/</span>
-            <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent font-bold tracking-wider uppercase">
+            <span
+              onClick={() => setActiveTab("dashboard")}
+              className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent font-bold tracking-wider uppercase cursor-pointer"
+            >
               {getBreadcrumbLabel()}
             </span>
           </div>
@@ -589,7 +608,7 @@ export default function RecruitmentDashboard() {
 
           <div className="flex items-center gap-3 text-xs">
             <button
-              onClick={() => setPortalViewMode("landing")}
+              onClick={handleGoToLanding}
               className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[9px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer"
             >
               Landing Page
