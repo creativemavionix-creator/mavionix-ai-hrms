@@ -40,27 +40,12 @@ import InterviewCenterView from "@/components/recruitment/InterviewCenterView"
 import AnalyticsView from "@/components/recruitment/AnalyticsView"
 import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
-import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
-import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
 import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
 import { useTheme } from "@/lib/theme"
 import { supabase } from "@/lib/supabaseClient"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
-  const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">(() => {
-    if (typeof window !== "undefined") {
-      const savedSession = sessionStorage.getItem("hiremind_portal_view_mode")
-      if (savedSession === "recruiter" || savedSession === "candidate" || savedSession === "landing") {
-        return savedSession
-      }
-      const savedLocal = localStorage.getItem("hiremind_portal_view_mode")
-      if (savedLocal === "recruiter" || savedLocal === "candidate" || savedLocal === "landing") {
-        return savedLocal
-      }
-    }
-    return "recruiter"
-  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -98,19 +83,15 @@ export default function RecruitmentDashboard() {
         if (typeof window !== "undefined") {
           localStorage.setItem("hiremind_recruiter_token", sess.access_token)
           localStorage.setItem("hiremind_recruiter_email", sess.user.email)
-          if (portalViewMode === "recruiter") {
-            localStorage.setItem("hiremind_token", sess.access_token)
-          }
+          localStorage.setItem("hiremind_token", sess.access_token)
         }
       } else {
-        // Fall back to saved recruiter token if available so Candidate actions do not wipe Recruiter session
+        // Fall back to saved recruiter token if available
         const savedToken = typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_token") : null
         const savedEmail = typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : null
         if (savedToken && savedEmail) {
           setSession({ access_token: savedToken, user: { email: savedEmail } })
-          if (portalViewMode === "recruiter") {
-            localStorage.setItem("hiremind_token", savedToken)
-          }
+          localStorage.setItem("hiremind_token", savedToken)
         } else {
           setSession(null)
         }
@@ -127,7 +108,7 @@ export default function RecruitmentDashboard() {
     })
 
     return () => subscription.unsubscribe()
-  }, [portalViewMode])
+  }, [])
 
   const handleHrLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -184,30 +165,14 @@ export default function RecruitmentDashboard() {
     }
     setSession(null)
     setActiveTab("dashboard")
-    setPortalViewMode("landing")
-  }
-
-  const handleGoToLanding = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hiremind_recruiter_active_tab")
-    }
-    setActiveTab("dashboard")
-    setPortalViewMode("landing")
   }
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      sessionStorage.setItem("hiremind_portal_view_mode", portalViewMode)
-      localStorage.setItem("hiremind_portal_view_mode", portalViewMode)
-      if (portalViewMode === "recruiter") {
-        const recruiterTok = localStorage.getItem("hiremind_recruiter_token")
-        if (recruiterTok) localStorage.setItem("hiremind_token", recruiterTok)
-      } else if (portalViewMode === "candidate") {
-        const candTok = localStorage.getItem("hiremind_candidate_token")
-        if (candTok) localStorage.setItem("hiremind_token", candTok)
-      }
+      localStorage.removeItem("hiremind_portal_view_mode")
+      sessionStorage.removeItem("hiremind_portal_view_mode")
     }
-  }, [portalViewMode])
+  }, [])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -385,15 +350,7 @@ export default function RecruitmentDashboard() {
 
   return (
     <>
-      {portalViewMode === "landing" && (
-        <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
-      )}
-
-      {portalViewMode === "candidate" && (
-        <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("recruiter")} />
-      )}
-
-      {portalViewMode === "recruiter" && !session && (
+      {!session && (
         <div className="min-h-screen bg-[#090A10] text-white font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
           <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
@@ -412,12 +369,6 @@ export default function RecruitmentDashboard() {
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleGoToLanding}
-              className="p-2.5 border border-white/[0.08] hover:bg-white/5 text-neutral-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <span>Landing Page</span>
-            </button>
           </header>
 
           <main className="relative z-10 max-w-md w-full mx-auto my-auto py-12">
@@ -486,7 +437,7 @@ export default function RecruitmentDashboard() {
         </div>
       )}
 
-      {portalViewMode === "recruiter" && session && (
+      {session && (
         <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />
@@ -607,13 +558,6 @@ export default function RecruitmentDashboard() {
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            <button
-              onClick={handleGoToLanding}
-              className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[9px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer"
-            >
-              Landing Page
-            </button>
-
             <button
               onClick={handleHrSignOut}
               className="px-3 py-1.5 bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-400 rounded-full text-[9px] font-extrabold tracking-wider uppercase transition-all shrink-0 shadow-md shadow-red-500/10 cursor-pointer"
