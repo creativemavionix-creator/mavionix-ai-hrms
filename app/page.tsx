@@ -40,12 +40,15 @@ import InterviewCenterView from "@/components/recruitment/InterviewCenterView"
 import AnalyticsView from "@/components/recruitment/AnalyticsView"
 import CommunicationView from "@/components/recruitment/CommunicationView"
 import SettingsView from "@/components/recruitment/SettingsView"
+import PortalChoiceLanding from "@/components/landing/PortalChoiceLanding"
+import CandidatePortalDashboard from "@/components/candidate/CandidatePortalDashboard"
 import RecruiterCopilotWidget from "@/components/recruitment/RecruiterCopilotWidget"
 import { useTheme } from "@/lib/theme"
 import { supabase } from "@/lib/supabaseClient"
 
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
+  const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">("landing")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -165,6 +168,7 @@ export default function RecruitmentDashboard() {
     }
     setSession(null)
     setActiveTab("dashboard")
+    setPortalViewMode("landing")
   }
 
   useEffect(() => {
@@ -350,7 +354,15 @@ export default function RecruitmentDashboard() {
 
   return (
     <>
-      {!session && (
+      {portalViewMode === "landing" && !session && (
+        <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
+      )}
+
+      {portalViewMode === "candidate" && (
+        <CandidatePortalDashboard onSwitchToRecruiter={() => setPortalViewMode("landing")} />
+      )}
+
+      {portalViewMode === "recruiter" && !session && (
         <div className="min-h-screen bg-[#090A10] text-white font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
           <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/15 blur-[140px] rounded-full pointer-events-none z-0" />
@@ -369,6 +381,13 @@ export default function RecruitmentDashboard() {
                 </span>
               </div>
             </div>
+
+            <button
+              onClick={() => setPortalViewMode("landing")}
+              className="px-3.5 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[10px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Landing Page</span>
+            </button>
           </header>
 
           <main className="relative z-10 max-w-md w-full mx-auto my-auto py-12">
@@ -558,6 +577,13 @@ export default function RecruitmentDashboard() {
           </div>
 
           <div className="flex items-center gap-3 text-xs">
+            <button
+              onClick={() => setPortalViewMode("landing")}
+              className="px-3.5 py-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/10 text-neutral-300 rounded-full text-[9px] font-bold tracking-wider uppercase transition-all shrink-0 cursor-pointer"
+            >
+              Landing Page
+            </button>
+
             <button
               onClick={handleHrSignOut}
               className="px-3 py-1.5 bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-400 rounded-full text-[9px] font-extrabold tracking-wider uppercase transition-all shrink-0 shadow-md shadow-red-500/10 cursor-pointer"
