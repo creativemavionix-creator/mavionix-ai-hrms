@@ -73,12 +73,20 @@ if (!globalStore.__demoRounds) {
 const demoRounds: Map<string, any> = globalStore.__demoRounds
 const MAX_EXCHANGES = 6
 
+interface BackendResult {
+  ok: boolean
+  status: number
+  data?: any
+  error?: string
+}
+
 async function tryBackend(
   action: string,
   body: any,
   candidateToken?: string
-): Promise<{ ok: boolean; data?: any }> {
+): Promise<BackendResult> {
   try {
+    const ADMIN_API = getApiUrl()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 12000)
 
@@ -87,65 +95,45 @@ async function tryBackend(
       headers["Authorization"] = `Bearer ${candidateToken}`
     }
 
+    let url = ""
+    let reqBody: any = undefined
+
     if (action === "start") {
-      const res = await fetch(
-        `${ADMIN_API}/api/applications/${body.applicationId}/start-round/${body.roundType}`,
-        {
-          method: "POST",
-          headers,
-          signal: controller.signal,
-        }
-      )
-      clearTimeout(timeoutId)
-      if (res.ok) {
-        const data = await res.json()
-        return { ok: true, data }
-      }
+      url = `${ADMIN_API}/api/applications/${body.applicationId}/start-round/${body.roundType}`
+    } else if (action === "respond") {
+      url = `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/respond`
+      reqBody = JSON.stringify({
+        message: body.message,
+        candidate_skills: body.candidateSkills || [],
+        speaking_metrics: body.speaking_metrics,
+      })
+    } else if (action === "report_strike") {
+      url = `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/strike`
+      reqBody = JSON.stringify({ strikes: body.strikes })
     }
 
-    if (action === "respond") {
-      const res = await fetch(
-        `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/respond`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            message: body.message,
-            candidate_skills: body.candidateSkills || [],
-            speaking_metrics: body.speaking_metrics,
-          }),
-          signal: controller.signal,
-        }
-      )
-      clearTimeout(timeoutId)
-      if (res.ok) {
-        const data = await res.json()
-        return { ok: true, data }
-      }
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: reqBody,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (res.ok) {
+      const data = await res.json()
+      return { ok: true, status: res.status, data }
     }
 
-    if (action === "report_strike") {
-      const res = await fetch(
-        `${ADMIN_API}/api/applications/${body.applicationId}/round/${body.roundId}/strike`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            strikes: body.strikes,
-          }),
-          signal: controller.signal,
-        }
-      )
-      clearTimeout(timeoutId)
-      if (res.ok) {
-        const data = await res.json()
-        return { ok: true, data }
-      }
+    const errData = await res.json().catch(() => ({}))
+    return {
+      ok: false,
+      status: res.status,
+      error: errData.detail || errData.error || `Backend returned status ${res.status}`,
     }
-  } catch {
-    // Backend unreachable
+  } catch (err: any) {
+    return { ok: false, status: 502, error: err?.message || "Backend network unreachable" }
   }
-  return { ok: false }
 }
 
 const MASTER_SYSTEM_PROMPTS: Record<string, string> = {
@@ -255,11 +243,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action } = body
     const candidateToken = body.token || body.session?.token || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
 
     if (action === "start") {
       const backendRes = await tryBackend("start", body, candidateToken)
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
+      }
+
+      // If backend responded with an HTTP status code (401, 403, 404, 410, 422, 500), forward it immediately
+      if (backendRes.status > 0 && backendRes.status !== 502) {
+        return NextResponse.json(
+          { error: backendRes.error || "Backend request failed" },
+          { status: backendRes.status }
+        )
+      }
+
+      // If network error/timeout and demo mode is NOT explicitly enabled, return 502
+      if (!isDemoAllowed && candidateToken !== "demo") {
+        return NextResponse.json(
+          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
+          { status: 502 }
+        )
       }
 
       const roundId = `demo-round-${Date.now()}`
@@ -306,6 +311,18 @@ export async function POST(req: NextRequest) {
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
       }
+      if (backendRes.status > 0 && backendRes.status !== 502) {
+        return NextResponse.json(
+          { error: backendRes.error || "Strike reporting failed" },
+          { status: backendRes.status }
+        )
+      }
+      if (!isDemoAllowed && candidateToken !== "demo") {
+        return NextResponse.json(
+          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
+          { status: 502 }
+        )
+      }
     }
 
     if (action === "respond") {
@@ -313,6 +330,20 @@ export async function POST(req: NextRequest) {
       const backendRes = await tryBackend("respond", body, candidateToken)
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
+      }
+
+      if (backendRes.status > 0 && backendRes.status !== 502) {
+        return NextResponse.json(
+          { error: backendRes.error || "Response evaluation failed" },
+          { status: backendRes.status }
+        )
+      }
+
+      if (!isDemoAllowed && candidateToken !== "demo") {
+        return NextResponse.json(
+          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
+          { status: 502 }
+        )
       }
 
       const round = demoRounds.get(roundId) || {

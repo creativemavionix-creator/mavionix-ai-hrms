@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { requireRecruiter } from "@/lib/requireRecruiter"
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -15,6 +16,11 @@ function getSupabaseAdmin() {
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await requireRecruiter(request)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
   const supabaseAdmin = getSupabaseAdmin()
   const { id: candidateId } = await context.params
 

@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { requireRecruiter } from "@/lib/requireRecruiter"
 
 export async function POST(req: Request) {
+  const auth = await requireRecruiter(req)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
   try {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"

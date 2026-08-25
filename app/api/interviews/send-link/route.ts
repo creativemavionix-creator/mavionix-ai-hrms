@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { Resend } from "resend"
 import { logStageTransition } from "@/lib/stageHistory"
+import { requireRecruiter } from "@/lib/requireRecruiter"
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -17,6 +18,11 @@ function getSupabase() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireRecruiter(req)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
   try {
     const supabase = getSupabase()
     const body = await req.json()

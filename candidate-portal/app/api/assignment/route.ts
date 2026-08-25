@@ -37,21 +37,45 @@ export async function POST(req: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`
     }
 
-    // Submit the assignment to FastAPI backend
-    const backendRes = await fetch(`${ADMIN_API}/api/assignments/${assignmentId}/submit`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        submission_text: submissionText || "[Empty submission]",
-        submission_url: submissionUrl || undefined,
-        submission_type: submissionType || "text",
-      }),
-      signal: controller1.signal,
-    }).catch(() => null).finally(() => clearTimeout(timeoutId1))
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
+    let backendRes: Response | null = null
 
-    if (backendRes && !backendRes.ok) {
+    try {
+      backendRes = await fetch(`${ADMIN_API}/api/assignments/${assignmentId}/submit`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          submission_text: submissionText || "[Empty submission]",
+          submission_url: submissionUrl || undefined,
+          submission_type: submissionType || "text",
+        }),
+        signal: controller1.signal,
+      })
+    } catch (fetchErr) {
+      backendRes = null
+    } finally {
+      clearTimeout(timeoutId1)
+    }
+
+    if (!backendRes) {
+      if (!isDemoAllowed && token !== "demo") {
+        return NextResponse.json(
+          { error: "Backend service unavailable", detail: "Could not connect to FastAPI backend." },
+          { status: 502 }
+        )
+      }
+      return NextResponse.json({
+        submitted: true,
+        message: "Assignment submitted in offline demo mode.",
+      })
+    }
+
+    if (!backendRes.ok) {
       const errData = await backendRes.json().catch(() => ({}))
-      return NextResponse.json({ error: errData.detail || "Assignment submission failed" }, { status: backendRes.status })
+      return NextResponse.json(
+        { error: errData.detail || errData.error || "Assignment submission failed" },
+        { status: backendRes.status }
+      )
     }
 
     return NextResponse.json({

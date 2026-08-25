@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { requireRecruiter } from "@/lib/requireRecruiter"
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -15,6 +16,11 @@ function getSupabaseAdmin() {
 }
 
 export async function GET(request: Request) {
+  const auth = await requireRecruiter(request)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
   const supabaseAdmin = getSupabaseAdmin()
   const { searchParams } = new URL(request.url)
   const stage = searchParams.get("stage")
