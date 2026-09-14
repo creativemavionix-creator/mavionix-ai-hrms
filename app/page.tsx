@@ -354,7 +354,7 @@ export default function RecruitmentDashboard() {
 
   return (
     <>
-      {portalViewMode === "landing" && !session && (
+      {portalViewMode === "landing" && (
         <PortalChoiceLanding onSelectRole={(role) => setPortalViewMode(role)} />
       )}
 
@@ -456,7 +456,7 @@ export default function RecruitmentDashboard() {
         </div>
       )}
 
-      {session && (
+      {portalViewMode === "recruiter" && session && (
         <div className="flex h-screen overflow-hidden bg-[var(--hm-bg-primary)] text-[var(--hm-text-primary)] relative font-sans">
       {/* Background ambient lighting */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-violet-600/10 blur-[130px] rounded-full pointer-events-none dark:opacity-75 opacity-30 z-0" />

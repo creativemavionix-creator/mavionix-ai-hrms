@@ -86,7 +86,7 @@ export default function CommunicationView() {
     } finally { setIsSending(false) }
   }
 
-  const eligibleCands = candidates.filter(c => c.stage && !["hired", "rejected"].includes(c.stage))
+  const eligibleCands = candidates.filter(c => c.stage && !["hired", "rejected"].includes(c.stage.toLowerCase()))
 
   return (
     <div className="space-y-6 pb-10">

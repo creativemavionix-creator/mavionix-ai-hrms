@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"
     const systemInstruction = body.systemInstruction || "You are HireMind AI assistant."
-    const modelName = body.modelName || "gemini-2.0-flash"
+    const modelName = body.modelName || "gemini-3.6-flash"
     const history = body.history || []
     const userApiKey = req.headers.get("x-gemini-api-key")
 

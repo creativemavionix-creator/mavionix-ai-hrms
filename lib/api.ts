@@ -13,16 +13,8 @@ import { supabase } from "./supabaseClient"
 import { toDbStage } from "./stageHistory"
 
 function getApiUrl(): string {
-  const url = process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL
-  if (!url) {
-    const errorMsg = "Missing required environment variable: NEXT_PUBLIC_API_URL or ADMIN_API_URL"
-    if (process.env.NODE_ENV === "development") {
-      console.error(errorMsg)
-    } else {
-      throw new Error(errorMsg)
-    }
-  }
-  return (url || "").replace(/\/$/, "")
+  const url = process.env.NEXT_PUBLIC_API_URL || process.env.ADMIN_API_URL || "http://localhost:8000"
+  return url.replace(/\/$/, "")
 }
 
 const BASE_URL = getApiUrl()
@@ -43,7 +35,7 @@ function getToken(): string | null {
         try {
           const sess = JSON.parse(localStorage.getItem(key) || "{}")
           if (sess?.access_token) return sess.access_token
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     return null
@@ -121,8 +113,8 @@ async function request<T>(
       typeof data?.detail === "string"
         ? data.detail
         : Array.isArray(data?.detail)
-        ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
-        : "An unexpected error occurred."
+          ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
+          : "An unexpected error occurred."
     throw new Error(message)
   }
   return data as T
@@ -131,55 +123,55 @@ async function request<T>(
 // ── Convenience wrappers ───────────────────────────────────────────────────
 
 export const api = {
-  get:    <T>(path: string)                  => request<T>("GET",    path),
-  post:   <T>(path: string, body: unknown)   => request<T>("POST",   path, body),
-  patch:  <T>(path: string, body: unknown)   => request<T>("PATCH",  path, body),
-  put:    <T>(path: string, body: unknown)   => request<T>("PUT",    path, body),
-  delete: <T>(path: string)                  => request<T>("DELETE", path),
+  get: <T>(path: string) => request<T>("GET", path),
+  post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
+  patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
+  put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
+  delete: <T>(path: string) => request<T>("DELETE", path),
 }
 
 // ── Jobs API ──────────────────────────────────────────────────────────────
 
 export interface ApiJob {
-  id:              string
-  job_code:        string
-  title:           string
-  department:      string
-  location:        string
-  status:          "active" | "onhold" | "draft" | "closed"
-  priority:        "low" | "medium" | "high"
-  posted_date:     string
-  description:     string | null
-  created_by:      string | null
-  created_at:      string
+  id: string
+  job_code: string
+  title: string
+  department: string
+  location: string
+  status: "active" | "onhold" | "draft" | "closed"
+  priority: "low" | "medium" | "high"
+  posted_date: string
+  description: string | null
+  created_by: string | null
+  created_at: string
   blueprint_version?: number
-  round_blueprints?:  Record<string, any>
+  round_blueprints?: Record<string, any>
   applicant_count: number
 }
 
 export interface JobStats {
-  active_roles:  number
+  active_roles: number
   high_priority: number
-  draft_roles:   number
+  draft_roles: number
 }
 
 export interface CreateJobPayload {
-  title:       string
-  department:  string
-  location:    string
-  status:      ApiJob["status"]
-  priority:    ApiJob["priority"]
+  title: string
+  department: string
+  location: string
+  status: ApiJob["status"]
+  priority: ApiJob["priority"]
   description?: string
   posted_date?: string
   round_blueprints?: Record<string, any>
 }
 
 export interface UpdateJobPayload {
-  title?:      string
+  title?: string
   department?: string
-  location?:   string
-  status?:     ApiJob["status"]
-  priority?:   ApiJob["priority"]
+  location?: string
+  status?: ApiJob["status"]
+  priority?: ApiJob["priority"]
   description?: string
   round_blueprints?: Record<string, any>
 }
@@ -229,72 +221,72 @@ export type MatchQuality = "excellent" | "strong" | "good" | "fair" | "low"
 
 export interface ApiCandidate {
   // candidate core
-  id:              string
-  name:            string
-  email:           string
-  phone:           string | null
-  initials:        string
-  resume_url?:     string | null
-  parsed_data?:    Record<string, unknown> | null
-  user_id?:        string | null
-  created_at?:     string
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  initials: string
+  resume_url?: string | null
+  parsed_data?: Record<string, unknown> | null
+  user_id?: string | null
+  created_at?: string
   // application
   application_id?: string | null
-  job_id?:         string | null
-  job_title:       string | null
-  stage:           AppStage | null
-  ai_score:        number | null
-  match_quality:   MatchQuality | null
-  flagged:         boolean
-  applied_date:    string | null
+  job_id?: string | null
+  job_title: string | null
+  stage: AppStage | null
+  ai_score: number | null
+  match_quality: MatchQuality | null
+  flagged: boolean
+  applied_date: string | null
   // AI report
-  skill_score:     number | null
-  exp_score:       number | null
-  edu_score:       number | null
-  proj_score:      number | null
-  confidence:      number | null
+  skill_score: number | null
+  exp_score: number | null
+  edu_score: number | null
+  proj_score: number | null
+  confidence: number | null
   sentiment_score: number | null
-  insights:        string | null
-  tags:            string[]
+  insights: string | null
+  tags: string[]
   verification_status: string | null
 }
 
 export interface CandidateStats {
-  total:        number
-  shortlisted:  number
+  total: number
+  shortlisted: number
   in_interview: number
-  rejected:     number
+  rejected: number
 }
 
 export interface UpdateApplicationPayload {
-  stage?:  AppStage
+  stage?: AppStage
   flagged?: boolean
 }
 
 /** POST /api/candidates uses multipart/form-data — handled separately */
 async function uploadCandidate(payload: {
-  name:    string
-  email:   string
-  phone:   string
-  job_id:  string
-  resume:  File
+  name: string
+  email: string
+  phone: string
+  job_id: string
+  resume: File
 }): Promise<ApiCandidate> {
   try {
     const token = getToken()
-    const form  = new FormData()
-    form.append("name",    payload.name)
-    form.append("email",   payload.email)
-    form.append("phone",   payload.phone)
-    form.append("job_id",  payload.job_id)
-    form.append("resume",  payload.resume)
+    const form = new FormData()
+    form.append("name", payload.name)
+    form.append("email", payload.email)
+    form.append("phone", payload.phone)
+    form.append("job_id", payload.job_id)
+    form.append("resume", payload.resume)
 
     const headers: Record<string, string> = {}
     if (token) headers["Authorization"] = `Bearer ${token}`
 
     const res = await fetch(`${BASE_URL}/api/candidates`, {
-      method:  "POST",
+      method: "POST",
       headers,  // no Content-Type — browser sets multipart boundary automatically
-      body:    form,
+      body: form,
     })
 
     const data = await res.json().catch(() => ({ detail: res.statusText }))
@@ -303,8 +295,8 @@ async function uploadCandidate(payload: {
         typeof data?.detail === "string"
           ? data.detail
           : Array.isArray(data?.detail)
-          ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
-          : "Failed to upload candidate."
+            ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
+            : "Failed to upload candidate."
       throw new Error(message)
     }
     return data as ApiCandidate
@@ -321,7 +313,7 @@ export const candidatesApi = {
       if (params?.stage && params.stage !== "all") qs.set("stage", params.stage)
       if (params?.search) qs.set("search", params.search)
       const query = qs.toString() ? `?${qs.toString()}` : ""
-      
+
       const serverRes = await fetch(`/api/candidates${query}`)
       if (serverRes.ok) {
         const cands = await serverRes.json()
@@ -489,7 +481,7 @@ export const candidatesApi = {
         const rejected = apps.filter((a: any) => a.stage === "rejected").length
         return { total, shortlisted, in_interview, rejected }
       }
-    } catch (sbErr) {}
+    } catch (sbErr) { }
 
     try {
       return await api.get<CandidateStats>("/api/candidates/stats")
@@ -548,7 +540,7 @@ export const candidatesApi = {
             parsed_data: c.parsed_data || {}
           }
         }
-      } catch (sbErr) {}
+      } catch (sbErr) { }
 
       // Fallback mock object for UI stability
       return {
@@ -612,31 +604,31 @@ export const candidatesApi = {
 export type VerificationStatus = "verified" | "revoked" | "pending" | "unverified"
 
 export interface ApiAIReport {
-  id:                  string
-  application_id:      string
+  id: string
+  application_id: string
   verification_status: VerificationStatus
-  sentiment_score:     number | null
-  match_ranking:       string | null
-  skill_score:         number | null
-  exp_score:           number | null
-  edu_score:           number | null
-  proj_score:          number | null
-  confidence:          number | null
-  insights:            string | null
-  tags:                string[] | null
-  flagged:             boolean
-  created_at:          string
+  sentiment_score: number | null
+  match_ranking: string | null
+  skill_score: number | null
+  exp_score: number | null
+  edu_score: number | null
+  proj_score: number | null
+  confidence: number | null
+  insights: string | null
+  tags: string[] | null
+  flagged: boolean
+  created_at: string
   // denormalised joins
-  candidate_name:      string | null
-  candidate_email:     string | null
-  candidate_initials:  string | null
-  job_title:           string | null
-  ai_score:            number | null
+  candidate_name: string | null
+  candidate_email: string | null
+  candidate_initials: string | null
+  job_title: string | null
+  ai_score: number | null
 }
 
 export interface AIReportStats {
-  total_reports:  number
-  flagged_count:  number
+  total_reports: number
+  flagged_count: number
   active_sources: number
 }
 
@@ -644,8 +636,8 @@ export type AIReportFilter = "all" | "flagged" | "verified"
 
 export interface UpdateAIReportPayload {
   verification_status?: VerificationStatus
-  flagged?:             boolean
-  insights?:            string
+  flagged?: boolean
+  insights?: string
 }
 
 export const aiReportsApi = {
@@ -668,46 +660,46 @@ export const aiReportsApi = {
 
 // ── Interviews API ────────────────────────────────────────────────────────────
 
-export type SessionType     = "ai_screening" | "technical" | "final"
+export type SessionType = "ai_screening" | "technical" | "final"
 export type InterviewStatus = "scheduled" | "completed" | "cancelled" | "no_show"
 
 export interface ApiInterview {
-  id:               string
-  application_id:   string
+  id: string
+  application_id: string
   interviewer_name: string
-  session_type:     SessionType
-  scheduled_at:     string        // ISO datetime
-  status:           InterviewStatus
-  score:            number | null
-  created_at:       string
+  session_type: SessionType
+  scheduled_at: string        // ISO datetime
+  status: InterviewStatus
+  score: number | null
+  created_at: string
   // denormalised joins
-  candidate_name:   string | null
-  candidate_id:     string | null
-  job_title:        string | null
+  candidate_name: string | null
+  candidate_id: string | null
+  job_title: string | null
 }
 
 export interface InterviewStats {
-  scheduled:  number
-  completed:  number
-  avg_score:  number
-  no_shows:   number
+  scheduled: number
+  completed: number
+  avg_score: number
+  no_shows: number
 }
 
 export interface CreateInterviewPayload {
-  application_id:   string
+  application_id: string
   interviewer_name: string
-  session_type:     SessionType
-  scheduled_at:     string        // ISO datetime string
-  status?:          InterviewStatus
-  score?:           number | null
+  session_type: SessionType
+  scheduled_at: string        // ISO datetime string
+  status?: InterviewStatus
+  score?: number | null
 }
 
 export interface UpdateInterviewPayload {
-  status?:          InterviewStatus
-  score?:           number
+  status?: InterviewStatus
+  score?: number
   interviewer_name?: string
-  session_type?:    SessionType
-  scheduled_at?:    string
+  session_type?: SessionType
+  scheduled_at?: string
 }
 
 export const interviewsApi = {
@@ -740,38 +732,38 @@ export type ChannelStatus = "active" | "warning" | "inactive" | "standby" | "cri
 export type MessageStatus = "sent" | "pending" | "failed"
 
 export interface ApiChannel {
-  id:              string
-  name:            string
-  type:            string
+  id: string
+  name: string
+  type: string
   channel_id_code: string
-  status:          ChannelStatus
-  sent_volume:     number
-  delivered_pct:   number
+  status: ChannelStatus
+  sent_volume: number
+  delivered_pct: number
 }
 
 export interface ApiMessage {
-  id:             string
-  candidate_id:   string
-  channel_id:     string
-  subject:        string | null
-  body:           string
-  status:         MessageStatus
-  sent_at:        string | null
+  id: string
+  candidate_id: string
+  channel_id: string
+  subject: string | null
+  body: string
+  status: MessageStatus
+  sent_at: string | null
   candidate_name: string | null
 }
 
 export interface MessageStats {
-  sent_today:      number
-  pending_count:   number
-  response_rate:   number
+  sent_today: number
+  pending_count: number
+  response_rate: number
   scheduled_sends: number
 }
 
 export interface SendMessagePayload {
   candidate_id: string
-  channel_id:   string
-  subject?:     string
-  body:         string
+  channel_id: string
+  subject?: string
+  body: string
 }
 
 export const communicationsApi = {
@@ -782,7 +774,7 @@ export const communicationsApi = {
   listMessages: (params?: { candidate_id?: string; channel_id?: string }) => {
     const qs = new URLSearchParams()
     if (params?.candidate_id) qs.set("candidate_id", params.candidate_id)
-    if (params?.channel_id)   qs.set("channel_id",   params.channel_id)
+    if (params?.channel_id) qs.set("channel_id", params.channel_id)
     const query = qs.toString() ? `?${qs.toString()}` : ""
     return api.get<ApiMessage[]>(`/api/communications/messages${query}`)
   },
@@ -797,37 +789,37 @@ export const communicationsApi = {
 // ── Analytics API ─────────────────────────────────────────────────────────────
 
 export interface TimeToHirePoint {
-  month:    string
+  month: string
   avg_days: number
 }
 
 export interface SourceHire {
-  name:       string
-  count:      number
+  name: string
+  count: number
   percentage: number
-  color:      string
+  color: string
 }
 
 export interface DeptRow {
-  department:  string
-  applied:     number
+  department: string
+  applied: number
   interviewed: number
-  hired:       number
-  conversion:  number
+  hired: number
+  conversion: number
 }
 
 export interface ScoreBucket {
-  label:     string
-  rank:      string
-  count:     number
+  label: string
+  rank: string
+  count: number
   range_min: number
   range_max: number
 }
 
 export interface AnalyticsSummary {
-  time_to_hire:       TimeToHirePoint[]
-  source_of_hire:     SourceHire[]
-  dept_pipeline:      DeptRow[]
+  time_to_hire: TimeToHirePoint[]
+  source_of_hire: SourceHire[]
+  dept_pipeline: DeptRow[]
   score_distribution: ScoreBucket[]
 }
 
@@ -870,30 +862,30 @@ export const analyticsApi = {
 // ── Settings API ──────────────────────────────────────────────────────────────
 
 export interface ApiAIWeights {
-  skills:     number
+  skills: number
   experience: number
-  education:  number
-  projects:   number
+  education: number
+  projects: number
 }
 
 export interface ApiShortlistThreshold {
-  value:            number  // score >= this → auto-shortlist
+  value: number  // score >= this → auto-shortlist
   borderline_floor: number  // score < this → auto-reject
 }
 
 export interface ApiNotificationPrefs {
-  email:   boolean
-  slack:   boolean
-  push:    boolean
+  email: boolean
+  slack: boolean
+  push: boolean
   ai_flag: boolean
 }
 
 export interface ApiIntegrations {
   linkedin: boolean
-  naukri:   boolean
-  indeed:   boolean
-  slack:    boolean
-  email:    boolean
+  naukri: boolean
+  indeed: boolean
+  slack: boolean
+  email: boolean
 }
 
 export const settingsApi = {
@@ -961,46 +953,46 @@ export const settingsApi = {
 // ── Assignments API ───────────────────────────────────────────────────────────
 
 export interface ApiAssignment {
-  id:                    string
-  application_id:        string
-  title:                 string
-  description:           string
-  requirements:          string | null
+  id: string
+  application_id: string
+  title: string
+  description: string
+  requirements: string | null
   deliverables_required?: string[] | null
-  submission_data?:       Record<string, string> | null
-  submission_url:        string | null
-  submission_text:       string | null
-  submission_type?:      string
-  status:                "pending" | "submitted" | "reviewed" | "approved" | "rejected"
-  ai_evaluation:         {
-    score:           number
-    overall_score?:  number
-    criteria?:       {
+  submission_data?: Record<string, string> | null
+  submission_url: string | null
+  submission_text: string | null
+  submission_type?: string
+  status: "pending" | "submitted" | "reviewed" | "approved" | "rejected"
+  ai_evaluation: {
+    score: number
+    overall_score?: number
+    criteria?: {
       architecture?: number
-      correctness?:  number
+      correctness?: number
       code_quality?: number
-      documentation?:number
+      documentation?: number
     }
-    confidence?:     number
-    strengths:       string[]
-    weaknesses:      string[]
-    concerns?:       string[]
+    confidence?: number
+    strengths: string[]
+    weaknesses: string[]
+    concerns?: string[]
     missing_requirements?: string[]
-    recommendation:  string
+    recommendation: string
     technical_depth?: number
-    creativity?:     number
-    completeness?:   number
-    communication?:  number
+    creativity?: number
+    completeness?: number
+    communication?: number
   } | null
-  score:                 number | null
-  deadline:              string | null
-  created_at:            string
+  score: number | null
+  deadline: string | null
+  created_at: string
 }
 
 export interface AssignmentEvalResult {
-  assignment_id:         string
-  score:                 number
-  evaluation:            ApiAssignment["ai_evaluation"]
+  assignment_id: string
+  score: number
+  evaluation: ApiAssignment["ai_evaluation"]
   advanced_to_tech_round: boolean
 }
 
@@ -1099,7 +1091,7 @@ export const assignmentsApi = {
         submission_url: payload.submission_url || "",
         status: "submitted"
       }
-      
+
       const { data: asgn } = await supabase
         .from("assignments")
         .update(updateData)
@@ -1133,17 +1125,17 @@ export const assignmentsApi = {
 // ── Pipeline API ──────────────────────────────────────────────────────────────
 
 export interface PipelineHistory {
-  application_id:      string
-  candidate_name:      string
-  job_title:           string
-  current_stage:       string
-  ai_score:            number | null
-  match_quality:       string | null
-  flagged:             boolean
-  applied_date:        string | null
-  stages:              { stage: string; index: number; status: string }[]
-  activity_history:    { actor_name: string; action: string; context_label: string; log_type: string; created_at: string }[]
-  assignments:         ApiAssignment[]
+  application_id: string
+  candidate_name: string
+  job_title: string
+  current_stage: string
+  ai_score: number | null
+  match_quality: string | null
+  flagged: boolean
+  applied_date: string | null
+  stages: { stage: string; index: number; status: string }[]
+  activity_history: { actor_name: string; action: string; context_label: string; log_type: string; created_at: string }[]
+  assignments: ApiAssignment[]
   ai_interview_rounds: unknown[]
   final_recommendation: unknown | null
 }
@@ -1267,9 +1259,9 @@ export type RoundType = "tech" | "interview" | "speaking" | "hr" | "project"
 export type RoundStatus = "not_started" | "in_progress" | "completed"
 
 export interface TranscriptEntry {
-  role:         "ai" | "candidate"
-  message:      string
-  timestamp:    string
+  role: "ai" | "candidate"
+  message: string
+  timestamp: string
   answer_score?: number
   suspected_copy_paste?: boolean
   copy_paste_risk_score?: number
@@ -1283,32 +1275,32 @@ export interface TranscriptEntry {
 }
 
 export interface ApiAIRound {
-  id:              string
-  application_id:  string
-  round_type:      RoundType
-  transcript:      TranscriptEntry[]
-  status:          RoundStatus
-  ai_score:        number | null
-  ai_summary:      string | null
-  strengths:       string[] | null
-  concerns:        string[] | null
-  started_at:      string | null
-  completed_at:    string | null
-  created_at:      string
+  id: string
+  application_id: string
+  round_type: RoundType
+  transcript: TranscriptEntry[]
+  status: RoundStatus
+  ai_score: number | null
+  ai_summary: string | null
+  strengths: string[] | null
+  concerns: string[] | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
   // Reprocessing tracking fields
   requires_ai_reprocessing?: boolean
-  ai_review_completed?:     boolean
-  evaluation_status?:       string
-  evaluation_engine?:       string
-  evaluation_model?:        string
-  evaluation_version?:      number
-  retry_count?:             number
-  last_retry_at?:           string | null
-  reviewed_at?:             string | null
-  resume_integrity_score?:  number | null
-  probe_questions?:         string[] | null
-  compact_offline_data?:    any
-  browser_strike_count?:    number
+  ai_review_completed?: boolean
+  evaluation_status?: string
+  evaluation_engine?: string
+  evaluation_model?: string
+  evaluation_version?: number
+  retry_count?: number
+  last_retry_at?: string | null
+  reviewed_at?: string | null
+  resume_integrity_score?: number | null
+  probe_questions?: string[] | null
+  compact_offline_data?: any
+  browser_strike_count?: number
   speaking_eval?: {
     structure?: number;
     confidence?: number;
@@ -1321,20 +1313,20 @@ export interface ApiAIRound {
 }
 
 export interface StartRoundResponse {
-  round:          ApiAIRound
+  round: ApiAIRound
   first_question: string
-  message:        string
-  resumed:        boolean
+  message: string
+  resumed: boolean
 }
 
 export interface RespondResponse {
-  type:                      "question" | "complete"
-  message:                   string
-  answer_score:              number
-  exchange_number?:          number
-  round_complete:            boolean
-  summary?:                  { ai_score: number; ai_summary: string; strengths: string[]; concerns: string[] }
-  auto_started_next_round?:  RoundType | null
+  type: "question" | "complete"
+  message: string
+  answer_score: number
+  exchange_number?: number
+  round_complete: boolean
+  summary?: { ai_score: number; ai_summary: string; strengths: string[]; concerns: string[] }
+  auto_started_next_round?: RoundType | null
 }
 
 export const aiRoundsApi = {
@@ -1377,17 +1369,17 @@ export const aiRoundsApi = {
 export type RecommendationLevel = "strongly_recommended" | "recommended" | "consider" | "not_recommended"
 
 export interface ApiFinalRecommendation {
-  id:               string
-  application_id:   string
-  resume_score:     number | null
+  id: string
+  application_id: string
+  resume_score: number | null
   assignment_score: number | null
-  tech_score:       number | null
-  interview_score:  number | null
-  hr_score:         number | null
-  final_score:      number | null
-  recommendation:   RecommendationLevel
-  reasoning:        string | null
-  created_at:       string
+  tech_score: number | null
+  interview_score: number | null
+  hr_score: number | null
+  final_score: number | null
+  recommendation: RecommendationLevel
+  reasoning: string | null
+  created_at: string
 }
 
 export const recommendationApi = {
@@ -1407,30 +1399,30 @@ export const recommendationApi = {
 // ── Dashboard API ─────────────────────────────────────────────────────────────
 
 export interface DashboardStats {
-  total_jobs:       number
-  active_jobs:      number
+  total_jobs: number
+  active_jobs: number
   total_candidates: number
-  shortlisted:      number
-  in_interview:     number
-  offers_sent:      number
-  hired:            number
+  shortlisted: number
+  in_interview: number
+  offers_sent: number
+  hired: number
   funnel: {
-    applied:   number
-    screened:  number
+    applied: number
+    screened: number
     interview: number
-    offered:   number
-    hired:     number
-    rejected:  number
+    offered: number
+    hired: number
+    rejected: number
   }
 }
 
 export interface ActivityLogEntry {
-  id:            string
-  actor_name:    string
-  action:        string
+  id: string
+  actor_name: string
+  action: string
   context_label: string | null
-  log_type:      "info" | "success" | "warning" | "error"
-  created_at:    string
+  log_type: "info" | "success" | "warning" | "error"
+  created_at: string
 }
 
 export const dashboardApi = {
@@ -1495,21 +1487,21 @@ export const dashboardApi = {
 // ── Candidate Portal Token API ────────────────────────────────────────────────
 
 export interface PortalTokenResponse {
-  token:      string
-  url:        string
+  token: string
+  url: string
   expires_at: string
-  token_id:   string
+  token_id: string
 }
 
 export interface PortalToken {
-  id:             string
-  candidate_id:   string
+  id: string
+  candidate_id: string
   application_id: string
-  token:          string
-  round_type:     RoundType
-  used:           boolean
-  expires_at:     string
-  created_at:     string
+  token: string
+  round_type: RoundType
+  used: boolean
+  expires_at: string
+  created_at: string
 }
 
 export const portalApi = {
@@ -1666,7 +1658,7 @@ export const recruiterCopilotApi = {
         skill_data: {},
         confidence_score: geminiRes.success ? 98 : 90,
         confidence_reason: geminiRes.success ? `Live Gemini 2.0 Flash Response (${geminiRes.modelUsed})` : "Local AI Fallback Engine",
-        sources: ["gemini-2.0-flash", "pipeline"],
+        sources: ["gemini-3.6-flash", "pipeline"],
         follow_up_chips: ["/morning-brief", "Show top candidates", "Compare candidates"]
       }
     }

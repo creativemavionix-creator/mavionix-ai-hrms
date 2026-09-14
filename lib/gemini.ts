@@ -6,11 +6,15 @@ export async function generateGeminiChatResponse(payload: {
 }): Promise<{ text: string; success: boolean; modelUsed: string }> {
   try {
     const userApiKey = typeof window !== "undefined" ? localStorage.getItem("hiremind_gemini_api_key") || "" : ""
+    const token = typeof window !== "undefined"
+      ? localStorage.getItem("hiremind_recruiter_token") || localStorage.getItem("hiremind_token")
+      : null
 
     const res = await fetch("/api/gemini/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         ...(userApiKey ? { "x-gemini-api-key": userApiKey } : {})
       },
       body: JSON.stringify({

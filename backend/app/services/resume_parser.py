@@ -112,24 +112,24 @@ def _extract_json(text: str) -> Any:
     raise ValueError(f"Could not parse JSON from LLM response:\n{text[:300]}")
 
 
-GEMINI_KEY = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
-
 def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     """Call Gemini or DeepSeek chat completion and return the text response."""
+    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     # Try Gemini first
-    try:
-        import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
-        resp = httpx.post(
-            url,
-            json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-            timeout=15.0,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as exc:
-        logger.warning("Gemini API call failed, trying DeepSeek: %s", exc)
+    if gemini_key:
+        try:
+            import httpx
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={gemini_key}"
+            resp = httpx.post(
+                url,
+                json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
+                timeout=15.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as exc:
+            logger.warning("Gemini API call failed, trying DeepSeek: %s", exc)
 
     # Fallback to DeepSeek
     client = _get_client()
@@ -277,25 +277,28 @@ async def generate_screening_insights(
 # ── Combined entry point ──────────────────────────────────────────────────────
 
 async def parse_and_score(
-    file_bytes: bytes,
+    file_bytes: bytes | str,
     job_title: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Full pipeline: extract PDF → parse → score → insights.
     Falls back to mock if DeepSeek is unavailable or PDF can't be read.
     """
-    try:
-        text = extract_text_from_pdf(file_bytes)
-    except ValueError as exc:
-        logger.warning("PDF extraction failed, using raw bytes as text: %s", exc)
-        # Try to decode as plain text (might be a text-based resume)
-        text = file_bytes.decode("utf-8", errors="ignore")[:5000]
-        if len(text.strip()) < 20:
-            # Not enough content — use mock directly
-            logger.warning("Not enough content for LLM, using mock scoring")
-            parsed = _mock_parse("No resume text available")
-            scored = _mock_score(parsed, job_title)
-            return parsed, scored
+    if isinstance(file_bytes, str):
+        text = file_bytes
+    else:
+        try:
+            text = extract_text_from_pdf(file_bytes)
+        except ValueError as exc:
+            logger.warning("PDF extraction failed, using raw bytes as text: %s", exc)
+            # Try to decode as plain text (might be a text-based resume)
+            text = file_bytes.decode("utf-8", errors="ignore")[:5000]
+            if len(text.strip()) < 20:
+                # Not enough content — use mock directly
+                logger.warning("Not enough content for LLM, using mock scoring")
+                parsed = _mock_parse("No resume text available")
+                scored = _mock_score(parsed, job_title)
+                return parsed, scored
 
     try:
         parsed = await parse_resume(text)

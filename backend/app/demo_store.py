@@ -63,10 +63,25 @@ _SETTINGS_SEED = [
 # STORE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class MockAuth:
+    """Mock auth client for DemoStore matching Supabase client.auth interface."""
+
+    def get_user(self, token: str):
+        class MockUser:
+            id = "00000000-0000-0000-0000-000000000000"
+            email = "admin@hiremind.test"
+
+        class MockRes:
+            user = MockUser()
+
+        return MockRes()
+
+
 class DemoStore:
     """In-memory & disk-backed data store with table-based access."""
 
     def __init__(self):
+        self.auth = MockAuth()
         self.file_path = path.join(path.dirname(__file__), "demo_store.json")
         self.tables: dict[str, list[dict[str, Any]]] = {
             "users": [

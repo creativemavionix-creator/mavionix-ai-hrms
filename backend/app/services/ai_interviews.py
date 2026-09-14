@@ -75,11 +75,11 @@ def _record_fallback_metric(job_title: str, round_type: str, exchange_count: int
 
 MAX_EXCHANGES = 6  # 6 exchanges per round
 
-GEMINI_KEY = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
-
-
 def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    if not gemini_key:
+        raise RuntimeError("Gemini API key is not configured")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={gemini_key}"
     resp = httpx.post(
         url,
         json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},

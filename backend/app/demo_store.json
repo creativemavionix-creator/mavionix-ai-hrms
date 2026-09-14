@@ -182,6 +182,25 @@
       "flagged": false,
       "id": "e5fdc106-d683-4de7-91e8-2af1e8dffb42",
       "created_at": "2026-08-03T17:21:44.160109+00:00"
+    },
+    {
+      "application_id": "test-app-id",
+      "verification_status": "verified",
+      "skill_score": 50,
+      "exp_score": 0,
+      "edu_score": 0,
+      "proj_score": 0,
+      "confidence": 45,
+      "sentiment_score": 60,
+      "insights": "This candidate is a poor fit (overall score: 18) due to an incomplete profile missing all work experience and education history. Despite possessing relevant backend skills in Python and FastAPI, they cannot be recommended.",
+      "tags": [
+        "Python",
+        "FastAPI",
+        "TypeScript",
+        "Backend"
+      ],
+      "id": "cc05f52d-03ad-415d-a3a8-7dbeff5be50b",
+      "created_at": "2026-09-14T12:45:53.759337+00:00"
     }
   ],
   "interviews": [],

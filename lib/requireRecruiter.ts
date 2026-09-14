@@ -38,6 +38,16 @@ export async function requireRecruiter(request: Request): Promise<AuthCheckResul
     }
   }
 
+  if (token === "demo-token") {
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
+    if (isDemoAllowed) {
+      return {
+        authorized: true,
+        user: { id: "00000000-0000-0000-0000-000000000000", email: "hr.recruiter@hiremind.ai", role: "recruiter" }
+      }
+    }
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 

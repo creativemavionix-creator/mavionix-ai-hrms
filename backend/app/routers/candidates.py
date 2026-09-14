@@ -575,14 +575,13 @@ async def process_application_async(
         combined_text = f"Statement of Intent: {body.statementOfIntent}\nSkills: {body.skills}\nResume Content:\n{body.resumeText}"
         
         # Calculate AI score and breakdown
-        parse_result = parse_and_score(
-            resume_text=combined_text,
-            job_title="Candidate Requisition",
-            job_description=body.statementOfIntent or "Technical role"
+        parsed_data, scoring = await parse_and_score(
+            combined_text,
+            job_title="Candidate Requisition"
         )
 
-        ai_score = parse_result.get("overall_score", 85)
-        match_quality = "excellent" if ai_score >= 90 else "strong" if ai_score >= 80 else "good" if ai_score >= 70 else "fair"
+        ai_score = scoring.get("overall_score", 85)
+        match_quality = scoring.get("match_quality") or ("excellent" if ai_score >= 85 else "strong" if ai_score >= 70 else "good" if ai_score >= 55 else "fair" if ai_score >= 40 else "low")
 
         # Update applications table in Supabase
         if body.applicationId:
@@ -595,26 +594,26 @@ async def process_application_async(
             report_payload = {
                 "application_id": body.applicationId,
                 "verification_status": "verified",
-                "skill_score": parse_result.get("scores", {}).get("skills", 90),
-                "exp_score": parse_result.get("scores", {}).get("experience", 85),
-                "edu_score": parse_result.get("scores", {}).get("education", 88),
-                "proj_score": parse_result.get("scores", {}).get("projects", 90),
-                "confidence": 94,
-                "sentiment_score": 90,
-                "insights": parse_result.get("summary", "Candidate profile successfully processed and parsed."),
-                "tags": parse_result.get("extracted_skills", ["TypeScript", "React", "Node.js"])
+                "skill_score": scoring.get("skills_score", 85),
+                "exp_score": scoring.get("experience_score", 80),
+                "edu_score": scoring.get("education_score", 85),
+                "proj_score": scoring.get("projects_score", 85),
+                "confidence": scoring.get("confidence", 90),
+                "sentiment_score": scoring.get("sentiment_score", 85),
+                "insights": scoring.get("insights") or parsed_data.get("summary", "Candidate profile successfully processed and parsed."),
+                "tags": parsed_data.get("tags") or ["TypeScript", "React", "Node.js"]
             }
             try:
                 supabase.table("ai_reports").upsert(report_payload, on_conflict="application_id").execute()
             except Exception as report_err:
-                logger.warn(f"ai_reports upsert warning: {report_err}")
+                logger.warning(f"ai_reports upsert warning: {report_err}")
 
         return {
             "status": "success",
             "application_id": body.applicationId,
             "ai_score": ai_score,
             "match_quality": match_quality,
-            "parsed_data": parse_result
+            "parsed_data": parsed_data
         }
     except Exception as err:
         logger.error(f"Error in process_application_async: {err}")

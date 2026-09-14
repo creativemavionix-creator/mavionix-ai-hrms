@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { requireRecruiter } from "@/lib/requireRecruiter"
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -22,9 +21,39 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRecruiter(request)
-  if (!auth.authorized) {
-    return auth.response!
+  const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return NextResponse.json(
+      { error: "Unauthorized", detail: "Missing or malformed Authorization header." },
+      { status: 401 }
+    )
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim()
+  if (!token) {
+    return NextResponse.json(
+      { error: "Unauthorized", detail: "Empty access token." },
+      { status: 401 }
+    )
+  }
+
+  const isDemoMode = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
+  if (token !== "demo-token" || !isDemoMode) {
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token)
+      if (userError || !userData?.user) {
+        return NextResponse.json(
+          { error: "Unauthorized", detail: "Invalid or expired access token." },
+          { status: 401 }
+        )
+      }
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: "Unauthorized", detail: err?.message || "Token verification failed." },
+        { status: 401 }
+      )
+    }
   }
 
   try {

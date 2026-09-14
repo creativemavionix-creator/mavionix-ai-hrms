@@ -40,7 +40,6 @@ async function runAsyncAiScoring(
     // Upsert AI report to public.ai_reports table
     const { error: rError } = await supabase.from("ai_reports").upsert({
       application_id: applicationId,
-      candidate_id: candidateId,
       skill_score: aiAnalysis.skill_score,
       exp_score: aiAnalysis.exp_score,
       edu_score: aiAnalysis.edu_score,

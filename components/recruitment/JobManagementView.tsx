@@ -34,7 +34,7 @@ function StatCards({ stats, loading }: { stats: JobStats | null; loading: boolea
     loading ? (
       <div className="w-12 h-8 bg-white/5 rounded-xl animate-pulse mt-2" />
     ) : (
-      <p className="stat-number text-3xl mt-2">{n ?? "â€“"}</p>
+      <p className="stat-number text-3xl mt-2">{n ?? "–"}</p>
     )
 
   return (
@@ -547,7 +547,7 @@ export default function JobManagementView() {
       <Card className="glass-card border-white/[0.04] rounded-2xl shadow-lg overflow-hidden">
         <CardHeader className="p-6 pb-3 border-b border-white/[0.05] flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-bold text-neutral-400 tracking-widest uppercase">
-            ACTIVE REQUISITIONS ({loadingJobs ? "â€¦" : jobs.length})
+            ACTIVE REQUISITIONS ({loadingJobs ? "..." : jobs.length})
           </CardTitle>
           <button onClick={() => fetchJobs(statusFilter, searchTerm)}
             className="p-1 text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">

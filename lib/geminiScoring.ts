@@ -42,7 +42,7 @@ export async function analyzeCandidateResume(input: CandidateScoringInput): Prom
     try {
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         generationConfig: { responseMimeType: "application/json" },
         systemInstruction: `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
 Your task is to analyze candidate resumes and technical evaluation responses for engineering roles.
@@ -107,10 +107,10 @@ Evaluate the candidate's resume and responses thoroughly. Return valid JSON matc
 
 
       const skill_score = clamp(json.skill_score, 82)
-      const exp_score   = clamp(json.exp_score, 80)
-      const edu_score   = clamp(json.edu_score, 78)
-      const proj_score  = clamp(json.proj_score, 85)
-      const confidence  = clamp(json.confidence, 88)
+      const exp_score = clamp(json.exp_score, 80)
+      const edu_score = clamp(json.edu_score, 78)
+      const proj_score = clamp(json.proj_score, 85)
+      const confidence = clamp(json.confidence, 88)
       const sentiment_score = clamp(json.sentiment_score, 85)
 
       const overall_score = Math.round(
@@ -143,10 +143,10 @@ Evaluate the candidate's resume and responses thoroughly. Return valid JSON matc
   keywords.forEach(kw => { if (lower.includes(kw)) scoreBoost += 2.5 })
 
   const skill_score = clamp(70 + scoreBoost, 85)
-  const exp_score   = clamp(68 + (input.yearsExp?.includes("10") ? 20 : input.yearsExp?.includes("6") ? 15 : 10), 80)
-  const edu_score   = clamp(75 + (lower.includes("bachelor") || lower.includes("master") || lower.includes("bs") || lower.includes("computer science") ? 12 : 5), 78)
-  const proj_score  = clamp(72 + (input.technicalImpact ? 15 : 5), 82)
-  const confidence  = clamp(80 + (resume.length > 200 ? 10 : 0), 88)
+  const exp_score = clamp(68 + (input.yearsExp?.includes("10") ? 20 : input.yearsExp?.includes("6") ? 15 : 10), 80)
+  const edu_score = clamp(75 + (lower.includes("bachelor") || lower.includes("master") || lower.includes("bs") || lower.includes("computer science") ? 12 : 5), 78)
+  const proj_score = clamp(72 + (input.technicalImpact ? 15 : 5), 82)
+  const confidence = clamp(80 + (resume.length > 200 ? 10 : 0), 88)
   const sentiment_score = clamp(82, 85)
 
   const overall_score = Math.round(
