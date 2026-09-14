@@ -39,6 +39,15 @@ export function calculateIntegrityScore(
         score -= 5
         deductions.push(`-5 pts: Minor camera absence (${evt.duration}s)`)
       }
+    } else if (evt.type === "multiple_faces") {
+      score -= 15
+      deductions.push(`-15 pts: Multiple people detected in camera frame`)
+    } else if (evt.type === "looking_away") {
+      score -= 5
+      deductions.push(`-5 pts: Looking away from interview screen`)
+    } else if (evt.type === "face_occluded") {
+      score -= 10
+      deductions.push(`-10 pts: Face obstructed or covered`)
     } else if (evt.type === "tab_switch") {
       score -= 15
       deductions.push(`-15 pts: Browser tab switch (${evt.duration}s)`)

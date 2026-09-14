@@ -202,9 +202,24 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
               if (next >= 3) setIsLockout(true)
               return next
             })
-            const evt = createNormalizedEvent("camera_absence", "strike", duration, {
+
+            // Distinguish specific strike violation type
+            let eventType: "multiple_faces" | "looking_away" | "face_occluded" | "camera_absence" = "camera_absence"
+            let details = `Camera strike issued (5s continuous absence)`
+            if (res.payload.isMultipleFaces || res.payload.absenceReason === "multiple_faces") {
+              eventType = "multiple_faces"
+              details = `Multiple people (${res.payload.faceCount}) detected in camera frame`
+            } else if (res.payload.isLookingAway || res.payload.absenceReason === "looking_away") {
+              eventType = "looking_away"
+              details = `Candidate looked away from screen for prolonged duration`
+            } else if (res.payload.isFaceCovered || res.payload.absenceReason === "face_covered") {
+              eventType = "face_occluded"
+              details = `Face obstructed or covered from camera`
+            }
+
+            const evt = createNormalizedEvent(eventType, "strike", duration, {
               confidence: res.confidence,
-              details: `Camera strike issued (5s continuous absence)`,
+              details,
             })
             setEvents((prev) => [...prev, evt])
           }
@@ -314,6 +329,8 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
     engineState,
     absenceSeconds,
     countdownSeconds,
+    absenceReason: cameraResult?.payload.absenceReason || "none",
+    isMultipleFaces: cameraResult?.payload.isMultipleFaces || false,
     cameraStrikes,
     tabStrikes,
     isLockout,

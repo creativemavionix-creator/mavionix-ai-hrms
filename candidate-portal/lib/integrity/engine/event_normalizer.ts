@@ -1,5 +1,8 @@
 export type SecurityEventType =
   | "camera_absence"
+  | "multiple_faces"
+  | "looking_away"
+  | "face_occluded"
   | "tab_switch"
   | "mic_disconnected"
   | "network_loss"

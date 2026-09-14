@@ -484,6 +484,47 @@ function InterviewContent() {
     }
   }, [state, roundId, session, browserStrikes])
 
+  // Track camera strikes in real time and report to backend
+  const lastCameraStrikesRef = useRef(0)
+  useEffect(() => {
+    if (state !== "ready" || !roundId || !session) return
+    const currentStrikes = cameraPresence.cameraStrikes
+    if (currentStrikes > lastCameraStrikesRef.current) {
+      lastCameraStrikesRef.current = currentStrikes
+
+      fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "report_strike",
+          applicationId: session.applicationId,
+          roundId,
+          roundType: session.roundType,
+          strikes: currentStrikes,
+          jobTitle: session.jobTitle,
+          token: session.token,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (currentStrikes >= 3 || data.round_complete || data.type === "complete") {
+            if (data.summary) {
+              setCompleteSummary(data.summary)
+            }
+            setState("complete")
+            if (timerRef.current) clearInterval(timerRef.current)
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to report camera strike:", err)
+          if (currentStrikes >= 3) {
+            setState("complete")
+            if (timerRef.current) clearInterval(timerRef.current)
+          }
+        })
+    }
+  }, [cameraPresence.cameraStrikes, state, roundId, session])
+
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
     const sec = s % 60
@@ -1403,6 +1444,8 @@ function InterviewContent() {
         micHealthy={cameraPresence.micResult?.healthy ?? true}
         netHealthy={cameraPresence.netResult?.healthy ?? true}
         guidanceHint={cameraPresence.guidance.hint}
+        isMultipleFaces={cameraPresence.isMultipleFaces}
+        absenceReason={cameraPresence.absenceReason}
       />
 
       {/* ── Live Picture-in-Picture WebCam Self-Preview Widget (Bottom Right) ── */}
@@ -1415,17 +1458,33 @@ function InterviewContent() {
           confidence={cameraPresence.cameraResult?.confidence ?? 0.95}
           landmarks={cameraPresence.cameraResult?.payload.landmarksCount ?? 468}
           hint={cameraPresence.guidance.hint}
+          faceCount={cameraPresence.cameraResult?.payload.faceCount ?? 1}
+          isLookingAway={cameraPresence.cameraResult?.payload.isLookingAway ?? false}
+          isHeadTurnedSideways={cameraPresence.cameraResult?.payload.isHeadTurnedSideways ?? false}
+          isMultipleFaces={cameraPresence.cameraResult?.payload.isMultipleFaces ?? false}
+          isFaceCovered={cameraPresence.cameraResult?.payload.isFaceCovered ?? false}
+          absenceReason={cameraPresence.cameraResult?.payload.absenceReason ?? "none"}
         />
       )}
 
       {/* 3s-15s Soft Yellow Banner */}
       {cameraPresence.engineState === "WARNING" && (
-        <div className="bg-amber-500/20 border-b border-amber-500/40 text-amber-400 px-6 py-2 text-lg  flex items-center justify-between animate-pulse">
+        <div className="bg-amber-500/20 border-b border-amber-500/40 text-amber-400 px-6 py-2 text-xs flex items-center justify-between animate-pulse font-mono">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>WE CAN&apos;T SEE YOU IN CAMERA FRAME. PLEASE RETURN TO YOUR SEAT TO AVOID CAMERA STRIKES.</span>
+            <span className="font-semibold uppercase tracking-wide">
+              {cameraPresence.cameraResult?.payload.isMultipleFaces
+                ? "MULTIPLE PEOPLE DETECTED IN CAMERA FRAME. ONLY CANDIDATE PERMITTED."
+                : cameraPresence.cameraResult?.payload.isLookingAway
+                ? "LOOKING AWAY FROM SCREEN. PLEASE MAINTAIN FOCUS ON THE INTERVIEW."
+                : cameraPresence.cameraResult?.payload.isHeadTurnedSideways
+                ? "HEAD TURNED SIDEWAYS. PLEASE FACE THE CAMERA DIRECTLY."
+                : cameraPresence.cameraResult?.payload.isFaceCovered
+                ? "FACE PARTIALLY COVERED. PLEASE KEEP YOUR FACE VISIBLE."
+                : "WE CAN'T SEE YOU IN CAMERA FRAME. PLEASE RETURN TO YOUR SEAT TO AVOID CAMERA STRIKES."}
+            </span>
           </div>
-          <span className="font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 border border-amber-500/40">
+          <span className="font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 border border-amber-500/40 rounded-full text-[10px]">
             STRIKE IN: {cameraPresence.countdownSeconds}s
           </span>
         </div>
@@ -1829,6 +1888,12 @@ function InterviewContent() {
           confidence={cameraPresence.cameraResult?.confidence ?? 0.95}
           landmarks={cameraPresence.cameraResult?.payload.landmarksCount ?? 468}
           hint={cameraPresence.guidance.hint}
+          faceCount={cameraPresence.cameraResult?.payload.faceCount ?? 1}
+          isLookingAway={cameraPresence.cameraResult?.payload.isLookingAway ?? false}
+          isHeadTurnedSideways={cameraPresence.cameraResult?.payload.isHeadTurnedSideways ?? false}
+          isMultipleFaces={cameraPresence.cameraResult?.payload.isMultipleFaces ?? false}
+          isFaceCovered={cameraPresence.cameraResult?.payload.isFaceCovered ?? false}
+          absenceReason={cameraPresence.cameraResult?.payload.absenceReason ?? "none"}
         />
       )}
     </div>

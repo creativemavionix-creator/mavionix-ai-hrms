@@ -43,9 +43,13 @@ export function initMediaPipeEngine() {
             mlProcessingTimeoutId = null
           }
 
-          const found = results.detections && results.detections.length > 0
-          if (found && results.detections[0]) {
-            const det = results.detections[0]
+          const detections = results.detections || []
+          const count = detections.length
+          const isMultipleFaces = count > 1
+          const found = count > 0
+
+          if (found && detections[0]) {
+            const det = detections[0]
             const landmarks = det.landmarks || []
 
             const leftEye = landmarks[0]
@@ -85,8 +89,27 @@ export function initMediaPipeEngine() {
 
             // 2. Occlusion Guard
             const isFaceCovered = det.score ? det.score[0] < 0.40 : false
+
+            // Determine specific reason if unverified
+            let absenceReason: CameraPayload["absenceReason"] = "none"
+            if (isMultipleFaces) {
+              absenceReason = "multiple_faces"
+            } else if (isFaceCovered) {
+              absenceReason = "face_covered"
+            } else if (isHeadTurnedSideways) {
+              absenceReason = "head_turned"
+            } else if (isLookingAway) {
+              absenceReason = "looking_away"
+            }
+
+            // A face is healthy & verified only if:
+            // - single face (not multiple people)
+            // - forward & visible
+            // - not looking away
+            // - not head turned
+            // - not covered
             const isFaceForwardAndVisible =
-              hasEyesAndNose && !isLookingAway && !isHeadTurnedSideways && !isFaceCovered
+              hasEyesAndNose && !isLookingAway && !isHeadTurnedSideways && !isFaceCovered && !isMultipleFaces
 
             const bbox = det.boundingBox
               ? {
@@ -107,6 +130,12 @@ export function initMediaPipeEngine() {
               brightness: 65,
               faceAreaPct,
               skinRatio: 0.2,
+              faceCount: count,
+              isLookingAway,
+              isHeadTurnedSideways,
+              isMultipleFaces,
+              isFaceCovered,
+              absenceReason,
             }
           } else {
             // ZERO FACES DETECTED BY AI NEURAL NETWORK
@@ -117,6 +146,12 @@ export function initMediaPipeEngine() {
               brightness: 65,
               faceAreaPct: 0,
               skinRatio: 0,
+              faceCount: 0,
+              isLookingAway: false,
+              isHeadTurnedSideways: false,
+              isMultipleFaces: false,
+              isFaceCovered: false,
+              absenceReason: "no_face",
             }
           }
         })
@@ -140,7 +175,20 @@ export function processCameraFrame(
       healthy: false,
       confidence: 0,
       timestamp: now,
-      payload: { faceDetected: false, confidence: 0, landmarksCount: 0, brightness: 0, faceAreaPct: 0, skinRatio: 0 },
+      payload: {
+        faceDetected: false,
+        confidence: 0,
+        landmarksCount: 0,
+        brightness: 0,
+        faceAreaPct: 0,
+        skinRatio: 0,
+        faceCount: 0,
+        isLookingAway: false,
+        isHeadTurnedSideways: false,
+        isMultipleFaces: false,
+        isFaceCovered: false,
+        absenceReason: "no_face",
+      },
     }
   }
 
@@ -151,7 +199,20 @@ export function processCameraFrame(
       healthy: false,
       confidence: 0,
       timestamp: now,
-      payload: { faceDetected: false, confidence: 0, landmarksCount: 0, brightness: 0, faceAreaPct: 0, skinRatio: 0 },
+      payload: {
+        faceDetected: false,
+        confidence: 0,
+        landmarksCount: 0,
+        brightness: 0,
+        faceAreaPct: 0,
+        skinRatio: 0,
+        faceCount: 0,
+        isLookingAway: false,
+        isHeadTurnedSideways: false,
+        isMultipleFaces: false,
+        isFaceCovered: false,
+        absenceReason: "no_face",
+      },
     }
   }
 
@@ -190,6 +251,12 @@ export function processCameraFrame(
         brightness: Math.round(avgLum),
         faceAreaPct: 0,
         skinRatio: 0,
+        faceCount: 0,
+        isLookingAway: false,
+        isHeadTurnedSideways: false,
+        isMultipleFaces: false,
+        isFaceCovered: false,
+        absenceReason: "low_lighting",
       },
     }
   }
@@ -208,21 +275,21 @@ export function processCameraFrame(
     }
 
     if (lastMlResultPayload !== null) {
+      // MediaPipe ML model is authoritative — do not override faceDetected with ambient room luminance
       return {
         detector: "camera",
-        healthy: lastMlResultPayload.faceDetected || avgLum >= 20,
+        healthy: lastMlResultPayload.faceDetected,
         confidence: lastMlResultPayload.confidence || 0.95,
         timestamp: now,
         payload: {
           ...lastMlResultPayload,
-          faceDetected: lastMlResultPayload.faceDetected || avgLum >= 20,
           brightness: Math.round(avgLum),
         },
       }
     }
   }
 
-  // Fallback: If WebCam is active & brightness is adequate, auto-verify face so candidate is never blocked
+  // Fallback: Initial warmup while neural model downloads
   const isVideoActive = video.readyState >= 2 && avgLum >= 18
   return {
     detector: "camera",
@@ -236,6 +303,12 @@ export function processCameraFrame(
       brightness: Math.round(avgLum),
       faceAreaPct: isVideoActive ? 0.25 : 0,
       skinRatio: 0.2,
+      faceCount: isVideoActive ? 1 : 0,
+      isLookingAway: false,
+      isHeadTurnedSideways: false,
+      isMultipleFaces: false,
+      isFaceCovered: false,
+      absenceReason: isVideoActive ? "none" : "no_face",
     },
   }
 }

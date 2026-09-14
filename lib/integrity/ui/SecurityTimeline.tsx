@@ -30,6 +30,14 @@ export default function SecurityTimeline({ events = [] }: SecurityTimelineProps)
           },
           {
             id: "evt-2",
+            type: "looking_away",
+            severity: "info",
+            started_at: "14:10:45",
+            duration: 3,
+            metadata: { details: "Gaze deviation sideways from interview screen" },
+          },
+          {
+            id: "evt-3",
             type: "tab_switch",
             severity: "warning",
             started_at: "14:18:05",
@@ -65,7 +73,7 @@ export default function SecurityTimeline({ events = [] }: SecurityTimelineProps)
                   <span>{evt.started_at}</span>
                 </td>
                 <td className="p-2 border border-[var(--hm-border-subtle)] font-bold uppercase text-[#ff6b1a]">
-                  {evt.type.replace("_", " ")}
+                  {evt.type.replace(/_/g, " ")}
                 </td>
                 <td className="p-2 border border-[var(--hm-border-subtle)] font-bold uppercase">
                   <span

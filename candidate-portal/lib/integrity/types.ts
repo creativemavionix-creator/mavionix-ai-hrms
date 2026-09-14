@@ -25,6 +25,12 @@ export interface CameraPayload {
   brightness: number
   faceAreaPct: number
   skinRatio: number
+  faceCount: number
+  isLookingAway: boolean
+  isHeadTurnedSideways: boolean
+  isMultipleFaces: boolean
+  isFaceCovered: boolean
+  absenceReason?: "none" | "no_face" | "looking_away" | "head_turned" | "multiple_faces" | "face_covered" | "low_lighting"
 }
 
 export interface MicPayload {

@@ -14,7 +14,7 @@ export function evaluateGuidance(
   rolling?: RollingProfile | null
 ): GuidanceResult {
   // 1. Dark / Covered Lens
-  if (camera.brightness < 18) {
+  if (camera.brightness < 18 || camera.absenceReason === "low_lighting") {
     return {
       hint: "Improve front lighting — camera lens is dark or covered",
       actionNeeded: "improve_lighting",
@@ -22,10 +22,46 @@ export function evaluateGuidance(
     }
   }
 
-  // 2. Face Missing
-  if (!camera.faceDetected) {
+  // 2. Multiple Faces Detected
+  if (camera.isMultipleFaces || camera.faceCount > 1) {
     return {
-      hint: "Look directly at your screen & do not cover your face",
+      hint: `Multiple people (${camera.faceCount}) detected in camera — only candidate permitted`,
+      actionNeeded: "reposition",
+      lightingStatus: "optimal",
+    }
+  }
+
+  // 3. Face Missing
+  if (!camera.faceDetected && (camera.absenceReason === "no_face" || camera.faceCount === 0)) {
+    return {
+      hint: "No face detected — look directly at your screen and remain in camera frame",
+      actionNeeded: "reposition",
+      lightingStatus: "optimal",
+    }
+  }
+
+  // 4. Looking Away
+  if (camera.isLookingAway || camera.absenceReason === "looking_away") {
+    return {
+      hint: "Looking away detected — maintain eye contact with the interview screen",
+      actionNeeded: "reposition",
+      lightingStatus: "optimal",
+    }
+  }
+
+  // 5. Head Turned Sideways
+  if (camera.isHeadTurnedSideways || camera.absenceReason === "head_turned") {
+    return {
+      hint: "Head turned sideways — please face your camera directly",
+      actionNeeded: "center_face",
+      lightingStatus: "optimal",
+    }
+  }
+
+  // 6. Face Occluded / Covered
+  if (camera.isFaceCovered || camera.absenceReason === "face_covered") {
+    return {
+      hint: "Face partially covered — please uncover your face",
       actionNeeded: "reposition",
       lightingStatus: "optimal",
     }

@@ -5,7 +5,7 @@ import { Shield, AlertTriangle, Video, Mic, ExternalLink, Activity, CheckCircle,
 export interface SecurityEventItem {
   id: string
   timestamp: string
-  type: "camera_absence" | "tab_switch" | "mic_disconnection" | "portal_refresh"
+  type: "camera_absence" | "multiple_faces" | "looking_away" | "face_occluded" | "tab_switch" | "mic_disconnection" | "portal_refresh"
   reason: string
   duration_sec: number
   confidence?: number
@@ -57,6 +57,15 @@ export default function SecurityTimelineWidget({
     },
     {
       id: "ev-2",
+      timestamp: "14:10:45",
+      type: "looking_away",
+      reason: "gaze_deviation",
+      duration_sec: 3,
+      confidence: 0.96,
+      details: "Gaze deviated sideways from screen",
+    },
+    {
+      id: "ev-3",
       timestamp: "14:18:05",
       type: "tab_switch",
       reason: "window_blur",
@@ -150,8 +159,18 @@ export default function SecurityTimelineWidget({
                       <Clock className="w-3.5 h-3.5 text-neutral-500" />
                       <span>{evt.timestamp}</span>
                     </td>
-                    <td className="p-3 font-extrabold uppercase text-signal font-display">
-                      {evt.type.replace(/_/g, " ")}
+                    <td className="p-3 font-extrabold uppercase font-display">
+                      <span className={`px-2 py-0.5 rounded text-[8.5px] border ${
+                        evt.type === "multiple_faces"
+                          ? "bg-red-500/15 border-red-500/30 text-red-400"
+                          : evt.type === "looking_away" || evt.type === "face_occluded"
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                          : evt.type === "camera_absence"
+                          ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                          : "bg-signal/10 border-signal/20 text-signal"
+                      }`}>
+                        {evt.type.replace(/_/g, " ")}
+                      </span>
                     </td>
                     <td className="p-3 text-neutral-700 dark:text-neutral-300 font-semibold uppercase tracking-wider text-[9px]">
                       {evt.reason}
