@@ -109,12 +109,18 @@ async function request<T>(
 
   const data = await res.json().catch(() => ({ detail: res.statusText }))
   if (!res.ok) {
-    const message =
-      typeof data?.detail === "string"
-        ? data.detail
-        : Array.isArray(data?.detail)
-          ? data.detail.map((e: { msg: string }) => e.msg).join(", ")
-          : "An unexpected error occurred."
+    let message = "An unexpected error occurred."
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      message = data.detail
+    } else if (Array.isArray(data?.detail)) {
+      message = data.detail.map((e: any) => (typeof e === "string" ? e : e?.msg || JSON.stringify(e))).join(", ")
+    } else if (typeof data?.error === "string" && data.error.trim()) {
+      message = data.error
+    } else if (typeof data?.message === "string" && data.message.trim()) {
+      message = data.message
+    } else if (res.statusText) {
+      message = `HTTP ${res.status}: ${res.statusText}`
+    }
     throw new Error(message)
   }
   return data as T

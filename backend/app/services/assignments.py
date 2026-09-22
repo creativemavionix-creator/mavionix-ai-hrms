@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from app.config import settings
@@ -24,6 +26,58 @@ ASSIGNMENT_ADVANCE_THRESHOLD = 70  # score >= this → auto-advance to tech_roun
 
 def _client() -> OpenAI:
     return OpenAI(api_key=settings.deepseek_api_key, base_url="https://api.deepseek.com")
+
+
+def _call_gemini(system_prompt: str, user_prompt: str) -> str:
+    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    if not gemini_key:
+        raise RuntimeError("Gemini API key is not configured")
+    for model in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"):
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+            resp = httpx.post(
+                url,
+                json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
+                timeout=12.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates and "content" in candidates[0]:
+                    parts = candidates[0]["content"].get("parts", [])
+                    if parts and "text" in parts[0]:
+                        return parts[0]["text"]
+        except Exception as exc:
+            logger.warning("Gemini (%s) in assignments failed: %s", model, exc)
+    raise RuntimeError("All Gemini model endpoints failed or timed out")
+
+
+def _call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 1000) -> str:
+    """Call Gemini first, falling back to DeepSeek."""
+    if settings.gemini_api_key or os.getenv("GEMINI_API_KEY"):
+        try:
+            return _call_gemini(system_prompt, user_prompt)
+        except Exception as exc:
+            logger.warning("Gemini failed in assignments, attempting DeepSeek fallback: %s", exc)
+
+    if settings.deepseek_api_key:
+        try:
+            client = _client()
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content or ""
+        except Exception as exc:
+            logger.warning("DeepSeek failed in assignments: %s", exc)
+            raise exc
+
+    raise RuntimeError("No LLM service available")
 
 
 def _extract_json(raw: str) -> dict:
@@ -85,22 +139,17 @@ async def generate_assignment(
     role_category = _get_role_category(job_title, department)
 
     try:
-        client = _client()
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are an expert technical hiring manager. Return only valid JSON."},
-                {"role": "user", "content": _GENERATE_PROMPT.format(
-                    role_category=role_category,
-                    job_title=job_title,
-                    department=department,
-                    job_description=job_description or "Not provided",
-                )},
-            ],
+        raw = _call_llm(
+            system_prompt="You are an expert technical hiring manager. Return only valid JSON.",
+            user_prompt=_GENERATE_PROMPT.format(
+                role_category=role_category,
+                job_title=job_title,
+                department=department,
+                job_description=job_description or "Not provided",
+            ),
             temperature=0.7,
             max_tokens=1000,
         )
-        raw = response.choices[0].message.content or ""
         result = _extract_json(raw)
         return result
     except Exception as exc:
@@ -164,7 +213,6 @@ async def evaluate_submission(
         submission = "[No submission content provided - candidate submitted blank/short response]"
 
     try:
-        client = _client()
         prompt_content = _EVALUATE_PROMPT.format(
             title=title,
             description=description,
@@ -174,16 +222,12 @@ async def evaluate_submission(
         if role_blueprint:
             prompt_content += f"\n\nRole Evaluation Focus Criteria:\n{json.dumps(role_blueprint)}"
 
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are a rigorous but fair technical reviewer. Return only valid JSON."},
-                {"role": "user", "content": prompt_content},
-            ],
+        raw = _call_llm(
+            system_prompt="You are a rigorous but fair technical reviewer. Return only valid JSON.",
+            user_prompt=prompt_content,
             temperature=0.3,
             max_tokens=800,
         )
-        raw = response.choices[0].message.content or ""
         result = _extract_json(raw)
 
         # Normalize structure

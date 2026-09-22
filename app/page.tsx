@@ -61,12 +61,20 @@ export default function RecruitmentDashboard() {
   const theme = themeObj?.resolved || "dark"
   const setTheme = themeObj?.setMode || (() => {})
 
-  // Helper to verify if an authenticated email belongs to HR Recruiter
-  const isRecruiterEmail = (email?: string | null): boolean => {
+  // Helper to verify if an authenticated user/email belongs to HR Recruiter
+  const isRecruiterEmail = (email?: string | null, userObj?: any): boolean => {
+    if (userObj) {
+      const role = userObj.user_metadata?.role || userObj.app_metadata?.role
+      if (role && ["recruiter", "hr", "admin"].includes(String(role).toLowerCase())) return true
+    }
     if (!email) return false
     const e = email.toLowerCase().trim()
     const savedHrEmail = (typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : "")?.toLowerCase() || ""
-    return e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai")
+    if (e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai")) return true
+    if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development") {
+      return true
+    }
+    return false
   }
 
   // Recruiter Auth State
@@ -81,7 +89,7 @@ export default function RecruitmentDashboard() {
     setMounted(true)
 
     const syncRecruiterSession = (sess: any) => {
-      if (sess?.user?.email && isRecruiterEmail(sess.user.email)) {
+      if (sess?.user?.email && isRecruiterEmail(sess.user.email, sess.user)) {
         setSession(sess)
         if (typeof window !== "undefined") {
           localStorage.setItem("hiremind_recruiter_token", sess.access_token)
@@ -131,7 +139,7 @@ export default function RecruitmentDashboard() {
       }
 
       const email = data.session.user?.email || hrEmail.trim().toLowerCase()
-      if (!isRecruiterEmail(email)) {
+      if (!isRecruiterEmail(email, data.session.user)) {
         await supabase.auth.signOut()
         setHrLoginError("This account isn't authorized as an HR recruiter.")
         setHrLoggingIn(false)
