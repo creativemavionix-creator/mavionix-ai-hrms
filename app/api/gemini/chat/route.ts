@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"
     const systemInstruction = body.systemInstruction || "You are HireMind AI assistant."
-    const modelName = body.modelName || "gemini-3.6-flash"
+    const requestedModel = body.modelName || "gemini-3.5-flash"
     const history = body.history || []
     const userApiKey = req.headers.get("x-gemini-api-key")
 
@@ -28,29 +28,50 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction
-    })
+    const modelsToTry = [requestedModel]
+    if (!modelsToTry.includes("gemini-3.5-flash")) modelsToTry.push("gemini-3.5-flash")
+    if (!modelsToTry.includes("gemini-flash-latest")) modelsToTry.push("gemini-flash-latest")
 
     let responseText = ""
-    if (Array.isArray(history) && history.length > 0) {
-      const formattedHistory = history.map((h: any) => ({
-        role: h.role === "model" ? "model" : "user",
-        parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
-      }))
-      const chat = model.startChat({ history: formattedHistory })
-      const result = await chat.sendMessage(prompt)
-      responseText = result.response.text()
-    } else {
-      const result = await model.generateContent(prompt)
-      responseText = result.response.text()
+    let successfulModel = requestedModel
+    let lastError: any = null
+
+    for (const modelToUse of modelsToTry) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelToUse,
+          systemInstruction
+        })
+
+        if (Array.isArray(history) && history.length > 0) {
+          const formattedHistory = history.map((h: any) => ({
+            role: h.role === "model" ? "model" : "user",
+            parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
+          }))
+          const chat = model.startChat({ history: formattedHistory })
+          const result = await chat.sendMessage(prompt)
+          responseText = result.response.text()
+        } else {
+          const result = await model.generateContent(prompt)
+          responseText = result.response.text()
+        }
+
+        successfulModel = modelToUse
+        break
+      } catch (err: any) {
+        lastError = err
+        console.warn(`Gemini model ${modelToUse} failed:`, err?.message || err)
+      }
+    }
+
+    if (!responseText && lastError) {
+      throw lastError
     }
 
     return NextResponse.json({
       text: responseText,
       success: true,
-      modelUsed: modelName
+      modelUsed: successfulModel
     })
   } catch (err: any) {
     console.error("Server Gemini API Route Error:", err)

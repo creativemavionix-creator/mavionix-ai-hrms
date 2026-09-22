@@ -15,19 +15,26 @@ const deepseekKey = process.env.DEEPSEEK_API_KEY || ""
 
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!geminiKey) throw new Error("No Gemini key")
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }]
-    })
-  })
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`)
-  const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-  if (!text.trim()) throw new Error("Empty response")
-  return text
+  for (const model of ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }]
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
+        if (text.trim()) return text
+      }
+    } catch {
+      // try next model
+    }
+  }
+  throw new Error("All Gemini model endpoints failed")
 }
 
 async function callDeepSeek(systemPrompt: string, userPrompt: string): Promise<string> {

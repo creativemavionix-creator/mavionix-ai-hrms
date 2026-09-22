@@ -79,16 +79,24 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
     gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={gemini_key}"
-    resp = httpx.post(
-        url,
-        json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
-        timeout=8.0,
-    )
-    if resp.status_code == 200:
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:100]}")
+    for model in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"):
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+            resp = httpx.post(
+                url,
+                json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates and "content" in candidates[0]:
+                    parts = candidates[0]["content"].get("parts", [])
+                    if parts and "text" in parts[0]:
+                        return parts[0]["text"]
+        except Exception as exc:
+            logger.warning("Gemini (%s) failed: %s", model, exc)
+    raise RuntimeError("All Gemini model endpoints failed or timed out")
 
 
 def _client() -> Any:
