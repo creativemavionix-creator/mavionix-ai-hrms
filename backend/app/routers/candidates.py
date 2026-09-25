@@ -19,8 +19,10 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
+import httpx
 
 from app.auth import get_current_user, require_internal_or_hr, require_role
+from app.config import settings
 from app.database import get_user_client, supabase
 from app.schemas.applications import ApplicationCreate, ApplicationRead, ApplicationUpdate
 from app.schemas.candidates import (
@@ -440,9 +442,9 @@ async def grant_portal_access(candidate_id: str, user: HRStaffDep):
     email_id = None
     email_error = None
 
+    portal_url = settings.portal_base_url or "http://localhost:3001"
     if resend_api_key and resend_api_key.strip():
         try:
-            import requests
             resend_payload = {
                 "from": "HireMind AI <onboarding@resend.dev>",
                 "to": [email],
@@ -453,7 +455,7 @@ async def grant_portal_access(candidate_id: str, user: HRStaffDep):
                     <p style="color: #334155; font-size: 14px;">Hello <strong>{name}</strong>,</p>
                     <p style="color: #334155; font-size: 14px;">Your candidate application has been reviewed by HR and granted portal access!</p>
                     <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8b5cf6;">
-                        <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Portal Link:</strong> <a href="http://127.0.0.1:3000" style="color: #7c3aed; font-weight: bold;">http://127.0.0.1:3000</a></p>
+                        <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Portal Link:</strong> <a href="{portal_url}" style="color: #7c3aed; font-weight: bold;">{portal_url}</a></p>
                         <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Login Email:</strong> {email}</p>
                         <p style="margin: 6px 0; color: #1e293b; font-size: 13px;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: monospace; color: #0f172a;">{generated_password}</code></p>
                     </div>
@@ -463,14 +465,14 @@ async def grant_portal_access(candidate_id: str, user: HRStaffDep):
                 </div>
                 """
             }
-            r = requests.post(
+            r = httpx.post(
                 "https://api.resend.com/emails",
                 headers={
                     "Authorization": f"Bearer {resend_api_key.strip()}",
                     "Content-Type": "application/json"
                 },
                 json=resend_payload,
-                timeout=10
+                timeout=10.0
             )
             res_data = r.json() if r.content else {}
             if r.status_code in (200, 201) and "id" in res_data:

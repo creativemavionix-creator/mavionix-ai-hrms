@@ -25,9 +25,10 @@ async function runAsyncAiScoring(
 ) {
   try {
     const supabase = getSupabase()
+    const resolvedTitle = body.jobTitle || body.job_title || (body.jobId && !body.jobId.includes("-") ? body.jobId : "Senior Backend Engineer")
     const aiAnalysis = await analyzeCandidateResume({
       name: (body.name || "").trim(),
-      jobTitle: body.jobId || "Senior Backend Engineer",
+      jobTitle: resolvedTitle,
       resumeText: body.resumeText || "",
       statementOfIntent: body.statementOfIntent || "",
       technicalImpact: body.technicalImpact || "",

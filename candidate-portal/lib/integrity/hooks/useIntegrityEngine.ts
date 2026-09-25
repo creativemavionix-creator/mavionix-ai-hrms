@@ -155,6 +155,16 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
     setIsCameraActive(false)
   }, [])
 
+  // Ensure camera and microphone tracks are stopped when component unmounts
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+    }
+  }, [])
+
   // 1. Core Camera Frame Loop (Runs every 150ms)
   useEffect(() => {
     if (!isEnabled || !isCameraActive) return

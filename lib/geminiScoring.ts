@@ -51,7 +51,7 @@ export async function analyzeCandidateResume(input: CandidateScoringInput): Prom
         "gemini-flash-latest"
       ]
 
-      const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
+      const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator.
 Your task is to analyze candidate resumes and technical evaluation responses for engineering roles.
 Compute objective 0-100 scores based strictly on the provided resume content, technical depth, and role alignment.
 Return ONLY valid JSON matching this schema:

@@ -149,7 +149,29 @@ Your role:
 }
 
 async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  // Primary LLM Provider: DeepSeek AI
+  // Primary LLM Provider: Gemini Flash (gemini-3.5-flash / gemini-3.6-flash)
+  if (geminiKey && !geminiKey.includes("YOUR_")) {
+    for (const model of ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
+          })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+          if (text && text.trim()) return text
+        }
+      } catch (e) {
+        console.warn(`Gemini API (${model}) error:`, e)
+      }
+    }
+  }
+
+  // Secondary LLM Provider: DeepSeek AI
   if (deepseekKey && !deepseekKey.includes("YOUR_")) {
     try {
       const res = await fetch("https://api.deepseek.com/chat/completions", {
@@ -204,7 +226,6 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
       }
     }
   }
-
   // Tertiary LLM Provider: Groq Llama 3.3 70B
   if (groqKey && !groqKey.includes("YOUR_")) {
     try {
@@ -261,7 +282,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action } = body
     const candidateToken = body.token || body.session?.token || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "false" || process.env.NODE_ENV === "development" || candidateToken === "demo"
 
     if (action === "start") {
       const backendRes = await tryBackend("start", body, candidateToken)

@@ -117,7 +117,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     # Try Gemini first
     if gemini_key:
-        candidate_models = [
+        candidate_models = (
             "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
             "gemini-3.6-flash",
@@ -125,7 +125,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
             "gemma-4-26b-a4b-it",
             "gemini-flash-lite-latest",
             "gemini-flash-latest",
-        ]
+        )
         import httpx
         for cur_model in candidate_models:
             try:
@@ -133,13 +133,14 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
                 resp = httpx.post(
                     url,
                     json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-                    timeout=10.0,
+                    timeout=12.0,
+                    verify=False,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
+                    if candidates and "content" in candidates[0]:
+                        parts = candidates[0]["content"].get("parts", [])
                         non_thought = [p["text"] for p in parts if not p.get("thought") and "text" in p]
                         clean_text = "".join(non_thought).strip()
                         if clean_text:

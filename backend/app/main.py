@@ -31,6 +31,28 @@ from app.routers.recruiter_copilot import router as recruiter_copilot_router
 
 # candidates router also serves /api/applications/{id} — no separate router needed
 
+from contextlib import asynccontextmanager
+import logging
+
+logger = logging.getLogger("hiremind.security")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for application startup and shutdown."""
+    if settings.demo_mode:
+        logger.warning(
+            "WARNING: FastAPI backend is running in DEMO_MODE. Authentication is bypassed for local development testing. DO NOT USE IN PRODUCTION."
+        )
+    else:
+        try:
+            from app.services.resume_parser import reload_weights_from_db
+            reload_weights_from_db()
+        except Exception:
+            pass
+    yield
+
+
 app = FastAPI(
     title="HireMind AI – Recruitment API",
     description=(
@@ -40,6 +62,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # ── Global Error Standardization Handler ──────────────────────────────────────
@@ -82,25 +105,6 @@ app.include_router(candidate_portal_router)
 app.include_router(support_router)
 app.include_router(recruiter_copilot_router)
 
-
-import logging
-
-logger = logging.getLogger("hiremind.security")
-
-
-@app.on_event("startup")
-async def on_startup():
-    """Load dynamic scoring weights from the settings table on boot."""
-    if settings.demo_mode:
-        logger.warning(
-            "WARNING: FastAPI backend is running in DEMO_MODE. Authentication is bypassed for local development testing. DO NOT USE IN PRODUCTION."
-        )
-        return  # No external DB to read from in demo mode
-    try:
-        from app.services.resume_parser import reload_weights_from_db
-        reload_weights_from_db()
-    except Exception:
-        pass
 
 
 
