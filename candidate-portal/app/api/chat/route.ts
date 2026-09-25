@@ -172,23 +172,36 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
     }
   }
 
-  // Secondary LLM Provider: Gemini 2.0 Flash
+  // Secondary LLM Provider: Gemini
   if (geminiKey && !geminiKey.includes("YOUR_")) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
+    const candidateModels = [
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.8-flash",
+      "gemma-4-26b-a4b-it",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest"
+    ]
+    for (const curModel of candidateModels) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${geminiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
+          })
         })
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-        if (text && text.trim()) return text
+        if (res.ok) {
+          const data = await res.json()
+          const parts = data.candidates?.[0]?.content?.parts || []
+          const nonThought = parts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text).join("").trim()
+          const text = nonThought || parts[0]?.text
+          if (text && text.trim()) return text.trim()
+        }
+      } catch (e) {
+        console.warn(`Gemini model ${curModel} error:`, e)
       }
-    } catch (e) {
-      console.warn("Gemini API error:", e)
     }
   }
 
@@ -218,11 +231,16 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
 }
 
 function extractJSON(raw: string): any {
-  const cleaned = raw.replace(/```(?:json)?/g, "").replace(/```/g, "").trim()
-  try { return JSON.parse(cleaned) } catch { /* fall through */ }
-  const match = cleaned.match(/\{[\s\S]*\}/)
-  if (match) { try { return JSON.parse(match[0]) } catch { /* fall through */ } }
-  return {}
+  const cleaned = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    if (match) {
+      return JSON.parse(match[0])
+    }
+  }
+  throw new Error(`Could not parse JSON from response: ${raw.slice(0, 150)}`)
 }
 
 function isGibberish(message: string): boolean {
@@ -251,8 +269,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(backendRes.data)
       }
 
-      // If backend responded with an HTTP status code (401, 403, 404, 410, 422, 500), forward it immediately
-      if (backendRes.status > 0 && backendRes.status !== 502) {
+      // If backend responded with an HTTP status code, forward it immediately unless in demo mode
+      if (backendRes.status > 0 && backendRes.status !== 502 && candidateToken !== "demo" && !isDemoAllowed) {
         return NextResponse.json(
           { error: backendRes.error || "Backend request failed" },
           { status: backendRes.status }
@@ -311,7 +329,7 @@ export async function POST(req: NextRequest) {
       if (backendRes.ok && backendRes.data) {
         return NextResponse.json(backendRes.data)
       }
-      if (backendRes.status > 0 && backendRes.status !== 502) {
+      if (backendRes.status > 0 && backendRes.status !== 502 && candidateToken !== "demo" && !isDemoAllowed) {
         return NextResponse.json(
           { error: backendRes.error || "Strike reporting failed" },
           { status: backendRes.status }
@@ -332,7 +350,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(backendRes.data)
       }
 
-      if (backendRes.status > 0 && backendRes.status !== 502) {
+      if (backendRes.status > 0 && backendRes.status !== 502 && candidateToken !== "demo" && !isDemoAllowed) {
         return NextResponse.json(
           { error: backendRes.error || "Response evaluation failed" },
           { status: backendRes.status }

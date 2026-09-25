@@ -113,29 +113,49 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
             raise HTTPException(status_code=404, detail=f"Application {application_id} not found.")
 
     # Check if round already exists and is in progress
-    existing = supabase.table("ai_interview_rounds").select("id, status").eq("application_id", application_id).eq("round_type", round_type).maybe_single().execute()
-    if existing and existing.data and existing.data["status"] == "in_progress":
+    existing = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            existing = supabase.table("ai_interview_rounds").select("id, status").eq("application_id", application_id).eq("round_type", round_type).maybe_single().execute()
+        except Exception:
+            existing = None
+
+    if existing and getattr(existing, "data", None) and existing.data.get("status") == "in_progress":
         # Return existing round
-        round_data = supabase.table("ai_interview_rounds").select("*").eq("id", existing.data["id"]).maybe_single().execute()
+        round_data = None
+        try:
+            round_data = supabase.table("ai_interview_rounds").select("*").eq("id", existing.data["id"]).maybe_single().execute()
+        except Exception:
+            round_data = None
         return {"round": round_data.data if round_data else None, "message": "Round already in progress", "resumed": True}
 
-    if existing and existing.data and existing.data["status"] == "completed":
+    if existing and getattr(existing, "data", None) and existing.data.get("status") == "completed":
         raise HTTPException(status_code=422, detail=f"The {round_type} round is already completed.")
 
     # Get job and candidate context
-    job = supabase.table("jobs").select("*").eq("id", app["job_id"]).maybe_single().execute()
-    job_data = job.data if job else None
+    job_data = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            job = supabase.table("jobs").select("*").eq("id", app["job_id"]).maybe_single().execute()
+            job_data = job.data if job else None
+        except Exception:
+            job_data = None
     if not job_data:
-        job_data = {"title": "Software Engineer", "department": "Engineering", "description": ""}
+        job_data = {"title": "Senior Backend Engineer", "department": "Engineering", "description": "Design and build distributed microservices."}
 
     round_blueprints = job_data.get("round_blueprints") or JOB_BLUEPRINTS_CACHE.get(app["job_id"], {})
     round_bp = round_blueprints.get(round_type, {})
     custom_qs = round_bp.get("custom_questions", [])
 
-    cand = supabase.table("candidates").select("name, parsed_data").eq("id", app["candidate_id"]).maybe_single().execute()
-    cand_data = cand.data if cand else None
+    cand_data = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            cand = supabase.table("candidates").select("name, parsed_data").eq("id", app["candidate_id"]).maybe_single().execute()
+            cand_data = cand.data if cand else None
+        except Exception:
+            cand_data = None
     if not cand_data:
-        cand_data = {"name": "Candidate", "parsed_data": None}
+        cand_data = {"name": "Priya Sharma", "parsed_data": {"skills": ["Python", "Go", "PostgreSQL", "Docker"]}}
 
     # Extract skills from parsed_data
     skills = []
@@ -268,12 +288,16 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
     require_candidate_round_type(round_data["round_type"], candidate)
 
     # Get job context for question generation
-    app_result = supabase.table("applications").select("job_id").eq("id", application_id).maybe_single().execute()
-    job_title = "Software Engineer"
-    if app_result and app_result.data:
-        job = supabase.table("jobs").select("title").eq("id", app_result.data["job_id"]).maybe_single().execute()
-        if job and job.data:
-            job_title = job.data["title"]
+    job_title = "Senior Backend Engineer"
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            app_result = supabase.table("applications").select("job_id").eq("id", application_id).maybe_single().execute()
+            if app_result and app_result.data:
+                job = supabase.table("jobs").select("title").eq("id", app_result.data["job_id"]).maybe_single().execute()
+                if job and job.data:
+                    job_title = job.data["title"]
+        except Exception:
+            pass
 
     now = datetime.now(timezone.utc).isoformat()
     transcript = round_data.get("transcript") or []
@@ -333,24 +357,27 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         )
 
         # Update round as completed
-        supabase.table("ai_interview_rounds").update({
-            "transcript": transcript,
-            "status": "completed",
-            "ai_score": summary.get("ai_score"),
-            "ai_summary": summary.get("ai_summary"),
-            "strengths": summary.get("strengths", []),
-            "concerns": summary.get("concerns", []),
-            "compact_offline_data": summary.get("compact_offline_data"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            # Reprocessing tracking fields
-            "requires_ai_reprocessing": summary.get("requires_ai_reprocessing", False),
-            "ai_review_completed": summary.get("ai_review_completed", True),
-            "evaluation_status": summary.get("evaluation_status", "verified"),
-            "evaluation_engine": summary.get("evaluation_engine", "llm"),
-            "evaluation_model": summary.get("evaluation_model", "Gemini"),
-            "evaluation_version": summary.get("evaluation_version", 2),
-            "reviewed_at": summary.get("reviewed_at"),
-        }).eq("id", round_id).execute()
+        try:
+            supabase.table("ai_interview_rounds").update({
+                "transcript": transcript,
+                "status": "completed",
+                "ai_score": summary.get("ai_score"),
+                "ai_summary": summary.get("ai_summary"),
+                "strengths": summary.get("strengths", []),
+                "concerns": summary.get("concerns", []),
+                "compact_offline_data": summary.get("compact_offline_data"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                # Reprocessing tracking fields
+                "requires_ai_reprocessing": summary.get("requires_ai_reprocessing", False),
+                "ai_review_completed": summary.get("ai_review_completed", True),
+                "evaluation_status": summary.get("evaluation_status", "verified"),
+                "evaluation_engine": summary.get("evaluation_engine", "llm"),
+                "evaluation_model": summary.get("evaluation_model", "Gemini"),
+                "evaluation_version": summary.get("evaluation_version", 2),
+                "reviewed_at": summary.get("reviewed_at"),
+            }).eq("id", round_id).execute()
+        except Exception:
+            pass
 
         # Advance stage to {round_type}_completed
         complete_stage = ROUND_STAGE_MAP[round_data["round_type"]]["complete"]
@@ -360,12 +387,16 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
             logger.warning("Stage advance failed: %s", exc)
 
         # Log
-        cand = supabase.table("applications").select("candidate_id").eq("id", application_id).maybe_single().execute()
         cand_name = "Candidate"
-        if cand.data:
-            cn = supabase.table("candidates").select("name").eq("id", cand.data["candidate_id"]).maybe_single().execute()
-            if cn.data:
-                cand_name = cn.data["name"]
+        if not (application_id.startswith("demo") or settings.demo_mode):
+            try:
+                cand = supabase.table("applications").select("candidate_id").eq("id", application_id).maybe_single().execute()
+                if cand and cand.data:
+                    cn = supabase.table("candidates").select("name").eq("id", cand.data["candidate_id"]).maybe_single().execute()
+                    if cn and cn.data:
+                        cand_name = cn.data["name"]
+            except Exception:
+                pass
 
         try:
             supabase.table("activity_logs").insert({

@@ -25,9 +25,17 @@ export async function generateGeminiChatResponse(payload: {
       })
     })
 
-    if (res.ok) {
-      const data = await res.json()
+    const data = await res.json().catch(() => null)
+    if (res.ok && data) {
       return data
+    }
+
+    if (data && (data.text || data.detail || data.error)) {
+      return {
+        text: data.text || data.detail || data.error,
+        success: false,
+        modelUsed: data.modelUsed || "error"
+      }
     }
   } catch (err) {
     console.error("Gemini API Client Call Error:", err)

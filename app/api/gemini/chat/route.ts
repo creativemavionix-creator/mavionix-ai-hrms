@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"
     const systemInstruction = body.systemInstruction || "You are HireMind AI assistant."
-    const modelName = body.modelName || "gemini-3.6-flash"
+    const modelName = body.modelName || "gemini-3.5-flash"
     const history = body.history || []
     const userApiKey = req.headers.get("x-gemini-api-key")
 
@@ -28,29 +28,80 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction
-    })
+    const candidateModels = Array.from(new Set([
+      modelName,
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.8-flash",
+      "gemma-4-26b-a4b-it",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest"
+    ]))
 
     let responseText = ""
-    if (Array.isArray(history) && history.length > 0) {
-      const formattedHistory = history.map((h: any) => ({
-        role: h.role === "model" ? "model" : "user",
-        parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
-      }))
-      const chat = model.startChat({ history: formattedHistory })
-      const result = await chat.sendMessage(prompt)
-      responseText = result.response.text()
-    } else {
-      const result = await model.generateContent(prompt)
-      responseText = result.response.text()
+    let resolvedModel = modelName
+    let lastError: any = null
+
+    for (const curModel of candidateModels) {
+      try {
+        const isGemma = curModel.startsWith("gemma")
+        const modelConfig = isGemma
+          ? { model: curModel }
+          : { model: curModel, systemInstruction }
+
+        const model = genAI.getGenerativeModel(modelConfig)
+
+        // Prepend system instruction for Gemma models as they don't accept systemInstruction config
+        const effectivePrompt = isGemma && systemInstruction
+          ? `System Context: ${systemInstruction}\n\nRecruiter Query: ${prompt}`
+          : prompt
+
+        // Apply a per-model timeout to avoid hanging when Google servers experience queue delays
+        const result = await Promise.race([
+          (async () => {
+            if (Array.isArray(history) && history.length > 0 && !isGemma) {
+              const formattedHistory = history.map((h: any) => ({
+                role: h.role === "model" ? "model" : "user",
+                parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
+              }))
+              const chat = model.startChat({ history: formattedHistory })
+              return await chat.sendMessage(effectivePrompt)
+            } else {
+              return await model.generateContent(effectivePrompt)
+            }
+          })(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Model ${curModel} timed out`)), isGemma ? 30000 : 15000)
+          )
+        ])
+
+        const candidate = result.response.candidates?.[0]
+        const nonThoughtParts = candidate?.content?.parts?.filter((p: any) => !p.thought && p.text)
+        if (nonThoughtParts && nonThoughtParts.length > 0) {
+          responseText = nonThoughtParts.map((p: any) => p.text).join("").trim()
+        } else {
+          responseText = result.response.text()?.trim() || ""
+        }
+
+        if (responseText) {
+          resolvedModel = curModel
+          break
+        }
+      } catch (err: any) {
+        lastError = err
+        console.warn(`Model ${curModel} failed (${err.status || err.message}), attempting fallback...`)
+      }
+    }
+
+    if (!responseText && lastError) {
+      throw lastError
     }
 
     return NextResponse.json({
       text: responseText,
       success: true,
-      modelUsed: modelName
+      modelUsed: resolvedModel
     })
   } catch (err: any) {
     console.error("Server Gemini API Route Error:", err)

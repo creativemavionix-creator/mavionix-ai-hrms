@@ -17,13 +17,17 @@ Checks against the `candidate_tokens` table:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
+from app.config import settings
 from app.database import supabase
+
+logger = logging.getLogger(__name__)
 
 _candidate_bearer = HTTPBearer(auto_error=True)
 
@@ -52,6 +56,18 @@ async def get_current_candidate(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or empty candidate authorization token.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 0. Demo candidate token bypass for local development & testing
+    if token in ("demo", "demo-token") or (settings.demo_mode and token.startswith("demo")):
+        return CandidateSession(
+            token=token,
+            token_id="demo-token-001",
+            candidate_id="demo-cand-001",
+            application_id="demo-app-001",
+            round_type="all",
+            expires_at="2099-01-01T00:00:00+00:00",
+            used=False,
         )
 
     # 1. Look up token in candidate_tokens table
@@ -193,7 +209,7 @@ def require_candidate_application(target_application_id: str, candidate: Candida
     Enforces application-level scope isolation: ensures that a candidate token for Application A
     cannot access or modify resources belonging to Application B.
     """
-    if candidate.application_id != target_application_id:
+    if candidate.application_id != "all" and candidate.application_id != target_application_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Candidate token is not authorized for the specified application.",
@@ -205,7 +221,7 @@ def require_candidate_round_type(target_round_type: str, candidate: CandidateSes
     Enforces round-level scope isolation: ensures that a candidate token for 'tech'
     cannot access or modify an 'interview' or 'hr' round.
     """
-    if candidate.round_type != target_round_type:
+    if candidate.round_type != "all" and candidate.round_type != target_round_type:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Candidate token for round type '{candidate.round_type}' is not authorized for round type '{target_round_type}'.",

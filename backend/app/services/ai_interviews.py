@@ -75,20 +75,53 @@ def _record_fallback_metric(job_title: str, round_type: str, exchange_count: int
 
 MAX_EXCHANGES = 6  # 6 exchanges per round
 
+import urllib.request
+import ssl
+
 def _call_gemini(system_prompt: str, user_prompt: str) -> str:
     gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={gemini_key}"
-    resp = httpx.post(
-        url,
-        json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
-        timeout=8.0,
-    )
-    if resp.status_code == 200:
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:100]}")
+
+    candidate_models = [
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemma-4-26b-a4b-it",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest"
+    ]
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    last_error: Exception | None = None
+    for cur_model in candidate_models:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:generateContent?key={gemini_key}"
+            payload = json.dumps({"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]}).encode("utf-8")
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+
+            with urllib.request.urlopen(req, timeout=8.0, context=ctx) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        non_thought = [p["text"] for p in parts if not p.get("thought") and "text" in p]
+                        clean_text = "".join(non_thought).strip()
+                        if clean_text:
+                            return clean_text
+                        if parts and "text" in parts[0]:
+                            return parts[0]["text"]
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Gemini call with model {cur_model} failed: {e}. Trying fallback...")
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Failed to generate response from Gemini AI models.")
 
 
 def _client() -> Any:

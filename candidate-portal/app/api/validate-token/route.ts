@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ session: backendSession })
     }
 
-    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
+    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
     if (!isDemoAllowed) {
       return NextResponse.json({ error: "Invalid or unauthorized portal access token" }, { status: 401 })
     }
@@ -187,6 +187,7 @@ export async function POST(req: NextRequest) {
  */
 async function validateViaBackend(token: string): Promise<any | null> {
   try {
+    const ADMIN_API = getApiUrl()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 2000)
 

@@ -1657,8 +1657,8 @@ export const recruiterCopilotApi = {
         intent: "general_query",
         skill_data: {},
         confidence_score: geminiRes.success ? 98 : 90,
-        confidence_reason: geminiRes.success ? `Live Gemini 2.0 Flash Response (${geminiRes.modelUsed})` : "Local AI Fallback Engine",
-        sources: ["gemini-3.6-flash", "pipeline"],
+        confidence_reason: geminiRes.success ? `Live Gemini Response (${geminiRes.modelUsed})` : "Local AI Fallback Engine",
+        sources: ["gemini-flash-lite-latest", "pipeline"],
         follow_up_chips: ["/morning-brief", "Show top candidates", "Compare candidates"]
       }
     }

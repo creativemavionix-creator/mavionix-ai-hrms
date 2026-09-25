@@ -172,6 +172,16 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
           }
           setRollingProfile((prev) => updateRollingProfile(prev, res.payload))
         } else {
+          // Do not track absence or issue warnings/strikes if the interview is not active
+          if (!isInterviewActive) {
+            lastAbsenceStartRef.current = null
+            setAbsenceSeconds(0)
+            if (engineState !== "NORMAL") {
+              setEngineState("NORMAL")
+            }
+            return
+          }
+
           if (!lastAbsenceStartRef.current) {
             lastAbsenceStartRef.current = Date.now()
           }
@@ -294,12 +304,14 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
 
   const acknowledgeCameraWarning = useCallback(() => {
     lastAbsenceStartRef.current = null
+    lastChimeTimeRef.current = Date.now() + 4000
     setAbsenceSeconds(0)
     setEngineState("NORMAL")
   }, [])
 
   const resetStrikes = useCallback(() => {
     lastAbsenceStartRef.current = null
+    lastChimeTimeRef.current = 0
     setAbsenceSeconds(0)
     setCameraStrikes(0)
     setTabStrikes(0)

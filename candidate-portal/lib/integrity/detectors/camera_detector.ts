@@ -75,15 +75,12 @@ export function initMediaPipeEngine() {
               const minEyeDist = Math.min(distLeftEyeNose, distRightEyeNose)
               const yawSymmetryRatio = minEyeDist > 0.001 ? maxEyeDist / minEyeDist : 99
 
-              // Tightened yaw sensitivity (1.8 ratio) so looking sideways triggers looking away
-              if (yawSymmetryRatio > 1.8) {
-                isLookingAway = true
-              }
-
-              // Tightened eye distance threshold (0.15) for head turned sideways
               const eyeDistance = Math.abs(rightEye.x - leftEye.x)
-              if (eyeDistance < 0.15) {
+              // True profile turn occurs when yaw ratio > 3.5 or eyes collapse in perspective (< 0.035)
+              if (yawSymmetryRatio > 3.5 || (eyeDistance < 0.035 && eyeDistance > 0)) {
                 isHeadTurnedSideways = true
+              } else if (yawSymmetryRatio > 2.6) {
+                isLookingAway = true
               }
             }
 

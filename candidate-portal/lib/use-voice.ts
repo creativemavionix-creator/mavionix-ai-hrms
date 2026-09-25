@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +39,32 @@ function pickBestVoice(voices: SpeechSynthesisVoice[], lang: string): SpeechSynt
   if (langMatch.length > 0) return langMatch[0]
 
   return voices[0]
+}
+
+// ── Audio Unlock Helper (pre-unlock browser autoplay restriction) ───────────
+
+export function unlockAudio() {
+  if (typeof window === "undefined") return
+  try {
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      const ctx = new AudioContextClass()
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {})
+      }
+    }
+  } catch {}
+  try {
+    const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA")
+    audio.play().catch(() => {})
+  } catch {}
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+      }
+    } catch {}
+  }
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -111,6 +137,11 @@ export function useVoice({
     }
 
     recognition.onresult = (event: any) => {
+      // Prevent capturing microphone input while audio is playing or speechSynthesis is speaking (echo suppression)
+      if (audioRef.current || (typeof window !== "undefined" && window.speechSynthesis?.speaking)) {
+        return
+      }
+
       let interim = ""
       let final = ""
 
@@ -240,17 +271,25 @@ export function useVoice({
         utterance.voice = browserVoiceRef.current
       }
 
-      setSpokenCaption(text)
-      setIsSpeaking(true)
-
-      utterance.onend = () => {
-        setIsSpeaking(false)
-        setSpokenCaption("")
+      let finished = false
+      const onDone = () => {
+        if (!finished) {
+          finished = true
+          setIsSpeaking(false)
+          setSpokenCaption("")
+        }
       }
 
-      utterance.onerror = () => {
-        setIsSpeaking(false)
-        setSpokenCaption("")
+      utterance.onend = onDone
+      utterance.onerror = onDone
+
+      // Safety timeout in case speech synthesis stalls or fails to fire onend
+      const words = text.split(/\s+/).length
+      const maxMs = Math.max(8000, Math.min(60000, (words / 2) * 1000 + 4000))
+      setTimeout(onDone, maxMs)
+
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
       }
 
       window.speechSynthesis.speak(utterance)
@@ -294,16 +333,30 @@ export function useVoice({
     }
   }, [])
 
-  return {
-    isSupported,
-    isListening,
-    isSpeaking,
-    isLoadingAudio,
-    interimTranscript,
-    spokenCaption,
-    startListening,
-    stopListening,
-    speakText,
-    stopSpeaking,
-  }
+  return useMemo(
+    () => ({
+      isSupported,
+      isListening,
+      isSpeaking,
+      isLoadingAudio,
+      interimTranscript,
+      spokenCaption,
+      startListening,
+      stopListening,
+      speakText,
+      stopSpeaking,
+    }),
+    [
+      isSupported,
+      isListening,
+      isSpeaking,
+      isLoadingAudio,
+      interimTranscript,
+      spokenCaption,
+      startListening,
+      stopListening,
+      speakText,
+      stopSpeaking,
+    ]
+  )
 }

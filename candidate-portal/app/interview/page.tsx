@@ -6,10 +6,10 @@ import { Suspense, useEffect, useState, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Brain, Send, Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock,
-  Shield, ChevronRight, User, Bot, Mic, MicOff, Volume2, VolumeX, Video,
+  Shield, ChevronRight, User, Bot, Mic, MicOff, Volume2, VolumeX, Video, Square,
 } from "lucide-react"
 import type { CandidateSession, ChatMessage, AIResponse, RoundType, TranscriptEntry, Assignment } from "@/lib/types"
-import { useVoice } from "@/lib/use-voice"
+import { useVoice, unlockAudio } from "@/lib/use-voice"
 import { useIntegrityEngine } from "@/lib/integrity/hooks/useIntegrityEngine"
 import CameraPreview from "@/lib/integrity/ui/CameraPreview"
 import ReadinessReportCard from "@/lib/integrity/ui/ReadinessReportCard"
@@ -81,7 +81,15 @@ function PipelineStepper({ currentRound, completedRounds }: { currentRound: Roun
 
 // ── Chat Message Bubble ──────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  onReplay,
+  isCurrentlySpeaking,
+}: {
+  msg: ChatMessage
+  onReplay?: (text: string) => void
+  isCurrentlySpeaking?: boolean
+}) {
   const isCandidate = msg.role === "candidate"
 
   return (
@@ -114,9 +122,35 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           }`}
       >
         <p className="whitespace-pre-wrap font-medium">{msg.content}</p>
-        <span className="eyebrow text-[8px] text-neutral-500 mt-1.5 block">
-          {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-white/[0.04]">
+          <span className="eyebrow text-[8px] text-neutral-500">
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          {!isCandidate && onReplay && (
+            <button
+              type="button"
+              onClick={() => onReplay(msg.content)}
+              title={isCurrentlySpeaking ? "Stop Audio" : "Listen to question"}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                isCurrentlySpeaking
+                  ? "bg-signal/20 text-signal border border-signal/40 animate-pulse"
+                  : "bg-white/[0.05] hover:bg-white/[0.1] text-neutral-400 hover:text-white border border-white/[0.08]"
+              }`}
+            >
+              {isCurrentlySpeaking ? (
+                <>
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <span>Stop</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-2.5 h-2.5" />
+                  <span>Listen</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -280,15 +314,21 @@ function InterviewContent() {
   const [showStrikeModal, setShowStrikeModal] = useState(false)
   const [microphoneFallback, setMicrophoneFallback] = useState(false)
   const [speakingCountdown, setSpeakingCountdown] = useState(60)
+  const [voiceCountdownSec, setVoiceCountdownSec] = useState<number | null>(null)
+  const [currentlyReplayingText, setCurrentlyReplayingText] = useState<string | null>(null)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const speakingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const voiceCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const firstQuestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingVoiceSendRef = useRef<string | null>(null)
+  const hasSpokenFirstRef = useRef(false)
+  const isAiSpeakingRef = useRef(false)
 
   // ── Interview Integrity Engine Master Hook ─────────────────────────────
-  const cameraPresence = useIntegrityEngine(true, state === "ready" || state === "rules" || state === "device_check")
+  const cameraPresence = useIntegrityEngine(true, state === "ready")
 
   // Auto-start camera after explicit permission consent or during rules/device checks
   useEffect(() => {
@@ -302,6 +342,9 @@ function InterviewContent() {
   // ── Voice hook ───────────────────────────────────────────────────────────
 
   const handleVoiceTranscript = useCallback((text: string) => {
+    // Drop transcript if AI is speaking, audio is playing, or countdown is active (suppresses echo)
+    if (isAiSpeakingRef.current) return
+
     if (session?.roundType === "speaking") {
       setInput((prev) => {
         const space = prev ? " " : ""
@@ -316,6 +359,126 @@ function InterviewContent() {
   const voice = useVoice({
     onFinalTranscript: handleVoiceTranscript,
   })
+
+  // Stable refs for voice functions to prevent re-render loops and unintended timer cancellations
+  const speakTextRef = useRef(voice.speakText)
+  useEffect(() => {
+    speakTextRef.current = voice.speakText
+  }, [voice.speakText])
+
+  const voiceEnabledRef = useRef(voiceEnabled)
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled
+  }, [voiceEnabled])
+
+  // Pre-unlock audio on the first user click or keydown anywhere on the page
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockAudio()
+    }
+    window.addEventListener("click", handleFirstInteraction, { once: true, capture: true })
+    window.addEventListener("keydown", handleFirstInteraction, { once: true, capture: true })
+    return () => {
+      window.removeEventListener("click", handleFirstInteraction, { capture: true })
+      window.removeEventListener("keydown", handleFirstInteraction, { capture: true })
+    }
+  }, [])
+
+  // Synchronize AI speaking flag to ref for speech recognition echo suppression
+  useEffect(() => {
+    isAiSpeakingRef.current = voice.isSpeaking || voice.isLoadingAudio || voiceCountdownSec !== null
+  }, [voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec])
+
+  // Replay question audio handler
+  const handleReplayMessage = useCallback((text: string) => {
+    unlockAudio()
+    if (voice.isSpeaking && currentlyReplayingText === text) {
+      voice.stopSpeaking()
+      setCurrentlyReplayingText(null)
+    } else {
+      setCurrentlyReplayingText(text)
+      voice.speakText(text)
+    }
+  }, [voice, currentlyReplayingText])
+
+  useEffect(() => {
+    if (!voice.isSpeaking && currentlyReplayingText) {
+      setCurrentlyReplayingText(null)
+    }
+  }, [voice.isSpeaking, currentlyReplayingText])
+
+  // ── Auto-read first question with 3-second delay ──────────────────────────
+  useEffect(() => {
+    if (
+      state === "ready" &&
+      roundId &&
+      messages.length === 1 &&
+      messages[0].role === "ai" &&
+      !hasSpokenFirstRef.current
+    ) {
+      hasSpokenFirstRef.current = true
+      const questionText = messages[0].content
+
+      if (!voiceEnabledRef.current) {
+        setVoiceCountdownSec(null)
+        return
+      }
+
+      // Pre-unlock audio context for browser autoplay compliance
+      unlockAudio()
+
+      // Start countdown from 3
+      let remaining = 3
+      setVoiceCountdownSec(remaining)
+
+      if (voiceCountdownTimerRef.current) {
+        clearInterval(voiceCountdownTimerRef.current)
+        voiceCountdownTimerRef.current = null
+      }
+      if (firstQuestionTimerRef.current) {
+        clearTimeout(firstQuestionTimerRef.current)
+        firstQuestionTimerRef.current = null
+      }
+
+      voiceCountdownTimerRef.current = setInterval(() => {
+        remaining -= 1
+        if (remaining > 0) {
+          setVoiceCountdownSec(remaining)
+        } else {
+          setVoiceCountdownSec(null)
+          if (voiceCountdownTimerRef.current) {
+            clearInterval(voiceCountdownTimerRef.current)
+            voiceCountdownTimerRef.current = null
+          }
+        }
+      }, 1000)
+
+      firstQuestionTimerRef.current = setTimeout(() => {
+        setVoiceCountdownSec(null)
+        if (voiceCountdownTimerRef.current) {
+          clearInterval(voiceCountdownTimerRef.current)
+          voiceCountdownTimerRef.current = null
+        }
+        if (speakTextRef.current) {
+          speakTextRef.current(questionText)
+        }
+      }, 3000)
+    }
+  }, [state, roundId, messages.length])
+
+  // Cleanup timers on component unmount
+  useEffect(() => {
+    return () => {
+      if (firstQuestionTimerRef.current) {
+        clearTimeout(firstQuestionTimerRef.current)
+        firstQuestionTimerRef.current = null
+      }
+      if (voiceCountdownTimerRef.current) {
+        clearInterval(voiceCountdownTimerRef.current)
+        voiceCountdownTimerRef.current = null
+      }
+    }
+  }, [])
 
   // Process voice transcript once we have a roundId and are ready
   useEffect(() => {
@@ -401,7 +564,14 @@ function InterviewContent() {
     }
   }, [state])
 
-  // Speaking round countdown timer
+  // Reset speaking countdown to 60 on each new message/question in speaking round
+  useEffect(() => {
+    if (session?.roundType === "speaking" && state === "ready") {
+      setSpeakingCountdown(60)
+    }
+  }, [messages.length, session?.roundType, state])
+
+  // Speaking round countdown timer (ticks only when AI is NOT speaking/preparing)
   useEffect(() => {
     if (!session || session.roundType !== "speaking" || state !== "ready" || isAiTyping) {
       if (speakingTimerRef.current) {
@@ -411,15 +581,22 @@ function InterviewContent() {
       return
     }
 
-    setSpeakingCountdown(60)
-
-    if (speakingTimerRef.current) {
-      clearInterval(speakingTimerRef.current)
+    // Pause timer while AI is speaking, loading audio, or audio countdown is preparing
+    if (voice.isSpeaking || voice.isLoadingAudio || voiceCountdownSec !== null) {
+      if (speakingTimerRef.current) {
+        clearInterval(speakingTimerRef.current)
+        speakingTimerRef.current = null
+      }
+      return
     }
 
     speakingTimerRef.current = setInterval(() => {
       setSpeakingCountdown((prev) => {
         if (prev <= 1) {
+          if (speakingTimerRef.current) {
+            clearInterval(speakingTimerRef.current)
+            speakingTimerRef.current = null
+          }
           return 0
         }
         return prev - 1
@@ -429,7 +606,7 @@ function InterviewContent() {
     return () => {
       if (speakingTimerRef.current) clearInterval(speakingTimerRef.current)
     }
-  }, [messages.length, session?.roundType, state, isAiTyping])
+  }, [session, state, isAiTyping, voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec])
 
 
   // Track browser window blur / tab changes (strikes)
@@ -593,6 +770,9 @@ function InterviewContent() {
         setState("complete")
       } else {
         // 3. Default to interview dashboard & evaluation rules
+        cameraPresence.resetStrikes()
+        lastCameraStrikesRef.current = 0
+        setBrowserStrikes(0)
         setState("dashboard")
       }
     } catch (err) {
@@ -648,8 +828,13 @@ function InterviewContent() {
         )
         setMessages(existingMessages)
         setExchangeCount(existingMessages.filter((m) => m.role === "candidate").length)
+        hasSpokenFirstRef.current = true
       } else {
-        // New round — show first question
+        // New round — show first question and allow 3s delayed speech
+        cameraPresence.resetStrikes()
+        lastCameraStrikesRef.current = 0
+        setBrowserStrikes(0)
+        hasSpokenFirstRef.current = false
         const firstMsg: ChatMessage = {
           id: "msg-0",
           role: "ai",
@@ -773,12 +958,20 @@ function InterviewContent() {
     }
   }, [input, roundId, isAiTyping, session, messages.length, speakingCountdown, microphoneFallback, voiceEnabled, voice])
 
-  // Auto-submit when countdown hits 0
+  // Auto-submit when countdown hits 0 (only if AI is not speaking or preparing)
   useEffect(() => {
-    if (session?.roundType === "speaking" && state === "ready" && speakingCountdown === 0 && !isAiTyping) {
+    if (
+      session?.roundType === "speaking" &&
+      state === "ready" &&
+      speakingCountdown === 0 &&
+      !isAiTyping &&
+      !voice.isSpeaking &&
+      !voice.isLoadingAudio &&
+      voiceCountdownSec === null
+    ) {
       sendMessage()
     }
-  }, [speakingCountdown, session?.roundType, state, isAiTyping, sendMessage])
+  }, [speakingCountdown, session?.roundType, state, isAiTyping, voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec, sendMessage])
 
   // ── Keyboard handling ────────────────────────────────────────────────────
 
@@ -805,6 +998,13 @@ function InterviewContent() {
   const proceedToNextRound = async () => {
     const nextRound = getNextRound()
     if (!nextRound || !session) return
+
+    // Clean up timers and audio from current round
+    if (firstQuestionTimerRef.current) clearTimeout(firstQuestionTimerRef.current)
+    if (voiceCountdownTimerRef.current) clearInterval(voiceCountdownTimerRef.current)
+    setVoiceCountdownSec(null)
+    hasSpokenFirstRef.current = false
+    voice.stopSpeaking()
 
     // Mark current round as completed
     setCompletedRounds((prev) => [...prev, session.roundType])
@@ -1362,9 +1562,13 @@ function InterviewContent() {
           canvasRef={cameraPresence.canvasRef}
           streamRef={cameraPresence.streamRef}
           onStartInterview={async () => {
+            unlockAudio()
             if (cameraPresence.readinessState.calibratedProfile) {
               cameraPresence.setCalibrationProfile(cameraPresence.readinessState.calibratedProfile)
             }
+            cameraPresence.resetStrikes()
+            lastCameraStrikesRef.current = 0
+            setBrowserStrikes(0)
             setState("loading")
             if (session) await startRound(session)
           }}
@@ -1572,7 +1776,12 @@ function InterviewContent() {
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto chat-scroll p-6 space-y-4">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            onReplay={handleReplayMessage}
+            isCurrentlySpeaking={voice.isSpeaking && currentlyReplayingText === msg.content}
+          />
         ))}
         {isAiTyping && <TypingIndicator />}
         {state === "complete" && browserStrikes >= 3 && (
@@ -1593,21 +1802,27 @@ function InterviewContent() {
       </div>
 
       {/* Voice/AI caption bar */}
-      {(voice.isListening || voice.isSpeaking || voice.interimTranscript) && (
-        <div className="border-t border-[var(--hm-border-subtle)] bg-[var(--hm-bg-inset)] px-6 py-2">
-          {voice.isListening && voice.interimTranscript && (
+      {(voice.isListening || voice.isSpeaking || voice.interimTranscript || voiceCountdownSec !== null) && (
+        <div className="border-t border-[var(--hm-border-subtle)] bg-[var(--hm-bg-inset)] px-6 py-2.5">
+          {voiceCountdownSec !== null && (
+            <div className="flex items-center gap-2.5 text-xs text-[var(--hm-accent)] font-semibold animate-pulse">
+              <Volume2 className="w-3.5 h-3.5 text-[var(--hm-accent)]" />
+              <span className="tracking-wide">AI INTERVIEWER AUDIO STARTING IN {voiceCountdownSec}s...</span>
+            </div>
+          )}
+          {voiceCountdownSec === null && voice.isListening && voice.interimTranscript && (
             <div className="flex items-center gap-2 text-base  text-[var(--hm-text-secondary)]">
               <Mic className="w-3 h-3 text-[var(--hm-accent)] animate-pulse" />
               <span className="opacity-70 italic">{voice.interimTranscript}</span>
             </div>
           )}
-          {voice.isListening && !voice.interimTranscript && (
+          {voiceCountdownSec === null && voice.isListening && !voice.interimTranscript && (
             <div className="flex items-center gap-2 text-base  text-[var(--hm-text-muted)]">
               <Mic className="w-3 h-3 text-[var(--hm-accent)] animate-pulse" />
               <span>LISTENING...</span>
             </div>
           )}
-          {voice.isSpeaking && voice.spokenCaption && (
+          {voiceCountdownSec === null && voice.isSpeaking && voice.spokenCaption && (
             <div className="flex items-start gap-2 text-base  text-[var(--hm-text-secondary)]">
               <Volume2 className="w-3 h-3 text-[var(--hm-accent)] shrink-0 mt-0.5" />
               <span className="line-clamp-2">{voice.spokenCaption}</span>
@@ -1668,10 +1883,20 @@ function InterviewContent() {
                 </div>
                 <div>
                   <h4 className="text-lg font-bold  text-[var(--hm-text-primary)] tracking-wide uppercase">
-                    {voice.isListening ? "Listening..." : "Microphone Active"}
+                    {voiceCountdownSec !== null
+                      ? `Get Ready (${voiceCountdownSec}s)`
+                      : voice.isSpeaking
+                      ? "AI Speaking..."
+                      : voice.isListening
+                      ? "Listening..."
+                      : "Microphone Active"}
                   </h4>
                   <p className="text-base text-[var(--hm-text-muted)]  uppercase">
-                    Answer will auto-submit when timer expires
+                    {voiceCountdownSec !== null
+                      ? "Interviewer is preparing the question"
+                      : voice.isSpeaking
+                      ? "Listen to the question carefully"
+                      : "Answer will auto-submit when timer expires"}
                   </p>
                 </div>
               </div>
@@ -1789,6 +2014,7 @@ function InterviewContent() {
                   placeholder={
                     voice.isListening ? "LISTENING... SPEAK NOW" :
                     isAiTyping ? "WAITING FOR AI RESPONSE..." :
+                    voiceCountdownSec !== null ? `AUDIO STARTING IN ${voiceCountdownSec}S...` :
                     voice.isSpeaking ? "AI IS SPEAKING..." :
                     "TYPE YOUR RESPONSE... (ENTER TO SEND, SHIFT+ENTER FOR NEW LINE)"
                   }
@@ -1876,25 +2102,6 @@ function InterviewContent() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── Always-on WebCam Self-Preview Widget ── */}
-      {cameraPresence.isCameraActive && (
-        <CameraPreview
-          videoRef={cameraPresence.videoRef}
-          canvasRef={cameraPresence.canvasRef}
-          streamRef={cameraPresence.streamRef}
-          faceDetected={cameraPresence.cameraResult?.payload.faceDetected ?? true}
-          confidence={cameraPresence.cameraResult?.confidence ?? 0.95}
-          landmarks={cameraPresence.cameraResult?.payload.landmarksCount ?? 468}
-          hint={cameraPresence.guidance.hint}
-          faceCount={cameraPresence.cameraResult?.payload.faceCount ?? 1}
-          isLookingAway={cameraPresence.cameraResult?.payload.isLookingAway ?? false}
-          isHeadTurnedSideways={cameraPresence.cameraResult?.payload.isHeadTurnedSideways ?? false}
-          isMultipleFaces={cameraPresence.cameraResult?.payload.isMultipleFaces ?? false}
-          isFaceCovered={cameraPresence.cameraResult?.payload.isFaceCovered ?? false}
-          absenceReason={cameraPresence.cameraResult?.payload.absenceReason ?? "none"}
-        />
       )}
     </div>
   )

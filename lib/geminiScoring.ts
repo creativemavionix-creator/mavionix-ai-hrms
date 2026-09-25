@@ -41,10 +41,17 @@ export async function analyzeCandidateResume(input: CandidateScoringInput): Prom
   if (apiKey) {
     try {
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: "gemini-3.6-flash",
-        generationConfig: { responseMimeType: "application/json" },
-        systemInstruction: `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
+      const candidateModels = [
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemma-4-26b-a4b-it",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest"
+      ]
+
+      const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
 Your task is to analyze candidate resumes and technical evaluation responses for engineering roles.
 Compute objective 0-100 scores based strictly on the provided resume content, technical depth, and role alignment.
 Return ONLY valid JSON matching this schema:
@@ -59,7 +66,6 @@ Return ONLY valid JSON matching this schema:
   "tags": ["tag1", "tag2", "tag3", "tag4"],
   "verification_status": "verified" | "flagged"
 }`
-      })
 
       const prompt = `
 ANALYZE CANDIDATE APPLICATION:
@@ -90,19 +96,40 @@ ${input.outageLesson || "None provided."}
 
 Evaluate the candidate's resume and responses thoroughly. Return valid JSON matching the schema.`
 
-      const result = await model.generateContent(prompt)
-      const text = result.response.text()
-      const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
-      let json: any = {}
-      try {
-        json = JSON.parse(cleaned)
-      } catch {
-        const match = cleaned.match(/\{[\s\S]*\}/)
-        if (match) {
-          json = JSON.parse(match[0])
-        } else {
-          throw new Error("Failed to parse Gemini scoring JSON response")
+      let json: any = null
+      for (const curModel of candidateModels) {
+        try {
+          const isGemma = curModel.startsWith("gemma")
+          const model = genAI.getGenerativeModel(
+            isGemma
+              ? { model: curModel }
+              : {
+                  model: curModel,
+                  generationConfig: { responseMimeType: "application/json" },
+                  systemInstruction
+                }
+          )
+
+          const fullPrompt = isGemma ? `${systemInstruction}\n\n${prompt}` : prompt
+          const result = await model.generateContent(fullPrompt)
+          const candidate = result.response.candidates?.[0]
+          const nonThought = candidate?.content?.parts?.filter((p: any) => !p.thought && p.text)
+          const text = (nonThought && nonThought.length > 0) ? nonThought.map((p: any) => p.text).join("") : result.response.text()
+          const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
+          try {
+            json = JSON.parse(cleaned)
+          } catch {
+            const match = cleaned.match(/\{[\s\S]*\}/)
+            if (match) json = JSON.parse(match[0])
+          }
+          if (json && typeof json === "object") break
+        } catch (e) {
+          console.warn(`Scoring model ${curModel} failed, trying next...`, e)
         }
+      }
+
+      if (!json) {
+        throw new Error("Failed to generate AI scoring from candidate models")
       }
 
 

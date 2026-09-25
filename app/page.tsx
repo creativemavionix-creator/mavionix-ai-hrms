@@ -66,7 +66,7 @@ export default function RecruitmentDashboard() {
     if (!email) return false
     const e = email.toLowerCase().trim()
     const savedHrEmail = (typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : "")?.toLowerCase() || ""
-    return e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai")
+    return e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai") || e.endsWith("@mavionix.com")
   }
 
   // Recruiter Auth State

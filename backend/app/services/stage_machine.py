@@ -37,6 +37,8 @@ PIPELINE_STAGES: list[str] = [
     "tech_round_completed",
     "interview_round",
     "interview_round_completed",
+    "speaking_round",
+    "speaking_round_completed",
     "hr_round",
     "hr_round_completed",
     "offered",

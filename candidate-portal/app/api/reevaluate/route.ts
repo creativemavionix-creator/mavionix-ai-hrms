@@ -15,19 +15,42 @@ const deepseekKey = process.env.DEEPSEEK_API_KEY || ""
 
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!geminiKey) throw new Error("No Gemini key")
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }]
-    })
-  })
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`)
-  const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-  if (!text.trim()) throw new Error("Empty response")
-  return text
+  const candidateModels = [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+    "gemma-4-26b-a4b-it",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest"
+  ]
+
+  let lastErr: any = null
+  for (const curModel of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${geminiKey}`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }]
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const parts = data.candidates?.[0]?.content?.parts || []
+        const nonThought = parts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text).join("").trim()
+        const text = nonThought || parts[0]?.text || ""
+        if (text && text.trim()) return text.trim()
+      } else {
+        lastErr = new Error(`Gemini ${curModel} HTTP ${res.status}`)
+      }
+    } catch (e) {
+      lastErr = e
+    }
+  }
+
+  throw lastErr || new Error("Failed to generate response from Gemini candidate models")
 }
 
 async function callDeepSeek(systemPrompt: string, userPrompt: string): Promise<string> {
