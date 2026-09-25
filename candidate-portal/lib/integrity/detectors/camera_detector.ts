@@ -73,22 +73,28 @@ export function initMediaPipeEngine() {
               const distRightEyeNose = Math.abs(rightEye.x - noseTip.x)
               const maxEyeDist = Math.max(distLeftEyeNose, distRightEyeNose)
               const minEyeDist = Math.min(distLeftEyeNose, distRightEyeNose)
-              const yawSymmetryRatio = minEyeDist > 0.001 ? maxEyeDist / minEyeDist : 99
+              const yawSymmetryRatio = minEyeDist > 0.005 ? maxEyeDist / minEyeDist : 99
 
-              // Tightened yaw sensitivity (1.8 ratio) so looking sideways triggers looking away
-              if (yawSymmetryRatio > 1.8) {
+              const faceWidth = det.boundingBox ? det.boundingBox.width : 0.2
+              const eyeDistance = Math.abs(rightEye.x - leftEye.x)
+
+              // Looking away: strong yaw asymmetry (reading or looking across screen is ~1.0-2.2; looking away is > 2.8)
+              if (yawSymmetryRatio > 2.8) {
                 isLookingAway = true
               }
 
-              // Tightened eye distance threshold (0.15) for head turned sideways
-              const eyeDistance = Math.abs(rightEye.x - leftEye.x)
-              if (eyeDistance < 0.15) {
+              // Head turned sideways: severe yaw asymmetry or profile collapse of interpupillary distance
+              if (
+                yawSymmetryRatio > 3.8 ||
+                (faceWidth > 0.05 && eyeDistance < faceWidth * 0.18) ||
+                eyeDistance < 0.025
+              ) {
                 isHeadTurnedSideways = true
               }
             }
 
             // 2. Occlusion Guard
-            const isFaceCovered = det.score ? det.score[0] < 0.40 : false
+            const isFaceCovered = det.score ? det.score[0] < 0.35 : false
 
             // Determine specific reason if unverified
             let absenceReason: CameraPayload["absenceReason"] = "none"

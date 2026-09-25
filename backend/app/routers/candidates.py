@@ -531,6 +531,21 @@ async def update_application(application_id: str, body: ApplicationUpdate, user:
     if not payload:
         raise HTTPException(status_code=422, detail="No fields provided for update.")
 
+    stage_map = {
+        "submitted": "applied",
+        "under_review": "screened",
+        "approved": "shortlisted",
+        "task_assigned": "assignment_sent",
+        "task_submitted": "assignment_submitted",
+        "task_approved": "tech_round",
+        "interview_scheduled": "interview_round",
+        "interview_completed": "interview_round_completed",
+        "decision_hired": "hired",
+        "decision_rejected": "rejected",
+    }
+    if "stage" in payload and payload["stage"] in stage_map:
+        payload["stage"] = stage_map[payload["stage"]]
+
     client = get_user_client(user.token)
     result = (
         client.table("applications")

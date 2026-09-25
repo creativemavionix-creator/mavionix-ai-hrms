@@ -49,6 +49,7 @@ import { supabase } from "@/lib/supabaseClient"
 export default function RecruitmentDashboard() {
   const [mounted, setMounted] = useState(false)
   const [portalViewMode, setPortalViewMode] = useState<"landing" | "recruiter" | "candidate">("landing")
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -87,6 +88,16 @@ export default function RecruitmentDashboard() {
 
   useEffect(() => {
     setMounted(true)
+
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search)
+      const requestedPortal = urlParams.get("portal") || urlParams.get("mode")
+      if (requestedPortal === "candidate") {
+        setPortalViewMode("candidate")
+      } else if (requestedPortal === "recruiter") {
+        setPortalViewMode("recruiter")
+      }
+    }
 
     const syncRecruiterSession = (sess: any) => {
       if (sess?.user?.email && isRecruiterEmail(sess.user.email, sess.user)) {
@@ -294,6 +305,7 @@ export default function RecruitmentDashboard() {
 
   // Trigger Refresh
   const handleRefresh = () => {
+    setIsRefreshing(true)
     const date = new Date()
     const formatted = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(
       2
@@ -311,6 +323,11 @@ export default function RecruitmentDashboard() {
       type: "info",
     }
     setActivityLogs((prev) => [log, ...prev])
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("refresh-data"))
+    }
+    setTimeout(() => setIsRefreshing(false), 800)
   }
 
   // Calculate global status counts
@@ -609,9 +626,10 @@ export default function RecruitmentDashboard() {
             <button
               onClick={handleRefresh}
               title="Refresh Sync"
-              className="p-2 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.06] rounded-xl text-neutral-400 hover:text-neutral-100 transition-all active:scale-95"
+              disabled={isRefreshing}
+              className="p-2 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.06] rounded-xl text-neutral-400 hover:text-neutral-100 transition-all active:scale-95 cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-violet-400" : ""}`} />
             </button>
 
             <button

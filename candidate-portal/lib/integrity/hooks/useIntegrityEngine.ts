@@ -12,36 +12,64 @@ import { evaluateGuidance, GuidanceResult } from "../engine/guidance_engine"
 import { evaluateReadiness, updateRollingProfile, ReadinessState } from "../engine/readiness_engine"
 import { DetectorResult, CameraPayload, MicPayload, NetPayload, BrowserPayload, CalibrationProfile, RollingProfile } from "../types"
 
-function playSynthesizedChime(pitch: number = 880, isStrike: boolean = false) {
+let sharedAudioCtx: AudioContext | null = null
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-    if (!AudioCtx) return
-    const ctx = new AudioCtx()
+    if (!AudioCtx) return null
+    if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+      sharedAudioCtx = new AudioCtx()
+    }
+    if (sharedAudioCtx.state === "suspended") {
+      sharedAudioCtx.resume().catch(() => {})
+    }
+    return sharedAudioCtx
+  } catch {
+    return null
+  }
+}
+
+function playSynthesizedChime(pitch: number = 880, isStrike: boolean = false) {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+    const duration = 0.28
 
     const osc1 = ctx.createOscillator()
     const gain1 = ctx.createGain()
-    osc1.type = isStrike ? "sawtooth" : "sine"
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime)
-    osc1.frequency.exponentialRampToValueAtTime(pitch, ctx.currentTime + 0.3)
-    gain1.gain.setValueAtTime(0.55, ctx.currentTime)
-    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+    osc1.type = "sine"
+    osc1.frequency.setValueAtTime(587.33, now)
+    osc1.frequency.exponentialRampToValueAtTime(pitch, now + duration)
+
+    // Smooth envelope attack and decay to prevent any hardware clicks/pops
+    gain1.gain.setValueAtTime(0.0001, now)
+    gain1.gain.exponentialRampToValueAtTime(0.18, now + 0.03)
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
     osc1.connect(gain1)
     gain1.connect(ctx.destination)
-    osc1.start()
-    osc1.stop(ctx.currentTime + 0.3)
+    osc1.start(now)
+    osc1.stop(now + duration)
 
     if (isStrike) {
       const osc2 = ctx.createOscillator()
       const gain2 = ctx.createGain()
-      osc2.type = "square"
-      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1)
-      osc2.frequency.exponentialRampToValueAtTime(1244.5, ctx.currentTime + 0.35)
-      gain2.gain.setValueAtTime(0.4, ctx.currentTime + 0.1)
-      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35)
+      osc2.type = "sine"
+      osc2.frequency.setValueAtTime(880, now + 0.05)
+      osc2.frequency.exponentialRampToValueAtTime(1100, now + duration + 0.05)
+
+      gain2.gain.setValueAtTime(0.0001, now + 0.05)
+      gain2.gain.exponentialRampToValueAtTime(0.15, now + 0.08)
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.05)
+
       osc2.connect(gain2)
       gain2.connect(ctx.destination)
-      osc2.start(ctx.currentTime + 0.1)
-      osc2.stop(ctx.currentTime + 0.35)
+      osc2.start(now + 0.05)
+      osc2.stop(now + duration + 0.05)
     }
   } catch (e) {
     console.warn("Audio chime error:", e)
@@ -191,15 +219,16 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
           const evalRes = evaluateStateMachine(false, duration, cameraStrikes)
           const now = Date.now()
 
-          // Repetitive Louder Audio Chime Logic (SILENCED DURING HARDWARE DEVICE CHECK)
+          // Audio chime logic (only when interview is actively in session)
           if (isInterviewActive) {
+            const stateJustChanged = evalRes.nextState !== engineState
             if (evalRes.nextState === "WARNING") {
-              if (now - lastChimeTimeRef.current >= 1500) {
+              if (stateJustChanged || now - lastChimeTimeRef.current >= 6000) {
                 playSynthesizedChime(660, false)
                 lastChimeTimeRef.current = now
               }
             } else if (evalRes.nextState === "STRIKE" || evalRes.nextState === "LOCKOUT") {
-              if (now - lastChimeTimeRef.current >= 1000) {
+              if (evalRes.isNewStrike || stateJustChanged || now - lastChimeTimeRef.current >= 6000) {
                 playSynthesizedChime(1046.5, true)
                 lastChimeTimeRef.current = now
               }

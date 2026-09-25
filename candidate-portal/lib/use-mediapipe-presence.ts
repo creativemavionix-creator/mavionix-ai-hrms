@@ -22,23 +22,33 @@ export interface CameraPresenceState {
   events: SecurityEvent[]
 }
 
+let sharedWarningCtx: AudioContext | null = null
+
 // Web Audio API Synthesized Warning Chime (Zero External Files Needed)
 function playWarningChime(pitch: number = 880) {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
     if (!AudioCtx) return
-    const ctx = new AudioCtx()
+    if (!sharedWarningCtx || sharedWarningCtx.state === "closed") {
+      sharedWarningCtx = new AudioCtx()
+    }
+    if (sharedWarningCtx.state === "suspended") {
+      sharedWarningCtx.resume().catch(() => {})
+    }
+    const ctx = sharedWarningCtx
+    const now = ctx.currentTime
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = "sine"
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime) // D5
-    osc.frequency.exponentialRampToValueAtTime(pitch, ctx.currentTime + 0.25) // Ramp to pitch
-    gain.gain.setValueAtTime(0.2, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25)
+    osc.frequency.setValueAtTime(587.33, now)
+    osc.frequency.exponentialRampToValueAtTime(pitch, now + 0.25)
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.15, now + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25)
     osc.connect(gain)
     gain.connect(ctx.destination)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.25)
+    osc.start(now)
+    osc.stop(now + 0.25)
   } catch (e) {
     console.warn("Audio warning chime error:", e)
   }

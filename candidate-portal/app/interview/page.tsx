@@ -288,7 +288,7 @@ function InterviewContent() {
   const pendingVoiceSendRef = useRef<string | null>(null)
 
   // ── Interview Integrity Engine Master Hook ─────────────────────────────
-  const cameraPresence = useIntegrityEngine(true, state === "ready" || state === "rules" || state === "device_check")
+  const cameraPresence = useIntegrityEngine(true, state === "ready")
 
   // Auto-start camera after explicit permission consent or during rules/device checks
   useEffect(() => {

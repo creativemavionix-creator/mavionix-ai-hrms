@@ -230,7 +230,7 @@ async def generate_and_send_assignment(
             .maybe_single()
             .execute()
         )
-        if chan_result.data:
+        if chan_result and getattr(chan_result, "data", None):
             email_body = (
                 f"Dear {candidate['name'].split()[0]},\n\n"
                 f"Congratulations on being shortlisted for the {job['title']} position!\n\n"
@@ -560,13 +560,13 @@ async def manual_shortlist_and_assign(application_id: str, user: HRStaffDep):
     job = job_result.data
 
     cand_result = supabase.table("candidates").select("id, name, email").eq("id", app["candidate_id"]).maybe_single().execute()
-    if not cand_result.data:
+    if not cand_result or not getattr(cand_result, "data", None):
         raise HTTPException(status_code=404, detail="Candidate not found.")
     candidate = cand_result.data
 
     # Check if assignment already exists
     existing = supabase.table("assignments").select("id").eq("application_id", application_id).maybe_single().execute()
-    if existing.data:
+    if existing and getattr(existing, "data", None):
         return {"message": "Assignment already exists", "assignment_id": existing.data["id"], "already_exists": True}
 
     # Generate
