@@ -73,11 +73,17 @@ export function initMediaPipeEngine() {
               const distRightEyeNose = Math.abs(rightEye.x - noseTip.x)
               const maxEyeDist = Math.max(distLeftEyeNose, distRightEyeNose)
               const minEyeDist = Math.min(distLeftEyeNose, distRightEyeNose)
-              const yawSymmetryRatio = minEyeDist > 0.001 ? maxEyeDist / minEyeDist : 99
+              const yawSymmetryRatio = minEyeDist > 0.005 ? maxEyeDist / minEyeDist : 99
 
+              const faceWidth = det.boundingBox ? det.boundingBox.width : 0.2
               const eyeDistance = Math.abs(rightEye.x - leftEye.x)
-              // True profile turn occurs when yaw ratio > 3.5 or eyes collapse in perspective (< 0.035)
-              if (yawSymmetryRatio > 3.5 || (eyeDistance < 0.035 && eyeDistance > 0)) {
+
+              // Head turned sideways: severe yaw asymmetry or profile collapse of interpupillary distance
+              if (
+                yawSymmetryRatio > 3.5 ||
+                (faceWidth > 0.05 && eyeDistance < faceWidth * 0.18) ||
+                (eyeDistance < 0.030 && eyeDistance > 0)
+              ) {
                 isHeadTurnedSideways = true
               } else if (yawSymmetryRatio > 2.6) {
                 isLookingAway = true
@@ -85,7 +91,7 @@ export function initMediaPipeEngine() {
             }
 
             // 2. Occlusion Guard
-            const isFaceCovered = det.score ? det.score[0] < 0.40 : false
+            const isFaceCovered = det.score ? det.score[0] < 0.35 : false
 
             // Determine specific reason if unverified
             let absenceReason: CameraPayload["absenceReason"] = "none"

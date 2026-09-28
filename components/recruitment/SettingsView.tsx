@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, Bell, Cpu, Layers, CheckCircle, Loader2, AlertTriangle, Monitor, Sun, Moon } from "lucide-react"
+import { Shield, Bell, Cpu, Layers, CheckCircle, Loader2, AlertTriangle, Monitor, Sun, Moon, Key, Eye, EyeOff, Sparkles } from "lucide-react"
 import {
   settingsApi, ApiAIWeights, ApiNotificationPrefs, ApiIntegrations, ApiShortlistThreshold,
 } from "@/lib/api"
@@ -272,6 +272,54 @@ export default function SettingsView() {
               </button>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Gemini AI Configuration */}
+      <Card className="glass-card border-white/[0.04] rounded-radius-lg shadow-lg relative overflow-hidden reveal-up">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
+        <CardContent className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1 max-w-md">
+            <div className="flex items-center gap-2">
+              <span className="text-neutral-900 dark:text-white font-extrabold uppercase text-[10px] tracking-wider font-display flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-signal" />
+                GEMINI AI LIVE ENGINE
+              </span>
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ACTIVE
+              </span>
+            </div>
+            <p className="text-neutral-400 text-[10px] font-semibold leading-relaxed">
+              Powers the Recruiter Copilot, autonomous resume scoring, and live AI interviews across the platform. Configured via <code className="text-signal bg-white/[0.04] px-1 py-0.5 rounded text-[9px]">GEMINI_API_KEY</code> in server environment with optional custom override.
+            </p>
+          </div>
+          <form onSubmit={saveGeminiKey} className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:w-72">
+              <Key className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                type={showKey ? "text" : "password"}
+                placeholder="Environment Key Active (or enter custom key)"
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+                className="w-full bg-white/[0.02] dark:bg-black/40 border border-white/[0.08] rounded-radius-md pl-8 pr-8 py-2 text-[10px] font-mono text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-signal"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
+              >
+                {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={savingKey}
+              className="px-3.5 py-2 text-[10px] font-extrabold uppercase tracking-wider bg-signal text-white rounded-radius-md hover:opacity-90 transition-opacity flex items-center gap-1.5 shrink-0"
+            >
+              {savingKey && <Loader2 className="w-3 h-3 animate-spin" />}
+              {geminiApiKey ? "SAVE KEY" : "CLEAR"}
+            </button>
+          </form>
         </CardContent>
       </Card>
 

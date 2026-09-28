@@ -10,19 +10,21 @@ import { NextRequest, NextResponse } from "next/server"
 const globalStore = globalThis as any
 const demoRounds: Map<string, any> = globalStore.__demoRounds || new Map()
 
-const geminiKey = process.env.GEMINI_API_KEY || ""
-const deepseekKey = process.env.DEEPSEEK_API_KEY || ""
+const geminiKey = (process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "").replace(/^["']|["']$/g, "").trim()
+const deepseekKey = (process.env.DEEPSEEK_API_KEY || "").replace(/^["']|["']$/g, "").trim()
 
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!geminiKey) throw new Error("No Gemini key")
   const candidateModels = [
-    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
     "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
     "gemini-3.6-flash",
     "gemini-3.8-flash",
-    "gemma-4-26b-a4b-it",
-    "gemini-flash-lite-latest",
-    "gemini-flash-latest"
+    "gemini-2.5-flash",
+    "gemma-4-26b-a4b-it"
   ]
 
   let lastErr: any = null

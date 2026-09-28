@@ -684,7 +684,7 @@ function GrantPortalAccessModal({
   onClose
 }: GrantPortalAccessModalProps) {
   const [copied, setCopied] = useState(false)
-  const portalUrl = process.env.NEXT_PUBLIC_CANDIDATE_PORTAL_URL || (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:3000")
+  const portalUrl = typeof window !== "undefined" ? `${window.location.origin}?portal=candidate` : "http://localhost:3000?portal=candidate"
 
   const copyCredentials = () => {
     const credText = `HireMind AI Candidate Portal Access:\nLink: ${portalUrl}\nEmail: ${email}\nPassword: ${password}`
@@ -1020,8 +1020,8 @@ function DossierModal({ candidateId, onClose, onStageChange, onFlagChange, addTo
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => {
-                    onStageChange(c.application_id!, "approved", "Approved by recruiter during resume screening")
-                    setC(prev => prev ? { ...prev, stage: "approved" } : prev)
+                    onStageChange(c.application_id!, "shortlisted", "Approved by recruiter during resume screening")
+                    setC(prev => prev ? { ...prev, stage: "shortlisted" } : prev)
                     addToast("success", `🎉 ${c.name} APPROVED! Moved candidate to next stage.`)
                   }}
                   className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer"

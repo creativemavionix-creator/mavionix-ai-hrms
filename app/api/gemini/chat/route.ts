@@ -12,12 +12,13 @@ export async function POST(req: Request) {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"
     const systemInstruction = body.systemInstruction || "You are HireMind AI assistant."
-    const modelName = body.modelName || "gemini-3.5-flash"
+    const requestedModel = body.modelName
     const history = body.history || []
     const userApiKey = req.headers.get("x-gemini-api-key")
 
-    // Priority: 1. User Header, 2. Server Environment Variable (GEMINI_API_KEY - hidden from browser)
-    const apiKey = userApiKey || process.env.GEMINI_API_KEY
+    // Priority: 1. User Header, 2. Server Environment Variable (GEMINI_API_KEY / NEXT_PUBLIC_GEMINI_API_KEY)
+    let rawApiKey = userApiKey || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""
+    const apiKey = rawApiKey.replace(/^["']|["']$/g, "").trim()
 
     if (!apiKey || apiKey.includes("YOUR_")) {
       return NextResponse.json({
@@ -28,19 +29,29 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const candidateModels = Array.from(new Set([
-      modelName,
-      "gemini-3.5-flash",
+    const priorityModels = [
+      "gemini-flash-lite-latest",
       "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest",
+      "gemini-3.5-flash",
       "gemini-3.6-flash",
       "gemini-3.8-flash",
-      "gemma-4-26b-a4b-it",
-      "gemini-flash-lite-latest",
-      "gemini-flash-latest"
-    ]))
+      "gemini-2.5-flash",
+      "gemma-4-26b-a4b-it"
+    ]
+    const candidateModels: string[] = []
+    if (requestedModel && !candidateModels.includes(requestedModel)) {
+      candidateModels.push(requestedModel)
+    }
+    for (const m of priorityModels) {
+      if (!candidateModels.includes(m)) {
+        candidateModels.push(m)
+      }
+    }
 
     let responseText = ""
-    let resolvedModel = modelName
+    let resolvedModel = requestedModel || candidateModels[0] || "gemini-3.5-flash"
     let lastError: any = null
 
     for (const curModel of candidateModels) {

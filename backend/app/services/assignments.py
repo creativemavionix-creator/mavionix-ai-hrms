@@ -29,10 +29,11 @@ def _client() -> OpenAI:
 
 
 def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    gemini_key = raw_key.strip('"\'').strip()
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
-    for model in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"):
+    for model in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
             resp = httpx.post(

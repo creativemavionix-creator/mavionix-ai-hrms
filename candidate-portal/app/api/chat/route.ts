@@ -61,9 +61,9 @@ function matchJobProfile(jobTitle: string, profiles: any): any {
   }
   return profiles["default"] || {}
 }
-const deepseekKey = process.env.DEEPSEEK_API_KEY || ""
-const geminiKey = process.env.GEMINI_API_KEY || ""
-const groqKey = process.env.GROQ_API_KEY || ""
+const deepseekKey = (process.env.DEEPSEEK_API_KEY || "").replace(/^["']|["']$/g, "").trim()
+const geminiKey = (process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "").replace(/^["']|["']$/g, "").trim()
+const groqKey = (process.env.GROQ_API_KEY || "").replace(/^["']|["']$/g, "").trim()
 
 const globalStore = globalThis as any
 if (!globalStore.__demoRounds) {
@@ -149,9 +149,9 @@ Your role:
 }
 
 async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  // Primary LLM Provider: Gemini Flash (gemini-3.5-flash / gemini-3.6-flash)
+  // Primary LLM Provider: Gemini Flash
   if (geminiKey && !geminiKey.includes("YOUR_")) {
-    for (const model of ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]) {
+    for (const model of ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"]) {
       try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
           method: "POST",

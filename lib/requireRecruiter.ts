@@ -16,7 +16,7 @@ export interface AuthCheckResult {
 }
 
 export async function requireRecruiter(request: Request): Promise<AuthCheckResult> {
-  const isDev = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true"
+  const isDev = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "false"
   const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

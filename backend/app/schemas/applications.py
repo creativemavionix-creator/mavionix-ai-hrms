@@ -10,7 +10,10 @@ ApplicationStage = Literal[
     "interview_round", "interview_round_completed",
     "speaking_round", "speaking_round_completed",
     "hr_round", "hr_round_completed",
-    "interview", "offered", "hired", "rejected", "waitlisted"
+    "interview", "offered", "hired", "rejected", "waitlisted",
+    # UI aliases
+    "submitted", "under_review", "approved", "task_assigned", "task_submitted",
+    "task_approved", "interview_scheduled", "interview_completed", "decision_hired", "decision_rejected"
 ]
 MatchQuality     = Literal["excellent", "strong", "good", "fair", "low"]
 

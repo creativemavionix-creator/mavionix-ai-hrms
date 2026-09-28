@@ -48,9 +48,19 @@ def upload_resume(file_bytes: bytes, filename: str, content_type: str = "applica
         pass
 
     safe_name = f"{uuid.uuid4()}/{filename.replace(' ', '_')}"
-    supabase.storage.from_(BUCKET).upload(
-        path=safe_name,
-        file=file_bytes,
-        file_options={"content-type": content_type},
-    )
-    return supabase.storage.from_(BUCKET).get_public_url(safe_name)
+    try:
+        supabase.storage.from_(BUCKET).upload(
+            path=safe_name,
+            file=file_bytes,
+            file_options={"content-type": content_type},
+        )
+        return supabase.storage.from_(BUCKET).get_public_url(safe_name)
+    except Exception as exc:
+        logger.warning("Supabase storage upload failed, saving locally: %s", exc)
+        tmp_dir = os.path.join(tempfile.gettempdir(), "hiremind_resumes")
+        os.makedirs(tmp_dir, exist_ok=True)
+        local_name = f"{uuid.uuid4()}_{filename.replace(' ', '_')}"
+        path = os.path.join(tmp_dir, local_name)
+        with open(path, "wb") as f:
+            f.write(file_bytes)
+        return f"file://{path}"

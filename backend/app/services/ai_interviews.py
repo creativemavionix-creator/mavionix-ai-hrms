@@ -79,17 +79,20 @@ import urllib.request
 import ssl
 
 def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    gemini_key = raw_key.strip('"\'').strip()
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
     candidate_models = (
-        "gemini-3.5-flash",
+        "gemini-flash-lite-latest",
         "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
         "gemini-3.6-flash",
         "gemini-3.8-flash",
+        "gemini-2.5-flash",
         "gemma-4-26b-a4b-it",
-        "gemini-flash-lite-latest",
-        "gemini-flash-latest",
     )
     last_error: Exception | None = None
     for model in candidate_models:
@@ -98,7 +101,7 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
             resp = httpx.post(
                 url,
                 json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
-                timeout=10.0,
+                timeout=12.0,
                 verify=False,
             )
             if resp.status_code == 200:

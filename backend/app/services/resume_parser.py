@@ -67,7 +67,7 @@ def reload_weights_from_db() -> None:
     try:
         from app.database import supabase
         result = supabase.table("settings").select("value").eq("key", "ai_weights").maybe_single().execute()
-        if result.data and result.data.get("value"):
+        if result and getattr(result, "data", None) and result.data.get("value"):
             val = result.data["value"]
             total = val.get("skills", 0) + val.get("experience", 0) + val.get("education", 0) + val.get("projects", 0)
             if total > 0:
@@ -113,18 +113,41 @@ def _extract_json(text: str) -> Any:
 
 
 def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
-    """Call Gemini or DeepSeek chat completion and return the text response."""
-    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
-    # Try Gemini first
+    """Call DeepSeek or Gemini chat completion and return the text response."""
+    # 1. Try DeepSeek first (fast, reliable)
+    if settings.deepseek_api_key and OpenAI is not None:
+        try:
+            client = _get_client()
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.2,
+                timeout=15.0,
+            )
+            content = response.choices[0].message.content or ""
+            if content.strip():
+                return content.strip()
+        except Exception as exc:
+            logger.warning("DeepSeek API call failed: %s", exc)
+
+    # 2. Try Gemini with real models
+    raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    gemini_key = raw_key.strip('"\'').strip()
     if gemini_key:
         candidate_models = (
-            "gemini-3.5-flash",
+            "gemini-flash-lite-latest",
             "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-latest",
+            "gemini-3.5-flash",
             "gemini-3.6-flash",
             "gemini-3.8-flash",
+            "gemini-2.5-flash",
             "gemma-4-26b-a4b-it",
-            "gemini-flash-lite-latest",
-            "gemini-flash-latest",
         )
         import httpx
         for cur_model in candidate_models:
@@ -150,18 +173,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
             except Exception as exc:
                 logger.warning("Gemini model %s failed, trying fallback: %s", cur_model, exc)
 
-    # Fallback to DeepSeek
-    client = _get_client()
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.1,
-        max_tokens=max_tokens,
-    )
-    return response.choices[0].message.content or ""
+    raise RuntimeError("All LLM providers (DeepSeek and Gemini) failed or are unconfigured.")
 
 
 # ── Resume parsing ────────────────────────────────────────────────────────────

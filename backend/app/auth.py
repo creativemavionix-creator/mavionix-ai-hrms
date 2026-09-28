@@ -147,13 +147,15 @@ async def _verify_bearer_credentials(token: str) -> CurrentUser:
     user_id: str | None = None
     user_email: str | None = None
     user_name: str | None = None
+    authUser: Any = None
     try:
         # Verify via Supabase Auth API natively (cryptographic verification)
         auth_user_res = supabase.auth.get_user(token)
         if auth_user_res and getattr(auth_user_res, "user", None) and auth_user_res.user:
-            user_id = auth_user_res.user.id
-            user_email = auth_user_res.user.email
-            user_meta = getattr(auth_user_res.user, "user_metadata", {}) or {}
+            authUser = auth_user_res.user
+            user_id = authUser.id
+            user_email = authUser.email
+            user_meta = getattr(authUser, "user_metadata", {}) or {}
             user_name = user_meta.get("full_name") or user_meta.get("name") or (user_email.split("@")[0] if user_email else "Recruiter")
     except Exception:
         user_id = None
@@ -172,30 +174,40 @@ async def _verify_bearer_credentials(token: str) -> CurrentUser:
             .maybe_single()
             .execute()
         )
-        result = res.data if res else None
+        result = res.data if (res and getattr(res, "data", None)) else None
     except Exception:
         pass
 
     if not result:
         # User is authenticated via Supabase Auth, but their profile row in 'users' table doesn't exist yet!
-        # Automatically provision or determine role
-        role = "recruiter"
-        if user_email and ("admin" in user_email.lower() or user_email.endswith("@hiremind.ai") or user_email.endswith("@mavionix.com") or user_email == "hr.recruiter@hiremind.ai"):
+        is_recruiter = (
+            user_email == "hr.recruiter@hiremind.ai"
+            or (user_email and (user_email.endswith("@hiremind.ai") or user_email.endswith("@mavionix.com") or "admin" in user_email.lower()))
+        )
+        if is_dev or (user_email and "admin" in user_email.lower()):
             role = "super_admin"
-        elif is_dev:
-            role = "super_admin"
+        elif is_recruiter:
+            role = "recruiter"
+        else:
+            role = "candidate"
 
         new_profile = {
             "id": user_id,
             "email": user_email or "recruiter@hiremind.ai",
-            "name": user_name or "Recruiter",
+            "name": user_name or (user_email.split("@")[0] if user_email else "Recruiter"),
             "role": role,
         }
         try:
             supabase.table("users").upsert(new_profile).execute()
         except Exception:
             pass
-        result = new_profile
+        return CurrentUser(
+            id=user_id,
+            email=user_email or "recruiter@hiremind.ai",
+            name=user_name or (user_email.split("@")[0] if user_email else "Recruiter"),
+            role=role,
+            token=token,
+        )
 
     profile = result
     role = profile.get("role") or ("super_admin" if is_dev else "recruiter")

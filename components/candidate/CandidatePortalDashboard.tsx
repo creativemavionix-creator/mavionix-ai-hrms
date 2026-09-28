@@ -39,7 +39,12 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   // Auth Mode for unauthenticated tabbed form
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup")
   const [authLoading, setAuthLoading] = useState(false)
-  const [showApplyModal, setShowApplyModal] = useState(false)
+  const [submittedApplication, setSubmittedApplication] = useState<{
+    name: string
+    email: string
+    position: string
+    id?: string
+  } | null>(null)
 
   // Registration & Application Form Fields
   const [name, setName] = useState("")
@@ -70,17 +75,21 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
   const [activeAssignment, setActiveAssignment] = useState<any | null>(null)
 
   // Fetch candidate profile from GET /api/candidates/me using Bearer token
-  const fetchCandidateProfile = async () => {
+  const fetchCandidateProfile = async (explicitSession?: any) => {
     setViewState("loading")
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      let currentSession = explicitSession
+      if (!currentSession) {
+        const { data } = await supabase.auth.getSession()
+        currentSession = data.session
+      }
       
       const userEmail = currentSession?.user?.email?.toLowerCase() || ""
       const isHrRecruiter = userEmail === "hr.recruiter@hiremind.ai" || userEmail.endsWith("@hiremind.ai")
 
       let token = currentSession?.access_token || ""
       
-      if ((!currentSession?.user || isHrRecruiter) && typeof window !== "undefined") {
+      if (!token && typeof window !== "undefined") {
         const savedCandToken = localStorage.getItem("hiremind_candidate_token")
         if (savedCandToken) {
           token = savedCandToken
@@ -237,8 +246,13 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
       }
 
       if (data?.session) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("hiremind_candidate_token", data.session.access_token)
+          localStorage.setItem("hiremind_candidate_email", email.trim().toLowerCase())
+          localStorage.setItem("hiremind_token", data.session.access_token)
+        }
         showToast("success", "Sign in successful! Loading your portal...")
-        await fetchCandidateProfile()
+        await fetchCandidateProfile(data.session)
       }
     } catch (err: any) {
       showToast("error", `Sign In Exception: ${err?.message || "Unknown error"}`)
@@ -290,8 +304,13 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
         return
       }
 
-      showToast("success", "Thanks! We'll be in touch once HR reviews your application.")
-      setShowApplyModal(false)
+      showToast("success", "Application registered successfully!")
+      setSubmittedApplication({
+        name,
+        email: email.trim().toLowerCase(),
+        position,
+        id: result.application?.id || result.candidate?.id
+      })
     } catch (err: any) {
       showToast("error", `Application Exception: ${err?.message || "Unknown error"}`)
     } finally {
@@ -387,7 +406,89 @@ export default function CandidatePortalDashboard({ onSwitchToRecruiter }: Candid
               </button>
             </div>
 
-            {authMode === "signup" ? (
+            {submittedApplication ? (
+              <div className="space-y-6 text-center py-6 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                </div>
+
+                <div className="space-y-2 max-w-lg mx-auto">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 font-extrabold bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1 rounded-full inline-block">
+                    Application Successfully Registered
+                  </span>
+                  <h2 className="text-2xl font-display font-extrabold text-white">
+                    Thank You, {submittedApplication.name}!
+                  </h2>
+                  <p className="text-xs text-neutral-400 leading-relaxed">
+                    Your application for <span className="text-white font-semibold">{submittedApplication.position}</span> has been received and queued into the HireMind AI pipeline.
+                  </p>
+                  {submittedApplication.id && (
+                    <p className="text-[11px] font-mono text-neutral-500">
+                      Application Reference ID: <span className="text-emerald-400 font-bold">{submittedApplication.id}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Status pipeline indicator */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left max-w-2xl mx-auto pt-2">
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-emerald-500/30 space-y-1.5 shadow-lg">
+                    <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> 1. AI Resume Scoring
+                    </span>
+                    <p className="text-[11px] text-neutral-300 leading-relaxed">
+                      Gemini AI evaluates your experience, stack, and skill correlation in the background.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-amber-500/30 space-y-1.5 shadow-lg">
+                    <span className="text-[10px] font-mono uppercase text-amber-400 font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> 2. HR Recruiter Review
+                    </span>
+                    <p className="text-[11px] text-neutral-300 leading-relaxed">
+                      HR reviews your dossier on the Recruiter Workstation and approves portal access.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-indigo-500/30 space-y-1.5 shadow-lg">
+                    <span className="text-[10px] font-mono uppercase text-indigo-400 font-bold flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5" /> 3. Assessment & Interview
+                    </span>
+                    <p className="text-[11px] text-neutral-300 leading-relaxed">
+                      Once shortlisted, you receive credentials to access the proctored interview portal.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 max-w-md mx-auto">
+                  <Button
+                    onClick={() => {
+                      setSubmittedApplication(null)
+                      setAuthMode("signin")
+                    }}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-500/20"
+                  >
+                    Go to Candidate Sign In
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSubmittedApplication(null)
+                      setName("")
+                      setEmail("")
+                      setStatementOfIntent("")
+                      setPhone("")
+                      setLocation("")
+                      setLinkedInUrl("")
+                      setGithubUrl("")
+                      setSkillsText("")
+                      setResumeText("")
+                      setUploadedFile(null)
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 border-white/10 hover:bg-white/10 text-neutral-300 rounded-xl text-xs font-semibold"
+                  >
+                    Submit Another Application
+                  </Button>
+                </div>
+              </div>
+            ) : authMode === "signup" ? (
               <form onSubmit={handleApply} className="space-y-6">
                 <div className="border-b border-white/[0.06] pb-4">
                   <h2 className="text-xl font-display font-extrabold text-white">Candidate Registration & Job Application</h2>

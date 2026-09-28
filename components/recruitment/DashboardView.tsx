@@ -34,7 +34,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
     } catch {} finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+    window.addEventListener("refresh-data", fetchData)
+    return () => window.removeEventListener("refresh-data", fetchData)
+  }, [fetchData])
 
   // Simulate AI terminal feed
   useEffect(() => {
