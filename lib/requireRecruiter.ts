@@ -16,8 +16,16 @@ export interface AuthCheckResult {
 }
 
 export async function requireRecruiter(request: Request): Promise<AuthCheckResult> {
+  const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
   const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (isDemoAllowed) {
+      return {
+        authorized: true,
+        user: { id: "00000000-0000-0000-0000-000000000000", email: "hr.recruiter@hiremind.ai", role: "recruiter" }
+      }
+    }
     return {
       authorized: false,
       response: NextResponse.json(
@@ -28,23 +36,19 @@ export async function requireRecruiter(request: Request): Promise<AuthCheckResul
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, "").trim()
-  if (!token) {
+  if (!token || token === "demo-token") {
+    if (isDemoAllowed) {
+      return {
+        authorized: true,
+        user: { id: "00000000-0000-0000-0000-000000000000", email: "hr.recruiter@hiremind.ai", role: "recruiter" }
+      }
+    }
     return {
       authorized: false,
       response: NextResponse.json(
         { error: "Unauthorized", detail: "Empty access token." },
         { status: 401 }
       ),
-    }
-  }
-
-  if (token === "demo-token") {
-    const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development"
-    if (isDemoAllowed) {
-      return {
-        authorized: true,
-        user: { id: "00000000-0000-0000-0000-000000000000", email: "hr.recruiter@hiremind.ai", role: "recruiter" }
-      }
     }
   }
 

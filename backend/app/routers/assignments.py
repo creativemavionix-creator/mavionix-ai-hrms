@@ -459,7 +459,12 @@ async def get_assignment(assignment_id: str, user: HRStaffDep):
     result = supabase.table("assignments").select("*").eq("id", assignment_id).maybe_single().execute()
     if not result or not result.data:
         raise HTTPException(status_code=404, detail="Assignment not found.")
-    return result.data
+    data = result.data
+    if isinstance(data, dict) and not data.get("recruiter_review"):
+        ai_eval = data.get("ai_evaluation")
+        if isinstance(ai_eval, dict) and "recruiter_review" in ai_eval:
+            data["recruiter_review"] = ai_eval["recruiter_review"]
+    return data
 
 
 @router.post("/api/assignments/{assignment_id}/recruiter-review")
@@ -493,24 +498,37 @@ async def recruiter_review_assignment(assignment_id: str, body: RecruiterReviewR
     }
 
     # Column 'status' is PostgreSQL ENUM ('pending', 'submitted', 'reviewed').
-    # Store decision ('approved' | 'rejected') inside recruiter_review JSONB, set assignment status to 'reviewed'.
-    supabase.table("assignments").update({
+    # Store decision ('approved' | 'rejected') inside recruiter_review JSONB / ai_evaluation, set assignment status to 'reviewed'.
+    updated_eval = dict(ai_eval) if isinstance(ai_eval, dict) else {}
+    updated_eval["recruiter_review"] = review_audit
+    updated_eval["final_score"] = final_score
+    updated_eval["decision"] = body.decision
+
+    update_payload = {
         "score": final_score,
         "status": "reviewed",
+        "ai_evaluation": updated_eval,
         "recruiter_review": review_audit,
-    }).eq("id", assignment_id).execute()
+    }
+
+    try:
+        supabase.table("assignments").update(update_payload).eq("id", assignment_id).execute()
+    except Exception as e:
+        logger.warning("Updating assignments with recruiter_review column failed, falling back to ai_evaluation: %s", e)
+        update_payload.pop("recruiter_review", None)
+        supabase.table("assignments").update(update_payload).eq("id", assignment_id).execute()
 
     application_id = assignment["application_id"]
     if body.decision == "approved":
         try:
             await advance_stage(application_id, "tech_round", user.name, f"Approved by recruiter ({user.name}) with score {final_score}")
         except Exception as e:
-            logger.warn(f"Failed to advance stage to tech_round: {e}")
+            logger.warning("Failed to advance stage to tech_round: %s", e)
     else:
         try:
             await advance_stage(application_id, "rejected", user.name, f"Rejected by recruiter: {body.rejection_reason_category or 'Assignment review'}")
         except Exception as e:
-            logger.warn(f"Failed to advance stage to rejected: {e}")
+            logger.warning("Failed to advance stage to rejected: %s", e)
 
     return {
         "status": "reviewed",
@@ -532,7 +550,12 @@ async def get_assignment_by_application(application_id: str, user: HRStaffDep):
     )
     if not result or not result.data:
         raise HTTPException(status_code=404, detail="No assignment found for this application.")
-    return result.data
+    data = result.data
+    if isinstance(data, dict) and not data.get("recruiter_review"):
+        ai_eval = data.get("ai_evaluation")
+        if isinstance(ai_eval, dict) and "recruiter_review" in ai_eval:
+            data["recruiter_review"] = ai_eval["recruiter_review"]
+    return data
 
 
 @router.post("/api/applications/{application_id}/manual-shortlist-and-assign")

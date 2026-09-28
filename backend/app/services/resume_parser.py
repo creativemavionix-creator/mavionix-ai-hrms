@@ -135,16 +135,17 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
             logger.warning("DeepSeek API call failed: %s", exc)
 
     # 2. Try Gemini with real models
-    gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
+    gemini_key = raw_key.strip('"\'').strip()
     if gemini_key:
         import httpx
-        for model in ("gemini-1.5-flash", "gemini-2.0-flash"):
+        for model in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"):
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
                 resp = httpx.post(
                     url,
                     json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-                    timeout=8.0,
+                    timeout=10.0,
                 )
                 if resp.status_code == 200:
                     data = resp.json()

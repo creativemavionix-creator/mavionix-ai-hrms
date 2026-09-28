@@ -32,19 +32,24 @@ function clamp(val: any, defaultVal: number = 75): number {
 }
 
 export async function analyzeCandidateResume(input: CandidateScoringInput): Promise<AiScoringResult> {
-  const apiKey = input.userApiKey || process.env.GEMINI_API_KEY
+  const rawKey = input.userApiKey || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""
+  const apiKey = rawKey.replace(/^["']|["']$/g, "").trim()
 
   const skillsList = Array.isArray(input.skills)
     ? input.skills.join(", ")
     : input.skills || "Software Engineering, Problem Solving"
 
-  if (apiKey) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: "gemini-3.5-flash",
-        generationConfig: { responseMimeType: "application/json" },
-        systemInstruction: `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
+  if (apiKey && !apiKey.includes("YOUR_")) {
+    const modelsToTry = [
+      "gemini-flash-lite-latest",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest",
+      "gemini-3.5-flash"
+    ]
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
 Your task is to analyze candidate resumes and technical evaluation responses for engineering roles.
 Compute objective 0-100 scores based strictly on the provided resume content, technical depth, and role alignment.
 Return ONLY valid JSON matching this schema:
@@ -59,9 +64,8 @@ Return ONLY valid JSON matching this schema:
   "tags": ["tag1", "tag2", "tag3", "tag4"],
   "verification_status": "verified" | "flagged"
 }`
-      })
 
-      const prompt = `
+    const prompt = `
 ANALYZE CANDIDATE APPLICATION:
 - Candidate Name: ${input.name}
 - Target Position: ${input.jobTitle}
@@ -90,47 +94,55 @@ ${input.outageLesson || "None provided."}
 
 Evaluate the candidate's resume and responses thoroughly. Return valid JSON matching the schema.`
 
-      const result = await model.generateContent(prompt)
-      const text = result.response.text()
-      const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
-      let json: any = {}
+    for (const modelName of modelsToTry) {
       try {
-        json = JSON.parse(cleaned)
-      } catch {
-        const match = cleaned.match(/\{[\s\S]*\}/)
-        if (match) {
-          json = JSON.parse(match[0])
-        } else {
-          throw new Error("Failed to parse Gemini scoring JSON response")
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: "application/json" },
+          systemInstruction,
+        })
+
+        const result = await model.generateContent(prompt)
+        const text = result.response.text()
+        const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
+        let json: any = {}
+        try {
+          json = JSON.parse(cleaned)
+        } catch {
+          const match = cleaned.match(/\{[\s\S]*\}/)
+          if (match) {
+            json = JSON.parse(match[0])
+          } else {
+            continue
+          }
         }
+
+        const skill_score = clamp(json.skill_score, 82)
+        const exp_score = clamp(json.exp_score, 80)
+        const edu_score = clamp(json.edu_score, 78)
+        const proj_score = clamp(json.proj_score, 85)
+        const confidence = clamp(json.confidence, 88)
+        const sentiment_score = clamp(json.sentiment_score, 85)
+
+        const overall_score = Math.round(
+          (skill_score * 0.35) + (exp_score * 0.30) + (proj_score * 0.20) + (edu_score * 0.15)
+        )
+
+        return {
+          overall_score,
+          skill_score,
+          exp_score,
+          edu_score,
+          proj_score,
+          confidence,
+          sentiment_score,
+          insights: json.insights || `Candidate resume parsed successfully. Architectural experience verified by Gemini (${modelName}).`,
+          tags: Array.isArray(json.tags) && json.tags.length > 0 ? json.tags.slice(0, 6) : ["Engineering", "Backend", "Architecture"],
+          verification_status: json.verification_status === "flagged" ? "flagged" : "verified"
+        }
+      } catch (err: any) {
+        console.warn(`Gemini (${modelName}) resume scoring error:`, err?.message || err)
       }
-
-
-      const skill_score = clamp(json.skill_score, 82)
-      const exp_score = clamp(json.exp_score, 80)
-      const edu_score = clamp(json.edu_score, 78)
-      const proj_score = clamp(json.proj_score, 85)
-      const confidence = clamp(json.confidence, 88)
-      const sentiment_score = clamp(json.sentiment_score, 85)
-
-      const overall_score = Math.round(
-        (skill_score * 0.35) + (exp_score * 0.30) + (proj_score * 0.20) + (edu_score * 0.15)
-      )
-
-      return {
-        overall_score,
-        skill_score,
-        exp_score,
-        edu_score,
-        proj_score,
-        confidence,
-        sentiment_score,
-        insights: json.insights || "Candidate resume parsed successfully. Architectural experience verified by Gemini 2.0 Flash.",
-        tags: Array.isArray(json.tags) && json.tags.length > 0 ? json.tags.slice(0, 6) : ["Engineering", "Backend", "Architecture"],
-        verification_status: json.verification_status === "flagged" ? "flagged" : "verified"
-      }
-    } catch (err: any) {
-      console.warn("Gemini API resume scoring error, using dynamic heuristic fallback:", err.message || err)
     }
   }
 

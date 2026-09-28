@@ -12,12 +12,13 @@ export async function POST(req: Request) {
     const body = await req.json()
     const prompt = body.prompt || "Hello Gemini"
     const systemInstruction = body.systemInstruction || "You are HireMind AI assistant."
-    const requestedModel = body.modelName || "gemini-3.5-flash"
+    const requestedModel = body.modelName
     const history = body.history || []
     const userApiKey = req.headers.get("x-gemini-api-key")
 
-    // Priority: 1. User Header, 2. Server Environment Variable (GEMINI_API_KEY - hidden from browser)
-    const apiKey = userApiKey || process.env.GEMINI_API_KEY
+    // Priority: 1. User Header, 2. Server Environment Variable (GEMINI_API_KEY / NEXT_PUBLIC_GEMINI_API_KEY)
+    let rawApiKey = userApiKey || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""
+    const apiKey = rawApiKey.replace(/^["']|["']$/g, "").trim()
 
     if (!apiKey || apiKey.includes("YOUR_")) {
       return NextResponse.json({
@@ -28,9 +29,23 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelsToTry = [requestedModel]
-    if (!modelsToTry.includes("gemini-3.5-flash")) modelsToTry.push("gemini-3.5-flash")
-    if (!modelsToTry.includes("gemini-flash-latest")) modelsToTry.push("gemini-flash-latest")
+    const priorityModels = [
+      "gemini-flash-lite-latest",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash"
+    ]
+    const modelsToTry: string[] = []
+    if (requestedModel && !modelsToTry.includes(requestedModel)) {
+      modelsToTry.push(requestedModel)
+    }
+    for (const m of priorityModels) {
+      if (!modelsToTry.includes(m)) {
+        modelsToTry.push(m)
+      }
+    }
 
     let responseText = ""
     let successfulModel = requestedModel
