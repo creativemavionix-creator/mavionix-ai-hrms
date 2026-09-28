@@ -151,7 +151,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
                 resp = httpx.post(
                     url,
                     json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-                    timeout=5.0,
+                    timeout=15.0,
                     verify=False,
                 )
                 if resp.status_code == 200:

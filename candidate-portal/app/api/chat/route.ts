@@ -172,7 +172,7 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
     for (const model of activeModels) {
       try {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 4500)
+        const timer = setTimeout(() => controller.abort(), 9000)
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

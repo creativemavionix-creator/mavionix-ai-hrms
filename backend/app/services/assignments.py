@@ -39,7 +39,7 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
             resp = httpx.post(
                 url,
                 json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
-                timeout=5.0,
+                timeout=12.0,
             )
             if resp.status_code == 200:
                 data = resp.json()
