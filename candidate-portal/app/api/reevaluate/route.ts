@@ -17,6 +17,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   if (!geminiKey) throw new Error("No Gemini key")
   const candidateModels = [
     "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
     "gemini-flash-latest",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
@@ -30,7 +31,14 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }]
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 1000,
+            thinkingConfig: {
+              thinkingBudget: 0
+            }
+          }
         })
       })
       if (res.ok) {

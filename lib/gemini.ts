@@ -58,6 +58,7 @@ export async function generateGeminiChatResponse(payload: {
       const models = [
         payload.modelName,
         "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
         "gemini-flash-latest",
         "gemini-3.7-flash",
         "gemini-3.8-flash"

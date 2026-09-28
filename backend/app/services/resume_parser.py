@@ -140,6 +140,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     if gemini_key:
         candidate_models = (
             "gemini-3.6-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-latest",
             "gemini-3.7-flash",
             "gemini-3.8-flash",

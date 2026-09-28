@@ -165,6 +165,7 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
   if (geminiKey && !geminiKey.includes("YOUR_")) {
     const activeModels = [
       "gemini-3.6-flash",
+      "gemini-3.1-flash-lite",
       "gemini-flash-latest",
       "gemini-3.7-flash",
       "gemini-3.8-flash",
@@ -181,7 +182,11 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
             contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 350,
+              maxOutputTokens: 800,
+              responseMimeType: "application/json",
+              thinkingConfig: {
+                thinkingBudget: 0
+              }
             }
           })
         })
@@ -190,7 +195,7 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
           const data = await res.json()
           const parts = data.candidates?.[0]?.content?.parts || []
           const nonThought = parts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text).join("").trim()
-          const text = nonThought || parts[0]?.text
+          const text = nonThought || parts.map((p: any) => p.text || "").join("").trim()
           if (text && text.trim()) return text.trim()
         }
       } catch (e) {
@@ -333,9 +338,32 @@ export async function POST(req: NextRequest) {
       if (customQuestions.length > 0) {
         firstQ = customQuestions[0].text
       } else {
-        const profiles = await loadJobProfiles()
-        const matchedProfile = matchJobProfile(body.jobTitle, profiles)
-        firstQ = matchedProfile?.questions?.easy?.[0] || "Welcome to the technical round. To begin: Can you describe your recent technical projects and architectural decisions?"
+        const candidateName = body.candidateName || body.session?.candidateName || "Candidate"
+        const jobTitle = body.jobTitle || body.session?.jobTitle || "Software Engineer"
+        const candidateSkills = body.candidateSkills || body.session?.candidateSkills || []
+        const skillsStr = Array.isArray(candidateSkills) && candidateSkills.length > 0 ? candidateSkills.slice(0, 8).join(", ") : "relevant engineering skills"
+
+        const sysPrompt = MASTER_SYSTEM_PROMPTS[roundType] || MASTER_SYSTEM_PROMPTS.tech
+        const userPrompt = `Start the ${roundType} interview for ${candidateName} applying for the role of ${jobTitle}.
+Known candidate skills: ${skillsStr}.
+Generate a warm, professional 1-sentence opening greeting addressing the candidate by name and ask your very first sharp, domain-specific interview question.
+Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-sentence greeting + opening question" }`
+
+        try {
+          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt)
+          const parsed = extractJSON(llmRaw)
+          if (parsed && parsed.message && (parsed.message.includes("?") || parsed.message.length > 25)) {
+            firstQ = parsed.message
+          }
+        } catch (e) {
+          console.warn("Dynamic opening question generation failed, using profile fallback:", e)
+        }
+
+        if (!firstQ) {
+          const profiles = await loadJobProfiles()
+          const matchedProfile = matchJobProfile(body.jobTitle, profiles)
+          firstQ = matchedProfile?.questions?.easy?.[0] || `Welcome to the ${roundType} round for ${jobTitle}. To begin: Can you describe your recent technical projects and architectural decisions?`
+        }
       }
 
       const roundData = {

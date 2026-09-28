@@ -85,6 +85,7 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
         raise RuntimeError("Gemini API key is not configured")
     candidate_models = (
         "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
         "gemini-flash-latest",
         "gemini-3.7-flash",
         "gemini-3.8-flash",
@@ -95,7 +96,14 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
             resp = httpx.post(
                 url,
-                json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
+                json={
+                    "contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "maxOutputTokens": 800,
+                        "thinkingConfig": {"thinkingBudget": 0},
+                    },
+                },
                 timeout=12.0,
                 verify=False,
             )
