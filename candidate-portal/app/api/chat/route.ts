@@ -160,7 +160,12 @@ Your role:
   hr: `You are HireMind AI's Senior HR Director evaluating compensation expectations, notice period, and cultural fit. Return ONLY valid JSON: { "answer_score": integer 0-10, "type": "question" or "complete", "message": "Acknowledgment + next HR question" }`,
 }
 
-async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+interface LLMOptions {
+  thinkingBudget?: number | null
+  maxTokens?: number
+}
+
+async function callOnlineLLM(systemPrompt: string, userPrompt: string, options?: LLMOptions): Promise<string> {
   // Provider 1: Gemini (Ultra-fast, verified active models)
   if (geminiKey && !geminiKey.includes("YOUR_")) {
     const activeModels = [
@@ -170,24 +175,30 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
       "gemini-3.7-flash",
       "gemini-3.8-flash",
     ]
+    const thinkingBudget = options?.thinkingBudget !== undefined ? options.thinkingBudget : 100
+    const maxTokens = options?.maxTokens || 1000
+
     for (const model of activeModels) {
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 9000)
+        const genConfig: any = {
+          temperature: 0.7,
+          maxOutputTokens: maxTokens,
+          responseMimeType: "application/json",
+        }
+        if (thinkingBudget !== null) {
+          genConfig.thinkingConfig = {
+            thinkingBudget
+          }
+        }
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 800,
-              responseMimeType: "application/json",
-              thinkingConfig: {
-                thinkingBudget: 0
-              }
-            }
+            generationConfig: genConfig
           })
         })
         clearTimeout(timer)
@@ -465,6 +476,15 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
       const substantiveCount = transcript.filter((t: any) => t.role === "candidate" && !isGibberish(t.message)).length
       const shouldComplete = isBlueprintComplete || substantiveCount >= MAX_EXCHANGES
 
+      const isVoice = Boolean(
+        body.is_voice ||
+        body.speaking_metrics?.audio_duration ||
+        body.speaking_metrics?.words_per_minute ||
+        roundType === "speaking"
+      )
+      const perTurnThinkingBudget = isVoice ? 100 : 0
+      const perTurnMaxTokens = isVoice ? 1000 : 800
+
       let nextQuestionText = ""
       let ack = "Thank you for detailing your approach. "
       if (isGibberish(message)) {
@@ -472,6 +492,8 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
       }
 
       let aiMessage = ""
+      let currentTurnScore = 8
+
       if (shouldComplete) {
         aiMessage = `Thank you for your thorough responses. This concludes the ${round.round_type?.toUpperCase() || "interview"} round.`
       } else if (customQuestions.length > 0 && flowState.current_index < customQuestions.length) {
@@ -483,10 +505,20 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
         const userPrompt = `Candidate answered: "${message}"\n\nYou MUST ask the recruiter's exact mandatory question next: "${nextQuestionText}".\nReturn JSON: { "answer_score": number 1-10, "message": "1-sentence domain acknowledgment of candidate's answer + '${nextQuestionText.replace(/"/g, "'")}'" }`
 
         try {
-          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt)
+          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt, {
+            thinkingBudget: perTurnThinkingBudget,
+            maxTokens: perTurnMaxTokens,
+          })
           const parsed = extractJSON(llmRaw)
-          if (parsed && parsed.message && parsed.message.includes("?")) {
-            aiMessage = parsed.message
+          if (parsed) {
+            if (typeof parsed.answer_score === "number" && !isNaN(parsed.answer_score)) {
+              currentTurnScore = Math.min(10, Math.max(1, Math.round(parsed.answer_score)))
+            }
+            if (parsed.message && parsed.message.includes("?")) {
+              aiMessage = parsed.message
+            } else {
+              aiMessage = `${ack}${nextQuestionText}`
+            }
           } else {
             aiMessage = `${ack}${nextQuestionText}`
           }
@@ -504,10 +536,20 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
         const userPrompt = `Candidate answered: "${message}"\nJob: ${jobTitle}\nRound: ${roundType}\nExchange: ${substantiveCount} of ${MAX_EXCHANGES}\nGenerate your intelligent evaluation and next progressive interview question for ${jobTitle}. Return JSON: { "answer_score": number 1-10, "message": "1-sentence intelligent acknowledgment + next question" }`
 
         try {
-          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt)
+          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt, {
+            thinkingBudget: perTurnThinkingBudget,
+            maxTokens: perTurnMaxTokens,
+          })
           const parsed = extractJSON(llmRaw)
-          if (parsed && parsed.message && (parsed.message.includes("?") || parsed.message.length > 20)) {
-            aiMessage = parsed.message
+          if (parsed) {
+            if (typeof parsed.answer_score === "number" && !isNaN(parsed.answer_score)) {
+              currentTurnScore = Math.min(10, Math.max(1, Math.round(parsed.answer_score)))
+            }
+            if (parsed.message && (parsed.message.includes("?") || parsed.message.length > 20)) {
+              aiMessage = parsed.message
+            } else {
+              aiMessage = `${ack}${fallbackQ}`
+            }
           } else {
             aiMessage = `${ack}${fallbackQ}`
           }
@@ -515,6 +557,18 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
           aiMessage = `${ack}${fallbackQ}`
         }
       }
+
+      if (isGibberish(message)) {
+        currentTurnScore = Math.min(currentTurnScore, 3)
+      }
+
+      // Record per-question outcome
+      flowState.outcomes.push({
+        question_id: currentQuestion?.id || `q-${flowState.current_index}`,
+        score: currentTurnScore,
+        duration_seconds: body.speaking_metrics?.audio_duration || 120,
+        answered_at: new Date().toISOString()
+      })
 
       // Immediate HR Extraction
       let extractedHrData: any = null
@@ -525,25 +579,86 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
         }
       }
 
-      // Record per-question outcome
-      if (currentQuestion) {
-        flowState.outcomes.push({
-          question_id: currentQuestion.id,
-          score: isGibberish(message) ? 4 : 8,
-          duration_seconds: 120,
-          answered_at: new Date().toISOString()
-        })
-      }
-
       round.flow_state = flowState
       transcript.push({ role: "ai", message: aiMessage, timestamp: new Date().toISOString() })
 
+      // Dynamic Hybrid Final Scorecard Generation
+      let summaryResult: any = null
+      if (shouldComplete) {
+        // 1. Base Score = Mathematical average of all turn scores (0-100)
+        const allScores = (flowState.outcomes || []).map((o: any) => o.score).filter((s: any) => typeof s === "number")
+        const avgTurn = allScores.length > 0 ? (allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length) : currentTurnScore
+        const baseScore = Math.round(avgTurn * 10)
+
+        // 2. Penalty Modifiers = Deductions for tab-leaving strikes (-5 pts/strike) and copy-paste flags
+        const strikesCount = Number(body.strikes || 0)
+        const strikePenalty = strikesCount * 5
+
+        const candidateTexts = transcript.filter((t: any) => t.role === "candidate").map((t: any) => t.message || "")
+        let copyPastePenalty = 0
+        for (let i = 1; i < candidateTexts.length; i++) {
+          if (candidateTexts[i].length > 40 && candidateTexts[i] === candidateTexts[i - 1]) {
+            copyPastePenalty = 10
+            break
+          }
+        }
+
+        const finalAiScore = Math.min(100, Math.max(25, baseScore - strikePenalty - copyPastePenalty))
+
+        // 3. AI Qualitative Synthesis with full reasoning enabled
+        const transcriptText = transcript.map((t: any) => `${t.role === 'ai' ? 'Interviewer' : 'Candidate'}: ${t.message}`).join("\n")
+        const summarySysPrompt = `You are a Principal Engineering Hiring Committee lead compiling an executive candidate scorecard. Return ONLY valid JSON:
+{
+  "ai_score": ${finalAiScore},
+  "ai_summary": "2-3 sentence executive assessment summarizing technical depth, problem-solving, and communication",
+  "strengths": ["specific strength 1", "specific strength 2", "specific strength 3"],
+  "concerns": ["specific concern or gap 1", "specific concern 2"]
+}`
+        const summaryUserPrompt = `Candidate: ${body.candidateName || "Candidate"}
+Role: ${jobTitle} (${roundType} round)
+Final Computed Score: ${finalAiScore}/100 (Penalties: -${strikePenalty + copyPastePenalty} pts)
+
+Full Interview Transcript:
+${transcriptText}
+
+Synthesize your objective assessment based strictly on candidate's demonstrated responses. Return ONLY valid JSON.`
+
+        try {
+          const rawSummary = await callOnlineLLM(summarySysPrompt, summaryUserPrompt, { thinkingBudget: null, maxTokens: 1500 })
+          const parsedSummary = extractJSON(rawSummary)
+          if (parsedSummary && parsedSummary.ai_summary) {
+            summaryResult = {
+              ai_score: finalAiScore,
+              ai_summary: parsedSummary.ai_summary,
+              strengths: Array.isArray(parsedSummary.strengths) && parsedSummary.strengths.length > 0 ? parsedSummary.strengths : ["Technical domain knowledge", "Clear responses"],
+              concerns: Array.isArray(parsedSummary.concerns) ? parsedSummary.concerns : []
+            }
+          }
+        } catch (err) {
+          console.warn("AI summary generation failed, using rule-based synthesis:", err)
+        }
+
+        if (!summaryResult) {
+          const concerns: string[] = []
+          if (strikePenalty > 0) concerns.push(`Candidate incurred ${strikesCount} proctoring/tab-switch warnings (-${strikePenalty} pts).`)
+          if (copyPastePenalty > 0) concerns.push("Candidate responses showed repetitive patterns.")
+          if (finalAiScore < 70) concerns.push("Candidate showed gaps in technical architecture depth.")
+
+          summaryResult = {
+            ai_score: finalAiScore,
+            ai_summary: `Candidate completed the ${roundType?.toUpperCase() || "technical"} interview for ${jobTitle} with an overall evaluated performance of ${finalAiScore}/100 across ${allScores.length} evaluated exchanges.`,
+            strengths: finalAiScore >= 75 ? ["Demonstrated solid role fundamentals", "Structured response articulation"] : ["Completed all interview stages"],
+            concerns
+          }
+        }
+      }
+
       return NextResponse.json({
         message: aiMessage,
-        answer_score: isGibberish(message) ? 4 : 8,
+        answer_score: currentTurnScore,
         round_complete: shouldComplete,
         extracted_hr_data: extractedHrData,
-        summary: shouldComplete ? { ai_score: 88, ai_summary: "Strong candidate with solid technical concepts.", strengths: ["System Architecture", "ML Modeling"], concerns: [] } : null,
+        summary: summaryResult,
       })
     }
 

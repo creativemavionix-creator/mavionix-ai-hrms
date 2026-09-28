@@ -522,6 +522,8 @@ function InterviewContent() {
           message: text,
           candidateName: session.candidateName,
           jobTitle: session.jobTitle,
+          is_voice: true,
+          strikes: browserStrikes + (cameraPresence.cameraStrikes || 0),
           token: session.token,
         }),
       })
@@ -921,7 +923,9 @@ function InterviewContent() {
           message: candidateMsg.content,
           candidateName: session.candidateName,
           jobTitle: session.jobTitle,
+          is_voice: Boolean(forcedText !== undefined || session.roundType === "speaking" || voice.isListening || voiceCountdownSec !== null || speakingMetrics),
           speaking_metrics: speakingMetrics,
+          strikes: browserStrikes + (cameraPresence.cameraStrikes || 0),
           token: session.token,
         }),
       })
