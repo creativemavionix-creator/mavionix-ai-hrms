@@ -139,15 +139,10 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     gemini_key = raw_key.strip('"\'').strip()
     if gemini_key:
         candidate_models = (
-            "gemini-flash-lite-latest",
-            "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
             "gemini-flash-latest",
-            "gemini-3.5-flash",
-            "gemini-3.6-flash",
-            "gemini-3.8-flash",
-            "gemini-2.5-flash",
-            "gemma-4-26b-a4b-it",
+            "gemini-1.5-pro",
         )
         import httpx
         for cur_model in candidate_models:
@@ -156,7 +151,7 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
                 resp = httpx.post(
                     url,
                     json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-                    timeout=12.0,
+                    timeout=5.0,
                     verify=False,
                 )
                 if resp.status_code == 200:

@@ -463,12 +463,25 @@ function InterviewContent() {
           speakTextRef.current(questionText)
         }
       }, 3000)
+
+      return () => {
+        setVoiceCountdownSec(null)
+        if (voiceCountdownTimerRef.current) {
+          clearInterval(voiceCountdownTimerRef.current)
+          voiceCountdownTimerRef.current = null
+        }
+        if (firstQuestionTimerRef.current) {
+          clearTimeout(firstQuestionTimerRef.current)
+          firstQuestionTimerRef.current = null
+        }
+      }
     }
   }, [state, roundId, messages.length])
 
   // Cleanup timers on component unmount
   useEffect(() => {
     return () => {
+      setVoiceCountdownSec(null)
       if (firstQuestionTimerRef.current) {
         clearTimeout(firstQuestionTimerRef.current)
         firstQuestionTimerRef.current = null
@@ -1613,6 +1626,8 @@ function InterviewContent() {
     ? "TECHNICAL ROUND"
     : session?.roundType === "hr"
     ? "HR ROUND"
+    : session?.roundType === "speaking"
+    ? "SPEAKING ROUND"
     : "BEHAVIORAL INTERVIEW"
 
   return (
@@ -1769,7 +1784,7 @@ function InterviewContent() {
             <span className="text-green-500 uppercase">SESSION ACTIVE</span>
           </div>
           <span className="mx-1">•</span>
-          <span>Q{exchangeCount}/3</span>
+          <span>Q{Math.min(exchangeCount, 6)}/6</span>
         </div>
       </div>
 

@@ -57,11 +57,10 @@ export async function generateGeminiChatResponse(payload: {
       const genAI = new GoogleGenerativeAI(clientKey)
       const models = [
         payload.modelName,
-        "gemini-flash-lite-latest",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
         "gemini-flash-latest",
-        "gemini-3.5-flash"
+        "gemini-1.5-pro"
       ].filter(Boolean) as string[]
 
       for (const m of models) {

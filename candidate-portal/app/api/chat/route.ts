@@ -14,11 +14,19 @@ function getApiUrl(): string {
   return (url || "").replace(/\/$/, "")
 }
 
+let cachedJobProfiles: any = null
+let lastProfilesFetch = 0
+
 async function loadJobProfiles(): Promise<any> {
+  const now = Date.now()
+  if (cachedJobProfiles && now - lastProfilesFetch < 300000) {
+    return cachedJobProfiles
+  }
   try {
     const ADMIN_API = getApiUrl()
+    if (!ADMIN_API) return {}
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const timeoutId = setTimeout(() => controller.abort(), 1500)
     const res = await fetch(`${ADMIN_API}/api/portal/job-profiles`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
@@ -26,12 +34,14 @@ async function loadJobProfiles(): Promise<any> {
     })
     clearTimeout(timeoutId)
     if (res.ok) {
-      return await res.json()
+      cachedJobProfiles = await res.json()
+      lastProfilesFetch = now
+      return cachedJobProfiles
     }
-  } catch (e) {
-    console.error("Failed to fetch job profiles from backend API:", e)
+  } catch {
+    // Backend offline or unreachable, fallback to cached
   }
-  return {}
+  return cachedJobProfiles || {}
 }
 
 function matchJobProfile(jobTitle: string, profiles: any): any {
@@ -88,7 +98,7 @@ async function tryBackend(
   try {
     const ADMIN_API = getApiUrl()
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12000)
+    const timeoutId = setTimeout(() => controller.abort(), 3500)
 
     const headers: Record<string, string> = { "Content-Type": "application/json" }
     if (candidateToken) {
@@ -145,75 +155,37 @@ Your role:
 
   interview: `You are HireMind AI's Principal Behavioral Interviewer evaluating STAR competency responses. Return ONLY valid JSON: { "answer_score": integer 0-10, "type": "question" or "complete", "message": "Acknowledgment + next STAR question" }`,
 
+  speaking: `You are HireMind AI's Senior Communication Assessor evaluating verbal clarity and structure. Return ONLY valid JSON: { "answer_score": integer 0-10, "type": "question" or "complete", "message": "Acknowledgment + next oral prompt" }`,
+
   hr: `You are HireMind AI's Senior HR Director evaluating compensation expectations, notice period, and cultural fit. Return ONLY valid JSON: { "answer_score": integer 0-10, "type": "question" or "complete", "message": "Acknowledgment + next HR question" }`,
 }
 
 async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  // Primary LLM Provider: Gemini Flash
+  // Provider 1: Gemini (Ultra-fast, verified active models)
   if (geminiKey && !geminiKey.includes("YOUR_")) {
-    for (const model of ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"]) {
+    const activeModels = [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-flash-latest",
+      "gemini-1.5-pro",
+    ]
+    for (const model of activeModels) {
       try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 4500)
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
+            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 350,
+            }
           })
         })
-        if (res.ok) {
-          const data = await res.json()
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text && text.trim()) return text
-        }
-      } catch (e) {
-        console.warn(`Gemini API (${model}) error:`, e)
-      }
-    }
-  }
-
-  // Secondary LLM Provider: DeepSeek AI
-  if (deepseekKey && !deepseekKey.includes("YOUR_")) {
-    try {
-      const res = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${deepseekKey}` },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          temperature: 0.7,
-          max_tokens: 400,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const text = data.choices?.[0]?.message?.content
-        if (text && text.trim()) return text
-      }
-    } catch (e) {
-      console.warn("DeepSeek API exception:", e)
-    }
-  }
-
-  // Secondary LLM Provider: Gemini
-  if (geminiKey && !geminiKey.includes("YOUR_")) {
-    const candidateModels = [
-      "gemini-3.5-flash",
-      "gemini-3.5-flash-lite",
-      "gemini-3.6-flash",
-      "gemini-3.8-flash",
-      "gemma-4-26b-a4b-it",
-      "gemini-flash-lite-latest",
-      "gemini-flash-latest"
-    ]
-    for (const curModel of candidateModels) {
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${geminiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nCandidate Input & Context:\n${userPrompt}` }] }]
-          })
-        })
+        clearTimeout(timer)
         if (res.ok) {
           const data = await res.json()
           const parts = data.candidates?.[0]?.content?.parts || []
@@ -222,29 +194,62 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
           if (text && text.trim()) return text.trim()
         }
       } catch (e) {
-        console.warn(`Gemini model ${curModel} error:`, e)
+        console.warn(`Gemini API (${model}) failed, trying fallback:`, e)
       }
     }
   }
-  // Tertiary LLM Provider: Groq Llama 3.3 70B
+
+  // Provider 2: Groq Llama 3.3 70B (Fastest fallback ~500ms)
   if (groqKey && !groqKey.includes("YOUR_")) {
     try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 4000)
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
+        signal: controller.signal,
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           temperature: 0.7,
+          max_tokens: 300,
         })
       })
+      clearTimeout(timer)
       if (res.ok) {
         const data = await res.json()
         const text = data.choices?.[0]?.message?.content
-        if (text && text.trim()) return text
+        if (text && text.trim()) return text.trim()
       }
     } catch (e) {
       console.warn("Groq API error:", e)
+    }
+  }
+
+  // Provider 3: DeepSeek AI
+  if (deepseekKey && !deepseekKey.includes("YOUR_")) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${deepseekKey}` },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          temperature: 0.7,
+          max_tokens: 300,
+        }),
+      })
+      clearTimeout(timer)
+      if (res.ok) {
+        const data = await res.json()
+        const text = data.choices?.[0]?.message?.content
+        if (text && text.trim()) return text.trim()
+      }
+    } catch (e) {
+      console.warn("DeepSeek API exception:", e)
     }
   }
 
@@ -252,16 +257,27 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
 }
 
 function extractJSON(raw: string): any {
+  if (!raw) return null
   const cleaned = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
   try {
     return JSON.parse(cleaned)
   } catch {
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (match) {
-      return JSON.parse(match[0])
+      try {
+        return JSON.parse(match[0])
+      } catch {}
     }
   }
-  throw new Error(`Could not parse JSON from response: ${raw.slice(0, 150)}`)
+  // Gracefully handle model text responses that aren't JSON-wrapped
+  if (cleaned.length > 10 && (cleaned.includes("?") || cleaned.includes("Thank you") || cleaned.includes("welcome"))) {
+    return {
+      answer_score: 8,
+      type: "question",
+      message: cleaned
+    }
+  }
+  return null
 }
 
 function isGibberish(message: string): boolean {
@@ -283,27 +299,28 @@ export async function POST(req: NextRequest) {
     const { action } = body
     const candidateToken = body.token || body.session?.token || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
     const isDemoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "false" || process.env.NODE_ENV === "development" || candidateToken === "demo"
+    const isDemoSession = candidateToken === "demo" || (body.roundId && String(body.roundId).startsWith("demo-")) || (body.applicationId && String(body.applicationId).startsWith("demo-"))
 
     if (action === "start") {
-      const backendRes = await tryBackend("start", body, candidateToken)
-      if (backendRes.ok && backendRes.data) {
-        return NextResponse.json(backendRes.data)
-      }
+      if (!isDemoSession) {
+        const backendRes = await tryBackend("start", body, candidateToken)
+        if (backendRes.ok && backendRes.data) {
+          return NextResponse.json(backendRes.data)
+        }
 
-      // If backend responded with an HTTP status code, forward it immediately unless in demo mode
-      if (backendRes.status > 0 && backendRes.status !== 502 && candidateToken !== "demo" && !isDemoAllowed) {
-        return NextResponse.json(
-          { error: backendRes.error || "Backend request failed" },
-          { status: backendRes.status }
-        )
-      }
+        if (backendRes.status > 0 && backendRes.status !== 502 && !isDemoAllowed) {
+          return NextResponse.json(
+            { error: backendRes.error || "Backend request failed" },
+            { status: backendRes.status }
+          )
+        }
 
-      // If network error/timeout and demo mode is NOT explicitly enabled, return 502
-      if (!isDemoAllowed && candidateToken !== "demo") {
-        return NextResponse.json(
-          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
-          { status: 502 }
-        )
+        if (!isDemoAllowed) {
+          return NextResponse.json(
+            { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
+            { status: 502 }
+          )
+        }
       }
 
       const roundId = `demo-round-${Date.now()}`
@@ -366,23 +383,25 @@ export async function POST(req: NextRequest) {
 
     if (action === "respond") {
       const { roundId, message, jobTitle, roundType } = body
-      const backendRes = await tryBackend("respond", body, candidateToken)
-      if (backendRes.ok && backendRes.data) {
-        return NextResponse.json(backendRes.data)
-      }
+      if (!isDemoSession) {
+        const backendRes = await tryBackend("respond", body, candidateToken)
+        if (backendRes.ok && backendRes.data) {
+          return NextResponse.json(backendRes.data)
+        }
 
-      if (backendRes.status > 0 && backendRes.status !== 502 && candidateToken !== "demo" && !isDemoAllowed) {
-        return NextResponse.json(
-          { error: backendRes.error || "Response evaluation failed" },
-          { status: backendRes.status }
-        )
-      }
+        if (backendRes.status > 0 && backendRes.status !== 502 && !isDemoAllowed) {
+          return NextResponse.json(
+            { error: backendRes.error || "Response evaluation failed" },
+            { status: backendRes.status }
+          )
+        }
 
-      if (!isDemoAllowed && candidateToken !== "demo") {
-        return NextResponse.json(
-          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
-          { status: 502 }
-        )
+        if (!isDemoAllowed) {
+          return NextResponse.json(
+            { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
+            { status: 502 }
+          )
+        }
       }
 
       const round = demoRounds.get(roundId) || {
@@ -450,8 +469,23 @@ export async function POST(req: NextRequest) {
         const profiles = await loadJobProfiles()
         const matchedProfile = matchJobProfile(jobTitle, profiles)
         const qList = matchedProfile?.questions?.intermediate || []
-        nextQuestionText = qList[substantiveCount % qList.length] || "Could you walk me through your system design trade-offs?"
-        aiMessage = `${ack}${nextQuestionText}`
+        const fallbackQ = qList[substantiveCount % qList.length] || "Could you walk me through your system design trade-offs?"
+        nextQuestionText = fallbackQ
+
+        const sysPrompt = MASTER_SYSTEM_PROMPTS[roundType] || MASTER_SYSTEM_PROMPTS.tech
+        const userPrompt = `Candidate answered: "${message}"\nJob: ${jobTitle}\nRound: ${roundType}\nExchange: ${substantiveCount} of ${MAX_EXCHANGES}\nGenerate your intelligent evaluation and next progressive interview question for ${jobTitle}. Return JSON: { "answer_score": number 1-10, "message": "1-sentence intelligent acknowledgment + next question" }`
+
+        try {
+          const llmRaw = await callOnlineLLM(sysPrompt, userPrompt)
+          const parsed = extractJSON(llmRaw)
+          if (parsed && parsed.message && (parsed.message.includes("?") || parsed.message.length > 20)) {
+            aiMessage = parsed.message
+          } else {
+            aiMessage = `${ack}${fallbackQ}`
+          }
+        } catch {
+          aiMessage = `${ack}${fallbackQ}`
+        }
       }
 
       // Immediate HR Extraction

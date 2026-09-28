@@ -33,13 +33,13 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
     gemini_key = raw_key.strip('"\'').strip()
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
-    for model in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"):
+    for model in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest", "gemini-1.5-pro"):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
             resp = httpx.post(
                 url,
                 json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
-                timeout=12.0,
+                timeout=5.0,
             )
             if resp.status_code == 200:
                 data = resp.json()
