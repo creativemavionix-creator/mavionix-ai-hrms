@@ -84,10 +84,10 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> str:
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
     candidate_models = (
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
+        "gemini-3.6-flash",
         "gemini-flash-latest",
-        "gemini-1.5-pro",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
     )
     last_error: Exception | None = None
     for model in candidate_models:

@@ -41,10 +41,10 @@ export async function analyzeCandidateResume(input: CandidateScoringInput): Prom
 
   if (apiKey && !apiKey.includes("YOUR_")) {
     const candidateModels = [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
+      "gemini-3.6-flash",
       "gemini-flash-latest",
-      "gemini-1.5-pro",
+      "gemini-3.7-flash",
+      "gemini-3.8-flash",
     ]
 
     const genAI = new GoogleGenerativeAI(apiKey)

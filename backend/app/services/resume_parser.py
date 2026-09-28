@@ -139,10 +139,10 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     gemini_key = raw_key.strip('"\'').strip()
     if gemini_key:
         candidate_models = (
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
+            "gemini-3.6-flash",
             "gemini-flash-latest",
-            "gemini-1.5-pro",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
         )
         import httpx
         for cur_model in candidate_models:

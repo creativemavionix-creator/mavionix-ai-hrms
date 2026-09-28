@@ -1664,7 +1664,7 @@ export const recruiterCopilotApi = {
         skill_data: {},
         confidence_score: geminiRes.success ? 98 : 90,
         confidence_reason: geminiRes.success ? `Live Gemini Response (${geminiRes.modelUsed})` : "Local AI Fallback Engine",
-        sources: [geminiRes.modelUsed || "gemini-2.0-flash", "pipeline"],
+        sources: [geminiRes.modelUsed || "gemini-3.6-flash", "pipeline"],
         follow_up_chips: ["/morning-brief", "Show top candidates", "Compare candidates"]
       }
     }

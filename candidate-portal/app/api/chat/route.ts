@@ -164,10 +164,10 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string): Promise<
   // Provider 1: Gemini (Ultra-fast, verified active models)
   if (geminiKey && !geminiKey.includes("YOUR_")) {
     const activeModels = [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
+      "gemini-3.6-flash",
       "gemini-flash-latest",
-      "gemini-1.5-pro",
+      "gemini-3.7-flash",
+      "gemini-3.8-flash",
     ]
     for (const model of activeModels) {
       try {

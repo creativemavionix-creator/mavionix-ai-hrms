@@ -30,10 +30,10 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey)
     const priorityModels = [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
+      "gemini-3.6-flash",
       "gemini-flash-latest",
-      "gemini-1.5-pro",
+      "gemini-3.7-flash",
+      "gemini-3.8-flash",
     ]
     const candidateModels: string[] = []
     if (requestedModel && !candidateModels.includes(requestedModel)) {
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     let responseText = ""
-    let resolvedModel = requestedModel || candidateModels[0] || "gemini-2.0-flash"
+    let resolvedModel = requestedModel || candidateModels[0] || "gemini-3.6-flash"
     let lastError: any = null
 
     for (const curModel of candidateModels) {
