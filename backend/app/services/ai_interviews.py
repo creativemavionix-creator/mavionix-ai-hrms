@@ -89,11 +89,13 @@ def _call_gemini(
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
     candidate_models = (
-        "gemini-3.6-flash",
-        "gemini-3.1-flash-lite",
         "gemini-flash-latest",
         "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
         "gemini-3.8-flash",
+        "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it",
     )
     last_error: Exception | None = None
     for model in candidate_models:
@@ -103,7 +105,7 @@ def _call_gemini(
                 "temperature": 0.7,
                 "maxOutputTokens": max_tokens,
             }
-            if thinking_budget is not None:
+            if thinking_budget is not None and not model.startswith("gemma"):
                 gen_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
             resp = httpx.post(
                 url,

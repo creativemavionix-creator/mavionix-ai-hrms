@@ -169,11 +169,13 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string, options?:
   // Provider 1: Gemini (Ultra-fast, verified active models)
   if (geminiKey && !geminiKey.includes("YOUR_")) {
     const activeModels = [
-      "gemini-3.6-flash",
-      "gemini-3.1-flash-lite",
       "gemini-flash-latest",
       "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-3.1-flash-lite",
       "gemini-3.8-flash",
+      "gemma-4-26b-a4b-it",
+      "gemma-4-31b-it",
     ]
     const thinkingBudget = options?.thinkingBudget !== undefined ? options.thinkingBudget : 100
     const maxTokens = options?.maxTokens || 1000
@@ -187,7 +189,7 @@ async function callOnlineLLM(systemPrompt: string, userPrompt: string, options?:
           maxOutputTokens: maxTokens,
           responseMimeType: "application/json",
         }
-        if (thinkingBudget !== null) {
+        if (thinkingBudget !== null && !model.startsWith("gemma")) {
           genConfig.thinkingConfig = {
             thinkingBudget
           }
@@ -472,9 +474,8 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
         flowState.followup_count = 0
       }
 
-      const isBlueprintComplete = customQuestions.length > 0 ? flowState.current_index >= customQuestions.length : false
       const substantiveCount = transcript.filter((t: any) => t.role === "candidate" && !isGibberish(t.message)).length
-      const shouldComplete = isBlueprintComplete || substantiveCount >= MAX_EXCHANGES
+      const shouldComplete = substantiveCount >= MAX_EXCHANGES
 
       const isVoice = Boolean(
         body.is_voice ||
@@ -497,6 +498,7 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
       if (shouldComplete) {
         aiMessage = `Thank you for your thorough responses. This concludes the ${round.round_type?.toUpperCase() || "interview"} round.`
       } else if (customQuestions.length > 0 && flowState.current_index < customQuestions.length) {
+        // Step A: Recruiter's mandatory blueprint questions first
         const nextQObj = customQuestions[flowState.current_index]
         nextQuestionText = nextQObj.text
 
@@ -526,14 +528,19 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
           aiMessage = `${ack}${nextQuestionText}`
         }
       } else {
+        // Step B: Dynamic Adaptive AI Interview Turns (Exchanges 3 to 6)
+        // Models generate sharp, progressive questions based on candidate's demonstrated responses
+        const recentHistory = transcript.slice(-4).map((t: any) => `${t.role === 'ai' ? 'Interviewer' : 'Candidate'}: ${t.message}`).join("\n")
+
+        const sysPrompt = MASTER_SYSTEM_PROMPTS[roundType] || MASTER_SYSTEM_PROMPTS.tech
+        const userPrompt = `Interview History:\n${recentHistory}\n\nCandidate's Latest Answer: "${message}"\nRole: ${jobTitle}\nRound: ${roundType}\nExchange: ${substantiveCount} of ${MAX_EXCHANGES}\n\nEvaluate the candidate's response for depth, architectural trade-offs, and clarity. Formulate your next sharp, progressive technical follow-up question digging deeper into their answer or testing real-world edge cases.\nReturn ONLY valid JSON:\n{\n  "answer_score": integer 1-10,\n  "type": "question",\n  "message": "1-sentence intelligent acknowledgment of candidate's answer + your next progressive question"\n}`
+
+        // Safety fallback question from profile only if LLM call fails
         const profiles = await loadJobProfiles()
         const matchedProfile = matchJobProfile(jobTitle, profiles)
         const qList = matchedProfile?.questions?.intermediate || []
         const fallbackQ = qList[substantiveCount % qList.length] || "Could you walk me through your system design trade-offs?"
         nextQuestionText = fallbackQ
-
-        const sysPrompt = MASTER_SYSTEM_PROMPTS[roundType] || MASTER_SYSTEM_PROMPTS.tech
-        const userPrompt = `Candidate answered: "${message}"\nJob: ${jobTitle}\nRound: ${roundType}\nExchange: ${substantiveCount} of ${MAX_EXCHANGES}\nGenerate your intelligent evaluation and next progressive interview question for ${jobTitle}. Return JSON: { "answer_score": number 1-10, "message": "1-sentence intelligent acknowledgment + next question" }`
 
         try {
           const llmRaw = await callOnlineLLM(sysPrompt, userPrompt, {
