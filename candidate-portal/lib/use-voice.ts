@@ -82,9 +82,29 @@ export function useVoice({
   const [spokenCaption, setSpokenCaption] = useState("")
 
   const recognitionRef = useRef<any>(null)
+  const isListeningRef = useRef(false)
+  const restartTimeoutRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const browserVoiceRef = useRef<SpeechSynthesisVoice | null>(null)
+
+  // ── Cleanup speech recognition on unmount ──────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      isListeningRef.current = false
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current)
+        restartTimeoutRef.current = null
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+        recognitionRef.current = null
+      }
+    }
+  }, [])
 
   // ── Check support on mount ─────────────────────────────────────────────
 
@@ -125,10 +145,18 @@ export function useVoice({
     setIsLoadingAudio(false)
     setSpokenCaption("")
 
+    isListeningRef.current = true
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch {}
+    }
+
     const recognition = new SpeechRecognition()
     recognition.lang = lang
     recognition.interimResults = true
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.maxAlternatives = 1
 
     recognition.onstart = () => {
@@ -166,24 +194,52 @@ export function useVoice({
       if (event.error !== "no-speech" && event.error !== "aborted") {
         console.warn("Speech recognition error:", event.error)
       }
-      setIsListening(false)
-      setInterimTranscript("")
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        isListeningRef.current = false
+        setIsListening(false)
+        setInterimTranscript("")
+      }
     }
 
     recognition.onend = () => {
-      setIsListening(false)
       setInterimTranscript("")
+      if (isListeningRef.current) {
+        // Keep speech recognition alive across natural pauses until candidate clicks Stop
+        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current)
+        restartTimeoutRef.current = setTimeout(() => {
+          if (isListeningRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start()
+            } catch {
+              // Ignore if already active
+            }
+          }
+        }, 150)
+      } else {
+        setIsListening(false)
+      }
     }
 
     recognitionRef.current = recognition
-    recognition.start()
+    try {
+      recognition.start()
+    } catch (e) {
+      console.warn("Could not start speech recognition:", e)
+    }
   }, [lang, onFinalTranscript])
 
   // ── Stop listening ─────────────────────────────────────────────────────
 
   const stopListening = useCallback(() => {
+    isListeningRef.current = false
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current)
+      restartTimeoutRef.current = null
+    }
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try {
+        recognitionRef.current.stop()
+      } catch {}
       recognitionRef.current = null
     }
     setIsListening(false)

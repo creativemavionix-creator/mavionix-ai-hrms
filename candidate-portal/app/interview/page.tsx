@@ -323,7 +323,6 @@ function InterviewContent() {
   const speakingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const voiceCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const firstQuestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingVoiceSendRef = useRef<string | null>(null)
   const hasSpokenFirstRef = useRef(false)
   const isAiSpeakingRef = useRef(false)
 
@@ -343,18 +342,13 @@ function InterviewContent() {
 
   const handleVoiceTranscript = useCallback((text: string) => {
     // Drop transcript if AI is speaking, audio is playing, or countdown is active (suppresses echo)
-    if (isAiSpeakingRef.current) return
+    if (isAiSpeakingRef.current || !text.trim()) return
 
-    if (session?.roundType === "speaking") {
-      setInput((prev) => {
-        const space = prev ? " " : ""
-        return prev + space + text
-      })
-    } else {
-      // Store text — we'll send it via the same mechanism as typed messages
-      pendingVoiceSendRef.current = text
-    }
-  }, [session?.roundType])
+    setInput((prev) => {
+      const space = prev && !prev.endsWith(" ") ? " " : ""
+      return prev + space + text.trim()
+    })
+  }, [])
 
   const voice = useVoice({
     onFinalTranscript: handleVoiceTranscript,
@@ -493,76 +487,7 @@ function InterviewContent() {
     }
   }, [])
 
-  // Process voice transcript once we have a roundId and are ready
-  useEffect(() => {
-    if (pendingVoiceSendRef.current && roundId && state === "ready" && !isAiTyping && session) {
-      const text = pendingVoiceSendRef.current
-      pendingVoiceSendRef.current = null
 
-      // Inject into the send flow
-      const candidateMsg: ChatMessage = {
-        id: `msg-${messages.length}`,
-        role: "candidate",
-        content: text,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, candidateMsg])
-      setIsAiTyping(true)
-      setExchangeCount((c) => c + 1)
-
-      // Call chat API
-      fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "respond",
-          applicationId: session.applicationId,
-          roundId,
-          roundType: session.roundType,
-          message: text,
-          candidateName: session.candidateName,
-          jobTitle: session.jobTitle,
-          is_voice: true,
-          strikes: browserStrikes + (cameraPresence.cameraStrikes || 0),
-          token: session.token,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data: AIResponse) => {
-          const aiMsg: ChatMessage = {
-            id: `msg-${messages.length + 1}`,
-            role: "ai",
-            content: data.message,
-            timestamp: new Date().toISOString(),
-            answerScore: data.answer_score,
-          }
-          setMessages((prev) => [...prev, aiMsg])
-
-          // Auto-speak AI response if voice is enabled
-          if (voiceEnabled && voice.isSupported) {
-            voice.speakText(data.message)
-          }
-
-          if (data.round_complete && data.summary) {
-            setCompleteSummary(data.summary)
-            setState("complete")
-            if (timerRef.current) clearInterval(timerRef.current)
-          }
-        })
-        .catch(() => {
-          const aiErrorMsg: ChatMessage = {
-            id: `msg-${messages.length + 1}`,
-            role: "ai",
-            content: "Connection lost. Please refresh to continue.",
-            timestamp: new Date().toISOString(),
-          }
-          setMessages((prev) => [...prev, aiErrorMsg])
-        })
-        .finally(() => {
-          setIsAiTyping(false)
-        })
-    }
-  }, [pendingVoiceSendRef.current, roundId, state, isAiTyping, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -871,6 +796,9 @@ function InterviewContent() {
   // ── Send message ─────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (forcedText?: string) => {
+    if (voice.isListening) {
+      voice.stopListening()
+    }
     const textToSend = forcedText !== undefined ? forcedText : input
     if (forcedText === undefined && !textToSend.trim()) return
     if (!roundId || isAiTyping || !session) return
@@ -2029,13 +1957,13 @@ function InterviewContent() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isAiTyping || voice.isListening || state !== "ready"}
+                  disabled={isAiTyping || state !== "ready"}
                   placeholder={
-                    voice.isListening ? "LISTENING... SPEAK NOW" :
+                    voice.isListening ? (input ? "LISTENING... SPEAK TO CONTINUE OR EDIT TEXT" : "LISTENING... SPEAK NOW") :
                     isAiTyping ? "WAITING FOR AI RESPONSE..." :
                     voiceCountdownSec !== null ? `AUDIO STARTING IN ${voiceCountdownSec}S...` :
                     voice.isSpeaking ? "AI IS SPEAKING..." :
-                    "TYPE YOUR RESPONSE... (ENTER TO SEND, SHIFT+ENTER FOR NEW LINE)"
+                    "TYPE OR SPEAK YOUR RESPONSE... (ENTER TO SEND, SHIFT+ENTER FOR NEW LINE)"
                   }
                   className="w-full bg-[var(--hm-bg-inset)] border border-[var(--hm-border)] text-lg 
                     text-[var(--hm-text-primary)] p-3.5 pr-14 resize-none min-h-[50px] max-h-[120px] rounded-radius-md
@@ -2048,7 +1976,7 @@ function InterviewContent() {
               {/* Send button */}
               <button
                 onClick={() => sendMessage()}
-                disabled={(!input.trim() && session?.roundType !== "speaking") || isAiTyping || voice.isListening || state !== "ready" || (session?.roundType === "speaking" && input.trim().length < 10)}
+                disabled={(!input.trim() && session?.roundType !== "speaking") || isAiTyping || state !== "ready" || (session?.roundType === "speaking" && input.trim().length < 10)}
                 className="h-[50px] w-[50px] rounded-radius-md flex items-center justify-center bg-[var(--hm-accent)] text-white
                   border border-[var(--hm-accent)] hover:bg-[var(--hm-accent-hover)]
                   disabled:bg-[var(--hm-bg-elevated)] disabled:border-[var(--hm-border)] disabled:text-[var(--hm-text-muted)]
