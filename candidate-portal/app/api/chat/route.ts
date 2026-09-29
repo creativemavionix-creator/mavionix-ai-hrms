@@ -414,12 +414,32 @@ Return ONLY valid JSON: { "answer_score": 10, "type": "question", "message": "1-
           { status: backendRes.status }
         )
       }
-      if (!isDemoAllowed && candidateToken !== "demo") {
-        return NextResponse.json(
-          { error: "Backend service unreachable", detail: "Could not connect to backend API server." },
-          { status: 502 }
-        )
+
+      // Local / Demo strike handling
+      const currentStrikes = Number(body.strikes || 0)
+      const strikeType = body.strikeType || "browser" // 'browser' or 'camera'
+      if (currentStrikes >= 5) {
+        const termSummary = {
+          ai_score: 35,
+          ai_summary: `[DISQUALIFIED] Interview terminated automatically due to exceeding 5 ${strikeType === 'camera' ? 'camera presence' : 'browser tab focus'} strikes. Candidate did not maintain required integrity compliance.`,
+          strengths: ["Participated in initial assessment"],
+          concerns: [`Candidate exceeded limit with 5 ${strikeType === 'camera' ? 'camera' : 'tab switch'} strikes.`]
+        }
+        return NextResponse.json({
+          type: "complete",
+          round_complete: true,
+          message: `Interview session terminated due to 5 ${strikeType === 'camera' ? 'camera' : 'tab'} strikes.`,
+          summary: termSummary,
+          disqualified: true,
+          disqualification_reason: `5 ${strikeType === 'camera' ? 'camera presence' : 'tab navigation'} violations`
+        })
       }
+
+      return NextResponse.json({
+        type: "strike_synced",
+        strikes: currentStrikes,
+        round_complete: false,
+      })
     }
 
     if (action === "respond") {

@@ -177,80 +177,153 @@ function TypingIndicator() {
   )
 }
 
-function RoundCompleteCard({ summary }: { summary: AIResponse["summary"] | null }) {
-  if (!summary) return null
+function RoundCompleteCard({
+  summary,
+  isDisqualified = false,
+  disqualificationReason = "",
+  passingScore = 50,
+}: {
+  summary: AIResponse["summary"] | null
+  isDisqualified?: boolean
+  disqualificationReason?: string
+  passingScore?: number
+}) {
+  if (!summary && !isDisqualified) return null
 
-  const scoreColor = summary.ai_score >= 80 ? "text-green-400" : summary.ai_score >= 65 ? "text-signal" : "text-red-400"
-  const barColor   = summary.ai_score >= 80 ? "bg-green-500"   : summary.ai_score >= 65 ? "bg-signal"   : "bg-red-500"
-  const label      = summary.ai_score >= 80 ? "STRONG" : summary.ai_score >= 65 ? "GOOD" : "NEEDS IMPROVEMENT"
+  const score = summary?.ai_score ?? 0
+  const isPassed = !isDisqualified && score >= passingScore
+
+  const scoreColor = isDisqualified
+    ? "text-red-400"
+    : isPassed
+    ? (score >= 80 ? "text-green-400" : "text-signal")
+    : "text-red-400"
+
+  const barColor = isDisqualified
+    ? "bg-red-500"
+    : isPassed
+    ? (score >= 80 ? "bg-green-500" : "bg-signal")
+    : "bg-red-500"
+
+  const label = isDisqualified
+    ? "DISQUALIFIED"
+    : isPassed
+    ? (score >= 80 ? "STRONG PASS" : "ROUND CLEARED")
+    : "NOT CLEARED"
 
   return (
-    <div className="bg-[var(--hm-bg-card)] border border-[var(--hm-border)] p-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <CheckCircle className="w-5 h-5 text-green-500" />
-        <h3 className="text-2xl font-bold  text-[var(--hm-text-primary)] tracking-wider uppercase">
-          ROUND COMPLETED
-        </h3>
+    <div className={`p-6 space-y-5 rounded-radius-lg border ${
+      isDisqualified
+        ? "bg-red-950/20 border-red-500/40"
+        : isPassed
+        ? "bg-[var(--hm-bg-card)] border-green-500/30"
+        : "bg-red-950/20 border-red-500/40"
+    }`}>
+      {/* Header Verdict Banner */}
+      <div className="flex items-center justify-between border-b border-[var(--hm-border-subtle)] pb-4">
+        <div className="flex items-center gap-3">
+          {isDisqualified ? (
+            <div className="w-9 h-9 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-5 h-5 animate-pulse" />
+            </div>
+          ) : isPassed ? (
+            <div className="w-9 h-9 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center text-green-400">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          )}
+          <div>
+            <h3 className="text-xl font-bold text-[var(--hm-text-primary)] tracking-wider uppercase">
+              {isDisqualified
+                ? "ASSESSMENT TERMINATED & DISQUALIFIED"
+                : isPassed
+                ? "ROUND CLEARED — QUALIFIED FOR NEXT STAGE"
+                : "ROUND NOT CLEARED — INTERVIEW CONCLUDED"}
+            </h3>
+            <p className="text-xs text-[var(--hm-text-muted)] uppercase tracking-wide">
+              {isDisqualified
+                ? "Integrity policy violation threshold reached"
+                : `Passing Threshold: ${passingScore}/100 • Your Result: ${isPassed ? "PASSED" : "FAILED"}`}
+            </p>
+          </div>
+        </div>
+
+        <span className={`px-3 py-1 text-xs font-extrabold uppercase tracking-widest border rounded-md ${
+          isDisqualified
+            ? "bg-red-500/20 border-red-500 text-red-400"
+            : isPassed
+            ? "bg-green-500/20 border-green-500 text-green-400"
+            : "bg-red-500/20 border-red-500 text-red-400"
+        }`}>
+          {label}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {/* Score */}
-        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-3">
+        {/* Score Card */}
+        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-4 rounded-radius-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-lg text-[var(--hm-text-muted)]  uppercase tracking-wider">
-              AI EVALUATION SCORE
+            <span className="text-sm text-[var(--hm-text-muted)] uppercase tracking-wider font-semibold">
+              EVALUATED AI SCORE (CUTOFF: {passingScore}/100)
             </span>
-            <span className={`text-base  font-bold tracking-widest ${scoreColor}`}>{label}</span>
+            <span className={`text-sm font-bold tracking-widest ${scoreColor}`}>{label}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-4xl font-bold  ${scoreColor}`}>
-              {summary.ai_score}/100
+          <div className="flex items-center gap-4">
+            <span className={`text-4xl font-extrabold font-mono ${scoreColor}`}>
+              {score}/100
             </span>
-            <div className="flex-1 h-2 bg-[var(--hm-bg-primary)] border border-[var(--hm-border-subtle)]">
+            <div className="flex-1 h-3 bg-[var(--hm-bg-primary)] border border-[var(--hm-border-subtle)] rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-1000 ${barColor}`}
-                style={{ width: `${summary.ai_score}%` }}
+                style={{ width: `${Math.min(100, Math.max(5, score))}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Assessment */}
-        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-3">
-          <span className="text-lg text-[var(--hm-text-muted)]  uppercase tracking-wider block mb-2">
-            ASSESSMENT
+        {/* Assessment message / Termination reason */}
+        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-4 rounded-radius-md space-y-1.5">
+          <span className="text-xs text-[var(--hm-text-muted)] uppercase tracking-wider block font-semibold">
+            {isDisqualified ? "VIOLATION DETAILS" : "EXECUTIVE SUMMARY"}
           </span>
-          <p className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed">
-            {summary.ai_summary || "Assessment not available."}
+          <p className="text-sm text-[var(--hm-text-secondary)] leading-relaxed">
+            {isDisqualified
+              ? disqualificationReason || summary?.ai_summary || "Session terminated for exceeding proctoring integrity limits (5 violations)."
+              : summary?.ai_summary || "Assessment evaluation generated by HireMind AI committee."}
           </p>
         </div>
 
         {/* Strengths & Concerns side by side */}
-        {((summary.strengths && summary.strengths.length > 0) || (summary.concerns && summary.concerns.length > 0)) && (
-          <div className="grid grid-cols-2 gap-3">
+        {summary && ((summary.strengths && summary.strengths.length > 0) || (summary.concerns && summary.concerns.length > 0)) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {summary.strengths && summary.strengths.length > 0 && (
-              <div className="bg-[var(--hm-bg-inset)] border border-green-900/40 p-3">
-                <span className="text-base text-green-500  uppercase tracking-wider block mb-2">
-                  ✓ STRENGTHS
+              <div className="bg-[var(--hm-bg-inset)] border border-green-900/40 p-3.5 rounded-radius-md">
+                <span className="text-xs text-green-400 font-bold uppercase tracking-wider block mb-2">
+                  ✓ KEY STRENGTHS
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {summary.strengths.map((s: string, i: number) => (
-                    <li key={i} className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed flex gap-1.5">
-                      <span className="text-green-500 shrink-0">›</span>{s}
+                    <li key={i} className="text-xs text-[var(--hm-text-secondary)] leading-relaxed flex gap-2">
+                      <span className="text-green-400 font-bold">›</span>
+                      <span>{s}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
             {summary.concerns && summary.concerns.length > 0 && (
-              <div className="bg-[var(--hm-bg-inset)] border border-red-900/40 p-3">
-                <span className="text-base text-red-400  uppercase tracking-wider block mb-2">
-                  ⚠ AREAS TO IMPROVE
+              <div className="bg-[var(--hm-bg-inset)] border border-red-900/40 p-3.5 rounded-radius-md">
+                <span className="text-xs text-red-400 font-bold uppercase tracking-wider block mb-2">
+                  ⚠ NOTED GAPS / OBSERVATIONS
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {summary.concerns.map((c: string, i: number) => (
-                    <li key={i} className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed flex gap-1.5">
-                      <span className="text-red-400 shrink-0">›</span>{c}
+                    <li key={i} className="text-xs text-[var(--hm-text-secondary)] leading-relaxed flex gap-2">
+                      <span className="text-red-400 font-bold">›</span>
+                      <span>{c}</span>
                     </li>
                   ))}
                 </ul>
@@ -260,9 +333,16 @@ function RoundCompleteCard({ summary }: { summary: AIResponse["summary"] | null 
         )}
       </div>
 
-      <p className="text-base text-[var(--hm-text-muted)]  text-center pt-2 border-t border-[var(--hm-border-subtle)]">
-        Your results have been submitted to the recruitment team. You will be contacted with next steps.
-      </p>
+      {/* Outcome notification footer */}
+      <div className="pt-3 border-t border-[var(--hm-border-subtle)] text-center">
+        <p className="text-xs text-[var(--hm-text-muted)] font-medium">
+          {isDisqualified
+            ? "Your assessment has ended. Your integrity report and session details have been flagged to the recruiting team."
+            : isPassed
+            ? "You have satisfied all performance benchmarks for this stage. Please click below to proceed to your next round."
+            : "Your interview session has concluded. Your results have been submitted to the recruitment team for evaluation."}
+        </p>
+      </div>
     </div>
   )
 }
@@ -568,13 +648,14 @@ function InterviewContent() {
               roundId,
               roundType: session.roundType,
               strikes: nextStrikes,
+              strikeType: "browser",
               jobTitle: session.jobTitle,
               token: session.token,
             }),
           })
           const data = await res.json()
 
-          if (nextStrikes >= 3 || data.round_complete || data.type === "complete") {
+          if (nextStrikes >= 5 || data.round_complete || data.type === "complete") {
             if (data.summary) {
               setCompleteSummary(data.summary)
             }
@@ -585,7 +666,7 @@ function InterviewContent() {
           }
         } catch (err) {
           console.error("Failed to report strike:", err)
-          if (nextStrikes >= 3) {
+          if (nextStrikes >= 5) {
             setState("complete")
             if (timerRef.current) clearInterval(timerRef.current)
           } else {
@@ -618,13 +699,14 @@ function InterviewContent() {
           roundId,
           roundType: session.roundType,
           strikes: currentStrikes,
+          strikeType: "camera",
           jobTitle: session.jobTitle,
           token: session.token,
         }),
       })
         .then((res) => res.json())
         .then((data) => {
-          if (currentStrikes >= 3 || data.round_complete || data.type === "complete") {
+          if (currentStrikes >= 5 || data.round_complete || data.type === "complete") {
             if (data.summary) {
               setCompleteSummary(data.summary)
             }
@@ -634,7 +716,7 @@ function InterviewContent() {
         })
         .catch((err) => {
           console.error("Failed to report camera strike:", err)
-          if (currentStrikes >= 3) {
+          if (currentStrikes >= 5) {
             setState("complete")
             if (timerRef.current) clearInterval(timerRef.current)
           }
@@ -941,6 +1023,17 @@ function InterviewContent() {
   }
 
   const proceedToNextRound = async () => {
+    // Safety guard: Never allow next round if strikes reached limit or score below cutoff
+    if (browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5) {
+      console.warn("proceedToNextRound blocked: Candidate disqualified due to 5 integrity strikes.")
+      return
+    }
+    const finalScore = completeSummary?.ai_score ?? 0
+    if (finalScore < 50) {
+      console.warn("proceedToNextRound blocked: Candidate score below passing threshold (50).")
+      return
+    }
+
     const nextRound = getNextRound()
     if (!nextRound || !session) return
 
@@ -1356,8 +1449,8 @@ function InterviewContent() {
               {[
                 {
                   icon: AlertTriangle,
-                  title: "BROWSER FOCUS (3-STRIKE POLICY)",
-                  desc: "Switching windows 3 times will immediately terminate your session.",
+                  title: "BROWSER FOCUS (5-STRIKE POLICY)",
+                  desc: "Switching windows or tabs 5 times will immediately terminate your session.",
                   color: "text-amber-400",
                   borderColor: "border-amber-500/20",
                   bgColor: "bg-amber-500/5"
@@ -1365,7 +1458,7 @@ function InterviewContent() {
                 {
                   icon: Video,
                   title: "CAMERA PRESENCE & SELF-PREVIEW",
-                  desc: "PIP self-preview is active. 3 face absence strikes terminate session.",
+                  desc: "PIP self-preview is active. 5 face absence strikes terminate session.",
                   color: "text-emerald-400",
                   borderColor: "border-emerald-500/20",
                   bgColor: "bg-emerald-500/5"
@@ -1421,7 +1514,7 @@ function InterviewContent() {
                   className="mt-0.5 w-4 h-4 rounded border-white/20 bg-transparent text-signal focus:ring-signal focus:ring-offset-0"
                 />
                 <span className="text-[10px]  text-[var(--hm-text-primary)] leading-normal select-none">
-                  I confirm that I am taking this assessment independently. I have read, understood, and agree to abide by all anti-cheating, 3-strike tab-leaving, and integrity rules.
+                  I confirm that I am taking this assessment independently. I have read, understood, and agree to abide by all anti-cheating, 5-strike tab-leaving, and integrity rules.
                 </span>
               </label>
 
@@ -1649,16 +1742,16 @@ function InterviewContent() {
               <AlertTriangle className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-red-400 tracking-wider uppercase">
-              CAMERA WARNING: FACE OUT OF FRAME (STRIKE {cameraPresence.cameraStrikes}/3)
+              CAMERA WARNING: FACE OUT OF FRAME (STRIKE {cameraPresence.cameraStrikes}/5)
             </h3>
             <p className="text-xs text-[var(--hm-text-secondary)] leading-relaxed">
               You have been out of camera frame or obscuring facial keypoints (eyes/nose) for longer than 5 seconds. Please re-center your face directly in front of the camera.
             </p>
             <p className="text-xs text-red-400 font-bold uppercase tracking-wider">
-              3 CAMERA STRIKES WILL TERMINATE YOUR ASSESSMENT.
+              5 CAMERA STRIKES WILL TERMINATE YOUR ASSESSMENT.
             </p>
             <div className="pt-4 flex flex-col gap-3">
-              {cameraPresence.cameraStrikes < 3 ? (
+              {cameraPresence.cameraStrikes < 5 ? (
                 <button
                   onClick={() => {
                     cameraPresence.acknowledgeCameraWarning()
@@ -1670,7 +1763,7 @@ function InterviewContent() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-[10px] text-red-400 font-bold">
-                    ASSESSMENT LOCKED. 3 CAMERA STRIKES EXCEEDED.
+                    ASSESSMENT LOCKED. 5 CAMERA STRIKES EXCEEDED.
                   </p>
                   {process.env.NODE_ENV === "development" && (
                     <button
@@ -1708,7 +1801,7 @@ function InterviewContent() {
           {/* Camera Status Badge */}
           <div className="flex items-center gap-1 text-green-400">
             <span className={`w-2 h-2 rounded-full ${cameraPresence.cameraResult?.payload?.faceDetected ? "bg-green-400" : "bg-amber-400 animate-ping"}`} />
-            <span>CAMERA: {cameraPresence.cameraResult?.payload?.faceDetected ? "IN FRAME" : "OUT OF FRAME"} ({cameraPresence.cameraStrikes}/3)</span>
+            <span>CAMERA: {cameraPresence.cameraResult?.payload?.faceDetected ? "IN FRAME" : "OUT OF FRAME"} ({cameraPresence.cameraStrikes}/5)</span>
           </div>
           <span>•</span>
           <div className="flex items-center gap-1 text-green-500">
@@ -1730,21 +1823,25 @@ function InterviewContent() {
             isCurrentlySpeaking={voice.isSpeaking && currentlyReplayingText === msg.content}
           />
         ))}
-        {isAiTyping && <TypingIndicator />}
-        {state === "complete" && browserStrikes >= 3 && (
-          <div className="bg-red-500/10 border border-red-500/30 p-6 text-center space-y-4">
-            <div className="flex items-center justify-center gap-2 text-red-500">
-              <AlertTriangle className="w-5 h-5 animate-pulse" />
-              <h3 className="text-lg font-bold  uppercase tracking-wider">
-                INTERVIEW TERMINATED
-              </h3>
-            </div>
-            <p className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed max-w-lg mx-auto">
-              This session was automatically terminated because you navigated away from the interview window three times (3/3 strikes). The recruitment team has been notified.
-            </p>
-          </div>
+        {state === "complete" && (browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5) && (
+          <RoundCompleteCard
+            summary={completeSummary}
+            isDisqualified={true}
+            disqualificationReason={
+              browserStrikes >= 5
+                ? "Terminated: You navigated away from the interview tab 5 times (5/5 strikes)."
+                : "Terminated: Face or camera absence limit reached (5/5 strikes)."
+            }
+            passingScore={50}
+          />
         )}
-        {state === "complete" && browserStrikes < 3 && <RoundCompleteCard summary={completeSummary} />}
+        {state === "complete" && browserStrikes < 5 && cameraPresence.cameraStrikes < 5 && (
+          <RoundCompleteCard
+            summary={completeSummary}
+            isDisqualified={false}
+            passingScore={50}
+          />
+        )}
         <div ref={chatEndRef} />
       </div>
 
@@ -1782,6 +1879,39 @@ function InterviewContent() {
       <div className="border-t border-[var(--hm-border)] bg-[var(--hm-bg-card)] p-4 shrink-0">
         {state === "complete" ? (
           (() => {
+            const isDisqualified = browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5
+            const finalScore = completeSummary?.ai_score ?? 0
+            const isPassed = !isDisqualified && finalScore >= 50
+
+            if (isDisqualified) {
+              return (
+                <div className="flex items-center justify-between py-2 text-red-400">
+                  <div className="flex items-center gap-2 text-sm uppercase tracking-wider font-semibold">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>INTERVIEW TERMINATED — 5 INTEGRITY STRIKES REACHED</span>
+                  </div>
+                  <span className="text-xs text-[var(--hm-text-muted)] font-mono">
+                    STATUS: DISQUALIFIED
+                  </span>
+                </div>
+              )
+            }
+
+            if (!isPassed) {
+              return (
+                <div className="flex items-center justify-between py-2 text-red-400">
+                  <div className="flex items-center gap-2 text-sm uppercase tracking-wider font-semibold">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>ROUND NOT CLEARED (SCORE: {finalScore}/100, CUTOFF: 50) — INTERVIEW CONCLUDED</span>
+                  </div>
+                  <span className="text-xs text-[var(--hm-text-muted)] font-mono">
+                    STATUS: NOT ADVANCING
+                  </span>
+                </div>
+              )
+            }
+
+            // Candidate Passed: Show Proceed button if next round exists
             const nextRound = session ? (() => {
               const order: RoundType[] = ["tech", "interview", "speaking", "hr"]
               const idx = order.indexOf(session.roundType)
@@ -1791,22 +1921,22 @@ function InterviewContent() {
 
             return nextRound ? (
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2 text-base  text-[var(--hm-text-muted)] tracking-wider uppercase">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  ROUND COMPLETE
+                <div className="flex items-center gap-2 text-base text-green-400 tracking-wider uppercase font-semibold">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  ROUND CLEARED ({finalScore}/100)
                 </div>
                 <button
                   onClick={proceedToNextRound}
-                  className="btn-primary flex items-center gap-2 px-5 py-2.5 text-white text-xs font-display font-extrabold tracking-wider uppercase transition-transform hover:-translate-y-0.5 shadow-lg shadow-signal/20 rounded-xl"
+                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-white text-xs font-display font-extrabold tracking-wider uppercase transition-transform hover:-translate-y-0.5 shadow-lg shadow-signal/20 rounded-xl"
                 >
                   PROCEED TO {nextLabel}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 py-2 text-base  text-[var(--hm-text-muted)] tracking-wider uppercase">
+              <div className="flex items-center justify-center gap-2 py-2 text-base text-green-400 tracking-wider uppercase font-semibold">
                 <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                ALL INTERVIEW ROUNDS COMPLETE — RESULTS SUBMITTED
+                ALL INTERVIEW ROUNDS COMPLETED & CLEARED — RESULTS SUBMITTED
               </div>
             )
           })()

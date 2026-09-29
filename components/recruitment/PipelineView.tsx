@@ -553,22 +553,22 @@ function ChatRound({ applicationId, roundType, readOnly = false, onRoundComplete
           ) : null}
 
           {/* Browser Strike Cheating Alerts */}
-          {round.browser_strike_count && round.browser_strike_count > 0 && round.browser_strike_count < 3 ? (
+          {round.browser_strike_count && round.browser_strike_count > 0 && round.browser_strike_count < 5 ? (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-radius-lg p-4 mt-4 space-y-1">
               <div className="flex items-center gap-2 text-[10px] text-amber-400 font-bold">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
-                <span>SECURITY ALERT: ⚠️ CANDIDATE TAB NAVIGATED (STRIKE {round.browser_strike_count}/3)</span>
+                <span>SECURITY ALERT: ⚠️ CANDIDATE TAB NAVIGATED (STRIKE {round.browser_strike_count}/5)</span>
               </div>
               <p className="text-[9.5px] text-neutral-400 leading-relaxed pl-6 font-medium">
                 The candidate has navigated away from the interview tab or minimized the browser window.
               </p>
             </div>
-          ) : round.browser_strike_count && round.browser_strike_count >= 3 ? (
+          ) : round.browser_strike_count && round.browser_strike_count >= 5 ? (
             <div className="bg-red-500/10 border border-red-500/30 rounded-radius-lg p-4 mt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[10px] text-red-400 font-bold">
                   <XCircle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
-                  <span>SECURITY ALERT: 🚫 INTERVIEW TERMINATED (STRIKES EXCEEDED)</span>
+                  <span>SECURITY ALERT: 🚫 INTERVIEW TERMINATED (5 STRIKES EXCEEDED)</span>
                 </div>
                 <Button
                   onClick={handleResetRound}
@@ -580,7 +580,7 @@ function ChatRound({ applicationId, roundType, readOnly = false, onRoundComplete
                 </Button>
               </div>
               <p className="text-[9.5px] text-neutral-400 leading-relaxed font-medium">
-                This interview session was terminated automatically because the candidate navigated away from the browser window 3 times. Click <strong>Restart</strong> above to reset strikes and allow candidate to retake.
+                This interview session was terminated automatically because the candidate navigated away from the browser window 5 times. Click <strong>Restart</strong> above to reset strikes and allow candidate to retake.
               </p>
             </div>
           ) : null}

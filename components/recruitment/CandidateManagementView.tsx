@@ -68,6 +68,7 @@ const STAGE_COLORS: Record<string, string> = {
   offered:                "bg-amber-500/10 text-amber-400 border-amber-500/20",
   hired:                  "bg-green-500/10 text-green-400 border-green-500/20",
   rejected:               "bg-red-500/10 text-red-400 border-red-500/20",
+  disqualified:           "bg-red-950/40 text-red-400 border-red-500/50 font-extrabold",
   waitlisted:             "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
 }
 

@@ -379,12 +379,27 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         except Exception:
             pass
 
-        # Advance stage to {round_type}_completed
-        complete_stage = ROUND_STAGE_MAP[round_data["round_type"]]["complete"]
-        try:
-            await advance_stage(application_id, complete_stage, "AI System", f"{round_data['round_type']} round completed (score: {summary.get('ai_score')})")
-        except Exception as exc:
-            logger.warning("Stage advance failed: %s", exc)
+        score = summary.get("ai_score", 0)
+        is_cleared = score >= 50
+
+        if not is_cleared:
+            # Candidate did not clear the passing score cutoff
+            try:
+                await advance_stage(application_id, "rejected", "AI System", f"{round_data['round_type']} round not cleared (score: {score}/100, cutoff: 50)")
+                supabase.table("applications").update({
+                    "status": "rejected",
+                    "stage": "rejected",
+                    "rejection_reason": f"Did not clear {round_data['round_type']} round (Score: {score}/100, Cutoff: 50)"
+                }).eq("id", application_id).execute()
+            except Exception as exc:
+                logger.warning("Stage advance to rejected failed: %s", exc)
+        else:
+            # Advance stage to {round_type}_completed
+            complete_stage = ROUND_STAGE_MAP[round_data["round_type"]]["complete"]
+            try:
+                await advance_stage(application_id, complete_stage, "AI System", f"{round_data['round_type']} round completed (score: {score}/100)")
+            except Exception as exc:
+                logger.warning("Stage advance failed: %s", exc)
 
         # Log
         cand_name = "Candidate"
@@ -401,17 +416,17 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         try:
             supabase.table("activity_logs").insert({
                 "actor_name": cand_name,
-                "action": f"completed AI {round_data['round_type']} round (score: {summary.get('ai_score')}/100) for",
+                "action": f"completed AI {round_data['round_type']} round ({'cleared' if is_cleared else 'not cleared'}, score: {score}/100) for",
                 "context_label": job_title,
-                "log_type": "success",
+                "log_type": "success" if is_cleared else "warning",
             }).execute()
         except Exception:
             pass
 
-        # Auto-chain: start next round if applicable
+        # Auto-chain: start next round only if candidate cleared the round (score >= 50)
         next_round_type = NEXT_ROUND.get(round_data["round_type"])
         auto_started_next = None
-        if next_round_type and summary.get("ai_score", 0) >= 55:
+        if next_round_type and is_cleared:
             try:
                 # Create the next round automatically
                 next_stage = ROUND_STAGE_MAP[next_round_type]["start"]
@@ -512,7 +527,7 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
     except Exception:
         pass
 
-    if strikes >= 3:
+    if strikes >= 5:
         # Fetch job title
         job_title = "ML Engineer"
         try:
@@ -545,9 +560,9 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
 
         # Force termination text
         summary["concerns"] = (summary.get("concerns") or []) + [
-            "🚫 Interview terminated automatically: Candidate navigated away from the browser tab 3 times."
+            "🚫 Interview terminated automatically: Candidate navigated away from the browser tab 5 times."
         ]
-        summary["ai_summary"] = "[TERMINATED] " + summary.get("ai_summary", "")
+        summary["ai_summary"] = "[TERMINATED - 5 STRIKES] " + summary.get("ai_summary", "")
 
         # Update round status in db
         try:
@@ -562,13 +577,23 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
         except Exception:
             pass
 
+        # Update application status to disqualified
+        try:
+            supabase.table("applications").update({
+                "status": "disqualified",
+                "stage": "disqualified",
+                "disqualification_reason": "Terminated: 5 browser tab switch strikes"
+            }).eq("id", application_id).execute()
+        except Exception:
+            pass
+
         round_data["status"] = "completed"
         round_data["summary"] = summary
         DEMO_ROUNDS[round_id] = round_data
 
         return {
             "type": "complete",
-            "message": "This interview has been terminated due to tab leaves.",
+            "message": "This interview has been terminated due to 5 integrity strikes.",
             "round_complete": True,
             "summary": summary,
         }
