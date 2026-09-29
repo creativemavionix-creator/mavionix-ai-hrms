@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,32 @@ function pickBestVoice(voices: SpeechSynthesisVoice[], lang: string): SpeechSynt
   return voices[0]
 }
 
+// ── Audio Unlock Helper (pre-unlock browser autoplay restriction) ───────────
+
+export function unlockAudio() {
+  if (typeof window === "undefined") return
+  try {
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      const ctx = new AudioContextClass()
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {})
+      }
+    }
+  } catch {}
+  try {
+    const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA")
+    audio.play().catch(() => {})
+  } catch {}
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+      }
+    } catch {}
+  }
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useVoice({
@@ -56,9 +82,29 @@ export function useVoice({
   const [spokenCaption, setSpokenCaption] = useState("")
 
   const recognitionRef = useRef<any>(null)
+  const isListeningRef = useRef(false)
+  const restartTimeoutRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const browserVoiceRef = useRef<SpeechSynthesisVoice | null>(null)
+
+  // ── Cleanup speech recognition on unmount ──────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      isListeningRef.current = false
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current)
+        restartTimeoutRef.current = null
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+        recognitionRef.current = null
+      }
+    }
+  }, [])
 
   // ── Check support on mount ─────────────────────────────────────────────
 
@@ -99,10 +145,18 @@ export function useVoice({
     setIsLoadingAudio(false)
     setSpokenCaption("")
 
+    isListeningRef.current = true
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch {}
+    }
+
     const recognition = new SpeechRecognition()
     recognition.lang = lang
     recognition.interimResults = true
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.maxAlternatives = 1
 
     recognition.onstart = () => {
@@ -111,6 +165,11 @@ export function useVoice({
     }
 
     recognition.onresult = (event: any) => {
+      // Prevent capturing microphone input while audio is playing or speechSynthesis is speaking (echo suppression)
+      if (audioRef.current || (typeof window !== "undefined" && window.speechSynthesis?.speaking)) {
+        return
+      }
+
       let interim = ""
       let final = ""
 
@@ -135,24 +194,52 @@ export function useVoice({
       if (event.error !== "no-speech" && event.error !== "aborted") {
         console.warn("Speech recognition error:", event.error)
       }
-      setIsListening(false)
-      setInterimTranscript("")
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        isListeningRef.current = false
+        setIsListening(false)
+        setInterimTranscript("")
+      }
     }
 
     recognition.onend = () => {
-      setIsListening(false)
       setInterimTranscript("")
+      if (isListeningRef.current) {
+        // Keep speech recognition alive across natural pauses until candidate clicks Stop
+        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current)
+        restartTimeoutRef.current = setTimeout(() => {
+          if (isListeningRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start()
+            } catch {
+              // Ignore if already active
+            }
+          }
+        }, 150)
+      } else {
+        setIsListening(false)
+      }
     }
 
     recognitionRef.current = recognition
-    recognition.start()
+    try {
+      recognition.start()
+    } catch (e) {
+      console.warn("Could not start speech recognition:", e)
+    }
   }, [lang, onFinalTranscript])
 
   // ── Stop listening ─────────────────────────────────────────────────────
 
   const stopListening = useCallback(() => {
+    isListeningRef.current = false
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current)
+      restartTimeoutRef.current = null
+    }
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try {
+        recognitionRef.current.stop()
+      } catch {}
       recognitionRef.current = null
     }
     setIsListening(false)
@@ -240,17 +327,25 @@ export function useVoice({
         utterance.voice = browserVoiceRef.current
       }
 
-      setSpokenCaption(text)
-      setIsSpeaking(true)
-
-      utterance.onend = () => {
-        setIsSpeaking(false)
-        setSpokenCaption("")
+      let finished = false
+      const onDone = () => {
+        if (!finished) {
+          finished = true
+          setIsSpeaking(false)
+          setSpokenCaption("")
+        }
       }
 
-      utterance.onerror = () => {
-        setIsSpeaking(false)
-        setSpokenCaption("")
+      utterance.onend = onDone
+      utterance.onerror = onDone
+
+      // Safety timeout in case speech synthesis stalls or fails to fire onend
+      const words = text.split(/\s+/).length
+      const maxMs = Math.max(8000, Math.min(60000, (words / 2) * 1000 + 4000))
+      setTimeout(onDone, maxMs)
+
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
       }
 
       window.speechSynthesis.speak(utterance)
@@ -294,16 +389,30 @@ export function useVoice({
     }
   }, [])
 
-  return {
-    isSupported,
-    isListening,
-    isSpeaking,
-    isLoadingAudio,
-    interimTranscript,
-    spokenCaption,
-    startListening,
-    stopListening,
-    speakText,
-    stopSpeaking,
-  }
+  return useMemo(
+    () => ({
+      isSupported,
+      isListening,
+      isSpeaking,
+      isLoadingAudio,
+      interimTranscript,
+      spokenCaption,
+      startListening,
+      stopListening,
+      speakText,
+      stopSpeaking,
+    }),
+    [
+      isSupported,
+      isListening,
+      isSpeaking,
+      isLoadingAudio,
+      interimTranscript,
+      spokenCaption,
+      startListening,
+      stopListening,
+      speakText,
+      stopSpeaking,
+    ]
+  )
 }

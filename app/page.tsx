@@ -71,7 +71,14 @@ export default function RecruitmentDashboard() {
     if (!email) return false
     const e = email.toLowerCase().trim()
     const savedHrEmail = (typeof window !== "undefined" ? localStorage.getItem("hiremind_recruiter_email") : "")?.toLowerCase() || ""
-    if (e === "hr.recruiter@hiremind.ai" || (savedHrEmail.length > 0 && e === savedHrEmail) || e.endsWith("@hiremind.ai")) return true
+    if (
+      e === "hr.recruiter@hiremind.ai" ||
+      (savedHrEmail.length > 0 && e === savedHrEmail) ||
+      e.endsWith("@hiremind.ai") ||
+      e.endsWith("@mavionix.com")
+    ) {
+      return true
+    }
     if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" || process.env.NODE_ENV === "development") {
       return true
     }

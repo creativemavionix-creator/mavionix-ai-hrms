@@ -78,18 +78,15 @@ export function initMediaPipeEngine() {
               const faceWidth = det.boundingBox ? det.boundingBox.width : 0.2
               const eyeDistance = Math.abs(rightEye.x - leftEye.x)
 
-              // Looking away: strong yaw asymmetry (reading or looking across screen is ~1.0-2.2; looking away is > 2.8)
-              if (yawSymmetryRatio > 2.8) {
-                isLookingAway = true
-              }
-
               // Head turned sideways: severe yaw asymmetry or profile collapse of interpupillary distance
               if (
-                yawSymmetryRatio > 3.8 ||
+                yawSymmetryRatio > 3.5 ||
                 (faceWidth > 0.05 && eyeDistance < faceWidth * 0.18) ||
-                eyeDistance < 0.025
+                (eyeDistance < 0.030 && eyeDistance > 0)
               ) {
                 isHeadTurnedSideways = true
+              } else if (yawSymmetryRatio > 2.6) {
+                isLookingAway = true
               }
             }
 

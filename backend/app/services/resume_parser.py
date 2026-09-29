@@ -138,24 +138,36 @@ def _chat(system: str, user: str, max_tokens: int = 2048) -> str:
     raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     gemini_key = raw_key.strip('"\'').strip()
     if gemini_key:
+        candidate_models = (
+            "gemini-3.6-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-latest",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+        )
         import httpx
-        for model in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"):
+        for cur_model in candidate_models:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{cur_model}:generateContent?key={gemini_key}"
                 resp = httpx.post(
                     url,
                     json={"contents": [{"parts": [{"text": f"{system}\n\nTask:\n{user}"}]}]},
-                    timeout=10.0,
+                    timeout=15.0,
+                    verify=False,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
                     if candidates and "content" in candidates[0]:
                         parts = candidates[0]["content"].get("parts", [])
+                        non_thought = [p["text"] for p in parts if not p.get("thought") and "text" in p]
+                        clean_text = "".join(non_thought).strip()
+                        if clean_text:
+                            return clean_text
                         if parts and "text" in parts[0]:
                             return parts[0]["text"]
             except Exception as exc:
-                logger.warning("Gemini (%s) API call failed: %s", model, exc)
+                logger.warning("Gemini model %s failed, trying fallback: %s", cur_model, exc)
 
     raise RuntimeError("All LLM providers (DeepSeek and Gemini) failed or are unconfigured.")
 

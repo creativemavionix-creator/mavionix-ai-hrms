@@ -30,52 +30,74 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey)
     const priorityModels = [
-      "gemini-flash-lite-latest",
-      "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-latest",
-      "gemini-3.5-flash",
-      "gemini-2.5-flash"
+      "gemini-3.7-flash",
+      "gemini-3.8-flash",
     ]
-    const modelsToTry: string[] = []
-    if (requestedModel && !modelsToTry.includes(requestedModel)) {
-      modelsToTry.push(requestedModel)
+    const candidateModels: string[] = []
+    if (requestedModel && !candidateModels.includes(requestedModel)) {
+      candidateModels.push(requestedModel)
     }
     for (const m of priorityModels) {
-      if (!modelsToTry.includes(m)) {
-        modelsToTry.push(m)
+      if (!candidateModels.includes(m)) {
+        candidateModels.push(m)
       }
     }
 
     let responseText = ""
-    let successfulModel = requestedModel
+    let resolvedModel = requestedModel || candidateModels[0] || "gemini-3.6-flash"
     let lastError: any = null
 
-    for (const modelToUse of modelsToTry) {
+    for (const curModel of candidateModels) {
       try {
-        const model = genAI.getGenerativeModel({
-          model: modelToUse,
-          systemInstruction
-        })
+        const isGemma = curModel.startsWith("gemma")
+        const modelConfig = isGemma
+          ? { model: curModel }
+          : { model: curModel, systemInstruction }
 
-        if (Array.isArray(history) && history.length > 0) {
-          const formattedHistory = history.map((h: any) => ({
-            role: h.role === "model" ? "model" : "user",
-            parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
-          }))
-          const chat = model.startChat({ history: formattedHistory })
-          const result = await chat.sendMessage(prompt)
-          responseText = result.response.text()
+        const model = genAI.getGenerativeModel(modelConfig)
+
+        // Prepend system instruction for Gemma models as they don't accept systemInstruction config
+        const effectivePrompt = isGemma && systemInstruction
+          ? `System Context: ${systemInstruction}\n\nRecruiter Query: ${prompt}`
+          : prompt
+
+        // Apply a per-model timeout to avoid hanging when Google servers experience queue delays
+        const result = await Promise.race([
+          (async () => {
+            if (Array.isArray(history) && history.length > 0 && !isGemma) {
+              const formattedHistory = history.map((h: any) => ({
+                role: h.role === "model" ? "model" : "user",
+                parts: [{ text: typeof h.parts === "string" ? h.parts : (Array.isArray(h.parts) ? h.parts[0]?.text || String(h.parts) : String(h.parts)) }]
+              }))
+              const chat = model.startChat({ history: formattedHistory })
+              return await chat.sendMessage(effectivePrompt)
+            } else {
+              return await model.generateContent(effectivePrompt)
+            }
+          })(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Model ${curModel} timed out`)), isGemma ? 30000 : 15000)
+          )
+        ])
+
+        const candidate = result.response.candidates?.[0]
+        const nonThoughtParts = candidate?.content?.parts?.filter((p: any) => !p.thought && p.text)
+        if (nonThoughtParts && nonThoughtParts.length > 0) {
+          responseText = nonThoughtParts.map((p: any) => p.text).join("").trim()
         } else {
-          const result = await model.generateContent(prompt)
-          responseText = result.response.text()
+          responseText = result.response.text()?.trim() || ""
         }
 
-        successfulModel = modelToUse
-        break
+        if (responseText) {
+          resolvedModel = curModel
+          break
+        }
       } catch (err: any) {
         lastError = err
-        console.warn(`Gemini model ${modelToUse} failed:`, err?.message || err)
+        console.warn(`Model ${curModel} failed (${err.status || err.message}), attempting fallback...`)
       }
     }
 
@@ -86,7 +108,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       text: responseText,
       success: true,
-      modelUsed: successfulModel
+      modelUsed: resolvedModel
     })
   } catch (err: any) {
     console.error("Server Gemini API Route Error:", err)

@@ -6,10 +6,10 @@ import { Suspense, useEffect, useState, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Brain, Send, Loader2, AlertTriangle, CheckCircle, CheckCircle2, Clock,
-  Shield, ChevronRight, User, Bot, Mic, MicOff, Volume2, VolumeX, Video,
+  Shield, ChevronRight, User, Bot, Mic, MicOff, Volume2, VolumeX, Video, Square,
 } from "lucide-react"
 import type { CandidateSession, ChatMessage, AIResponse, RoundType, TranscriptEntry, Assignment } from "@/lib/types"
-import { useVoice } from "@/lib/use-voice"
+import { useVoice, unlockAudio } from "@/lib/use-voice"
 import { useIntegrityEngine } from "@/lib/integrity/hooks/useIntegrityEngine"
 import CameraPreview from "@/lib/integrity/ui/CameraPreview"
 import ReadinessReportCard from "@/lib/integrity/ui/ReadinessReportCard"
@@ -81,7 +81,15 @@ function PipelineStepper({ currentRound, completedRounds }: { currentRound: Roun
 
 // ── Chat Message Bubble ──────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  onReplay,
+  isCurrentlySpeaking,
+}: {
+  msg: ChatMessage
+  onReplay?: (text: string) => void
+  isCurrentlySpeaking?: boolean
+}) {
   const isCandidate = msg.role === "candidate"
 
   return (
@@ -114,9 +122,35 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           }`}
       >
         <p className="whitespace-pre-wrap font-medium">{msg.content}</p>
-        <span className="eyebrow text-[8px] text-neutral-500 mt-1.5 block">
-          {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-white/[0.04]">
+          <span className="eyebrow text-[8px] text-neutral-500">
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          {!isCandidate && onReplay && (
+            <button
+              type="button"
+              onClick={() => onReplay(msg.content)}
+              title={isCurrentlySpeaking ? "Stop Audio" : "Listen to question"}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                isCurrentlySpeaking
+                  ? "bg-signal/20 text-signal border border-signal/40 animate-pulse"
+                  : "bg-white/[0.05] hover:bg-white/[0.1] text-neutral-400 hover:text-white border border-white/[0.08]"
+              }`}
+            >
+              {isCurrentlySpeaking ? (
+                <>
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <span>Stop</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-2.5 h-2.5" />
+                  <span>Listen</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -143,80 +177,153 @@ function TypingIndicator() {
   )
 }
 
-function RoundCompleteCard({ summary }: { summary: AIResponse["summary"] | null }) {
-  if (!summary) return null
+function RoundCompleteCard({
+  summary,
+  isDisqualified = false,
+  disqualificationReason = "",
+  passingScore = 50,
+}: {
+  summary: AIResponse["summary"] | null
+  isDisqualified?: boolean
+  disqualificationReason?: string
+  passingScore?: number
+}) {
+  if (!summary && !isDisqualified) return null
 
-  const scoreColor = summary.ai_score >= 80 ? "text-green-400" : summary.ai_score >= 65 ? "text-signal" : "text-red-400"
-  const barColor   = summary.ai_score >= 80 ? "bg-green-500"   : summary.ai_score >= 65 ? "bg-signal"   : "bg-red-500"
-  const label      = summary.ai_score >= 80 ? "STRONG" : summary.ai_score >= 65 ? "GOOD" : "NEEDS IMPROVEMENT"
+  const score = summary?.ai_score ?? 0
+  const isPassed = !isDisqualified && score >= passingScore
+
+  const scoreColor = isDisqualified
+    ? "text-red-400"
+    : isPassed
+    ? (score >= 80 ? "text-green-400" : "text-signal")
+    : "text-red-400"
+
+  const barColor = isDisqualified
+    ? "bg-red-500"
+    : isPassed
+    ? (score >= 80 ? "bg-green-500" : "bg-signal")
+    : "bg-red-500"
+
+  const label = isDisqualified
+    ? "DISQUALIFIED"
+    : isPassed
+    ? (score >= 80 ? "STRONG PASS" : "ROUND CLEARED")
+    : "NOT CLEARED"
 
   return (
-    <div className="bg-[var(--hm-bg-card)] border border-[var(--hm-border)] p-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <CheckCircle className="w-5 h-5 text-green-500" />
-        <h3 className="text-2xl font-bold  text-[var(--hm-text-primary)] tracking-wider uppercase">
-          ROUND COMPLETED
-        </h3>
+    <div className={`p-6 space-y-5 rounded-radius-lg border ${
+      isDisqualified
+        ? "bg-red-950/20 border-red-500/40"
+        : isPassed
+        ? "bg-[var(--hm-bg-card)] border-green-500/30"
+        : "bg-red-950/20 border-red-500/40"
+    }`}>
+      {/* Header Verdict Banner */}
+      <div className="flex items-center justify-between border-b border-[var(--hm-border-subtle)] pb-4">
+        <div className="flex items-center gap-3">
+          {isDisqualified ? (
+            <div className="w-9 h-9 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-5 h-5 animate-pulse" />
+            </div>
+          ) : isPassed ? (
+            <div className="w-9 h-9 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center text-green-400">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          )}
+          <div>
+            <h3 className="text-xl font-bold text-[var(--hm-text-primary)] tracking-wider uppercase">
+              {isDisqualified
+                ? "ASSESSMENT TERMINATED & DISQUALIFIED"
+                : isPassed
+                ? "ROUND CLEARED — QUALIFIED FOR NEXT STAGE"
+                : "ROUND NOT CLEARED — INTERVIEW CONCLUDED"}
+            </h3>
+            <p className="text-xs text-[var(--hm-text-muted)] uppercase tracking-wide">
+              {isDisqualified
+                ? "Integrity policy violation threshold reached"
+                : `Passing Threshold: ${passingScore}/100 • Your Result: ${isPassed ? "PASSED" : "FAILED"}`}
+            </p>
+          </div>
+        </div>
+
+        <span className={`px-3 py-1 text-xs font-extrabold uppercase tracking-widest border rounded-md ${
+          isDisqualified
+            ? "bg-red-500/20 border-red-500 text-red-400"
+            : isPassed
+            ? "bg-green-500/20 border-green-500 text-green-400"
+            : "bg-red-500/20 border-red-500 text-red-400"
+        }`}>
+          {label}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {/* Score */}
-        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-3">
+        {/* Score Card */}
+        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-4 rounded-radius-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-lg text-[var(--hm-text-muted)]  uppercase tracking-wider">
-              AI EVALUATION SCORE
+            <span className="text-sm text-[var(--hm-text-muted)] uppercase tracking-wider font-semibold">
+              EVALUATED AI SCORE (CUTOFF: {passingScore}/100)
             </span>
-            <span className={`text-base  font-bold tracking-widest ${scoreColor}`}>{label}</span>
+            <span className={`text-sm font-bold tracking-widest ${scoreColor}`}>{label}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-4xl font-bold  ${scoreColor}`}>
-              {summary.ai_score}/100
+          <div className="flex items-center gap-4">
+            <span className={`text-4xl font-extrabold font-mono ${scoreColor}`}>
+              {score}/100
             </span>
-            <div className="flex-1 h-2 bg-[var(--hm-bg-primary)] border border-[var(--hm-border-subtle)]">
+            <div className="flex-1 h-3 bg-[var(--hm-bg-primary)] border border-[var(--hm-border-subtle)] rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-1000 ${barColor}`}
-                style={{ width: `${summary.ai_score}%` }}
+                style={{ width: `${Math.min(100, Math.max(5, score))}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Assessment */}
-        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-3">
-          <span className="text-lg text-[var(--hm-text-muted)]  uppercase tracking-wider block mb-2">
-            ASSESSMENT
+        {/* Assessment message / Termination reason */}
+        <div className="bg-[var(--hm-bg-inset)] border border-[var(--hm-border-subtle)] p-4 rounded-radius-md space-y-1.5">
+          <span className="text-xs text-[var(--hm-text-muted)] uppercase tracking-wider block font-semibold">
+            {isDisqualified ? "VIOLATION DETAILS" : "EXECUTIVE SUMMARY"}
           </span>
-          <p className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed">
-            {summary.ai_summary || "Assessment not available."}
+          <p className="text-sm text-[var(--hm-text-secondary)] leading-relaxed">
+            {isDisqualified
+              ? disqualificationReason || summary?.ai_summary || "Session terminated for exceeding proctoring integrity limits (5 violations)."
+              : summary?.ai_summary || "Assessment evaluation generated by HireMind AI committee."}
           </p>
         </div>
 
         {/* Strengths & Concerns side by side */}
-        {((summary.strengths && summary.strengths.length > 0) || (summary.concerns && summary.concerns.length > 0)) && (
-          <div className="grid grid-cols-2 gap-3">
+        {summary && ((summary.strengths && summary.strengths.length > 0) || (summary.concerns && summary.concerns.length > 0)) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {summary.strengths && summary.strengths.length > 0 && (
-              <div className="bg-[var(--hm-bg-inset)] border border-green-900/40 p-3">
-                <span className="text-base text-green-500  uppercase tracking-wider block mb-2">
-                  ✓ STRENGTHS
+              <div className="bg-[var(--hm-bg-inset)] border border-green-900/40 p-3.5 rounded-radius-md">
+                <span className="text-xs text-green-400 font-bold uppercase tracking-wider block mb-2">
+                  ✓ KEY STRENGTHS
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {summary.strengths.map((s: string, i: number) => (
-                    <li key={i} className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed flex gap-1.5">
-                      <span className="text-green-500 shrink-0">›</span>{s}
+                    <li key={i} className="text-xs text-[var(--hm-text-secondary)] leading-relaxed flex gap-2">
+                      <span className="text-green-400 font-bold">›</span>
+                      <span>{s}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
             {summary.concerns && summary.concerns.length > 0 && (
-              <div className="bg-[var(--hm-bg-inset)] border border-red-900/40 p-3">
-                <span className="text-base text-red-400  uppercase tracking-wider block mb-2">
-                  ⚠ AREAS TO IMPROVE
+              <div className="bg-[var(--hm-bg-inset)] border border-red-900/40 p-3.5 rounded-radius-md">
+                <span className="text-xs text-red-400 font-bold uppercase tracking-wider block mb-2">
+                  ⚠ NOTED GAPS / OBSERVATIONS
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {summary.concerns.map((c: string, i: number) => (
-                    <li key={i} className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed flex gap-1.5">
-                      <span className="text-red-400 shrink-0">›</span>{c}
+                    <li key={i} className="text-xs text-[var(--hm-text-secondary)] leading-relaxed flex gap-2">
+                      <span className="text-red-400 font-bold">›</span>
+                      <span>{c}</span>
                     </li>
                   ))}
                 </ul>
@@ -226,9 +333,16 @@ function RoundCompleteCard({ summary }: { summary: AIResponse["summary"] | null 
         )}
       </div>
 
-      <p className="text-base text-[var(--hm-text-muted)]  text-center pt-2 border-t border-[var(--hm-border-subtle)]">
-        Your results have been submitted to the recruitment team. You will be contacted with next steps.
-      </p>
+      {/* Outcome notification footer */}
+      <div className="pt-3 border-t border-[var(--hm-border-subtle)] text-center">
+        <p className="text-xs text-[var(--hm-text-muted)] font-medium">
+          {isDisqualified
+            ? "Your assessment has ended. Your integrity report and session details have been flagged to the recruiting team."
+            : isPassed
+            ? "You have satisfied all performance benchmarks for this stage. Please click below to proceed to your next round."
+            : "Your interview session has concluded. Your results have been submitted to the recruitment team for evaluation."}
+        </p>
+      </div>
     </div>
   )
 }
@@ -280,12 +394,17 @@ function InterviewContent() {
   const [showStrikeModal, setShowStrikeModal] = useState(false)
   const [microphoneFallback, setMicrophoneFallback] = useState(false)
   const [speakingCountdown, setSpeakingCountdown] = useState(60)
+  const [voiceCountdownSec, setVoiceCountdownSec] = useState<number | null>(null)
+  const [currentlyReplayingText, setCurrentlyReplayingText] = useState<string | null>(null)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const speakingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pendingVoiceSendRef = useRef<string | null>(null)
+  const voiceCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const firstQuestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasSpokenFirstRef = useRef(false)
+  const isAiSpeakingRef = useRef(false)
 
   // ── Interview Integrity Engine Master Hook ─────────────────────────────
   const cameraPresence = useIntegrityEngine(true, state === "ready")
@@ -302,89 +421,153 @@ function InterviewContent() {
   // ── Voice hook ───────────────────────────────────────────────────────────
 
   const handleVoiceTranscript = useCallback((text: string) => {
-    if (session?.roundType === "speaking") {
-      setInput((prev) => {
-        const space = prev ? " " : ""
-        return prev + space + text
-      })
-    } else {
-      // Store text — we'll send it via the same mechanism as typed messages
-      pendingVoiceSendRef.current = text
-    }
-  }, [session?.roundType])
+    // Drop transcript if AI is speaking, audio is playing, or countdown is active (suppresses echo)
+    if (isAiSpeakingRef.current || !text.trim()) return
+
+    setInput((prev) => {
+      const space = prev && !prev.endsWith(" ") ? " " : ""
+      return prev + space + text.trim()
+    })
+  }, [])
 
   const voice = useVoice({
     onFinalTranscript: handleVoiceTranscript,
   })
 
-  // Process voice transcript once we have a roundId and are ready
+  // Stable refs for voice functions to prevent re-render loops and unintended timer cancellations
+  const speakTextRef = useRef(voice.speakText)
   useEffect(() => {
-    if (pendingVoiceSendRef.current && roundId && state === "ready" && !isAiTyping && session) {
-      const text = pendingVoiceSendRef.current
-      pendingVoiceSendRef.current = null
+    speakTextRef.current = voice.speakText
+  }, [voice.speakText])
 
-      // Inject into the send flow
-      const candidateMsg: ChatMessage = {
-        id: `msg-${messages.length}`,
-        role: "candidate",
-        content: text,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, candidateMsg])
-      setIsAiTyping(true)
-      setExchangeCount((c) => c + 1)
+  const voiceEnabledRef = useRef(voiceEnabled)
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled
+  }, [voiceEnabled])
 
-      // Call chat API
-      fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "respond",
-          applicationId: session.applicationId,
-          roundId,
-          roundType: session.roundType,
-          message: text,
-          candidateName: session.candidateName,
-          jobTitle: session.jobTitle,
-          token: session.token,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data: AIResponse) => {
-          const aiMsg: ChatMessage = {
-            id: `msg-${messages.length + 1}`,
-            role: "ai",
-            content: data.message,
-            timestamp: new Date().toISOString(),
-            answerScore: data.answer_score,
-          }
-          setMessages((prev) => [...prev, aiMsg])
-
-          // Auto-speak AI response if voice is enabled
-          if (voiceEnabled && voice.isSupported) {
-            voice.speakText(data.message)
-          }
-
-          if (data.round_complete && data.summary) {
-            setCompleteSummary(data.summary)
-            setState("complete")
-            if (timerRef.current) clearInterval(timerRef.current)
-          }
-        })
-        .catch(() => {
-          const aiErrorMsg: ChatMessage = {
-            id: `msg-${messages.length + 1}`,
-            role: "ai",
-            content: "Connection lost. Please refresh to continue.",
-            timestamp: new Date().toISOString(),
-          }
-          setMessages((prev) => [...prev, aiErrorMsg])
-        })
-        .finally(() => {
-          setIsAiTyping(false)
-        })
+  // Pre-unlock audio on the first user click or keydown anywhere on the page
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockAudio()
     }
-  }, [pendingVoiceSendRef.current, roundId, state, isAiTyping, session]) // eslint-disable-line react-hooks/exhaustive-deps
+    window.addEventListener("click", handleFirstInteraction, { once: true, capture: true })
+    window.addEventListener("keydown", handleFirstInteraction, { once: true, capture: true })
+    return () => {
+      window.removeEventListener("click", handleFirstInteraction, { capture: true })
+      window.removeEventListener("keydown", handleFirstInteraction, { capture: true })
+    }
+  }, [])
+
+  // Synchronize AI speaking flag to ref for speech recognition echo suppression
+  useEffect(() => {
+    isAiSpeakingRef.current = voice.isSpeaking || voice.isLoadingAudio || voiceCountdownSec !== null
+  }, [voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec])
+
+  // Replay question audio handler
+  const handleReplayMessage = useCallback((text: string) => {
+    unlockAudio()
+    if (voice.isSpeaking && currentlyReplayingText === text) {
+      voice.stopSpeaking()
+      setCurrentlyReplayingText(null)
+    } else {
+      setCurrentlyReplayingText(text)
+      voice.speakText(text)
+    }
+  }, [voice, currentlyReplayingText])
+
+  useEffect(() => {
+    if (!voice.isSpeaking && currentlyReplayingText) {
+      setCurrentlyReplayingText(null)
+    }
+  }, [voice.isSpeaking, currentlyReplayingText])
+
+  // ── Auto-read first question with 3-second delay ──────────────────────────
+  useEffect(() => {
+    if (
+      state === "ready" &&
+      roundId &&
+      messages.length === 1 &&
+      messages[0].role === "ai" &&
+      !hasSpokenFirstRef.current
+    ) {
+      hasSpokenFirstRef.current = true
+      const questionText = messages[0].content
+
+      if (!voiceEnabledRef.current) {
+        setVoiceCountdownSec(null)
+        return
+      }
+
+      // Pre-unlock audio context for browser autoplay compliance
+      unlockAudio()
+
+      // Start countdown from 3
+      let remaining = 3
+      setVoiceCountdownSec(remaining)
+
+      if (voiceCountdownTimerRef.current) {
+        clearInterval(voiceCountdownTimerRef.current)
+        voiceCountdownTimerRef.current = null
+      }
+      if (firstQuestionTimerRef.current) {
+        clearTimeout(firstQuestionTimerRef.current)
+        firstQuestionTimerRef.current = null
+      }
+
+      voiceCountdownTimerRef.current = setInterval(() => {
+        remaining -= 1
+        if (remaining > 0) {
+          setVoiceCountdownSec(remaining)
+        } else {
+          setVoiceCountdownSec(null)
+          if (voiceCountdownTimerRef.current) {
+            clearInterval(voiceCountdownTimerRef.current)
+            voiceCountdownTimerRef.current = null
+          }
+        }
+      }, 1000)
+
+      firstQuestionTimerRef.current = setTimeout(() => {
+        setVoiceCountdownSec(null)
+        if (voiceCountdownTimerRef.current) {
+          clearInterval(voiceCountdownTimerRef.current)
+          voiceCountdownTimerRef.current = null
+        }
+        if (speakTextRef.current) {
+          speakTextRef.current(questionText)
+        }
+      }, 3000)
+
+      return () => {
+        setVoiceCountdownSec(null)
+        if (voiceCountdownTimerRef.current) {
+          clearInterval(voiceCountdownTimerRef.current)
+          voiceCountdownTimerRef.current = null
+        }
+        if (firstQuestionTimerRef.current) {
+          clearTimeout(firstQuestionTimerRef.current)
+          firstQuestionTimerRef.current = null
+        }
+      }
+    }
+  }, [state, roundId, messages.length])
+
+  // Cleanup timers on component unmount
+  useEffect(() => {
+    return () => {
+      setVoiceCountdownSec(null)
+      if (firstQuestionTimerRef.current) {
+        clearTimeout(firstQuestionTimerRef.current)
+        firstQuestionTimerRef.current = null
+      }
+      if (voiceCountdownTimerRef.current) {
+        clearInterval(voiceCountdownTimerRef.current)
+        voiceCountdownTimerRef.current = null
+      }
+    }
+  }, [])
+
+
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -401,7 +584,14 @@ function InterviewContent() {
     }
   }, [state])
 
-  // Speaking round countdown timer
+  // Reset speaking countdown to 60 on each new message/question in speaking round
+  useEffect(() => {
+    if (session?.roundType === "speaking" && state === "ready") {
+      setSpeakingCountdown(60)
+    }
+  }, [messages.length, session?.roundType, state])
+
+  // Speaking round countdown timer (ticks only when AI is NOT speaking/preparing)
   useEffect(() => {
     if (!session || session.roundType !== "speaking" || state !== "ready" || isAiTyping) {
       if (speakingTimerRef.current) {
@@ -411,15 +601,22 @@ function InterviewContent() {
       return
     }
 
-    setSpeakingCountdown(60)
-
-    if (speakingTimerRef.current) {
-      clearInterval(speakingTimerRef.current)
+    // Pause timer while AI is speaking, loading audio, or audio countdown is preparing
+    if (voice.isSpeaking || voice.isLoadingAudio || voiceCountdownSec !== null) {
+      if (speakingTimerRef.current) {
+        clearInterval(speakingTimerRef.current)
+        speakingTimerRef.current = null
+      }
+      return
     }
 
     speakingTimerRef.current = setInterval(() => {
       setSpeakingCountdown((prev) => {
         if (prev <= 1) {
+          if (speakingTimerRef.current) {
+            clearInterval(speakingTimerRef.current)
+            speakingTimerRef.current = null
+          }
           return 0
         }
         return prev - 1
@@ -429,7 +626,7 @@ function InterviewContent() {
     return () => {
       if (speakingTimerRef.current) clearInterval(speakingTimerRef.current)
     }
-  }, [messages.length, session?.roundType, state, isAiTyping])
+  }, [session, state, isAiTyping, voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec])
 
 
   // Track browser window blur / tab changes (strikes)
@@ -451,13 +648,14 @@ function InterviewContent() {
               roundId,
               roundType: session.roundType,
               strikes: nextStrikes,
+              strikeType: "browser",
               jobTitle: session.jobTitle,
               token: session.token,
             }),
           })
           const data = await res.json()
 
-          if (nextStrikes >= 3 || data.round_complete || data.type === "complete") {
+          if (nextStrikes >= 5 || data.round_complete || data.type === "complete") {
             if (data.summary) {
               setCompleteSummary(data.summary)
             }
@@ -468,7 +666,7 @@ function InterviewContent() {
           }
         } catch (err) {
           console.error("Failed to report strike:", err)
-          if (nextStrikes >= 3) {
+          if (nextStrikes >= 5) {
             setState("complete")
             if (timerRef.current) clearInterval(timerRef.current)
           } else {
@@ -501,13 +699,14 @@ function InterviewContent() {
           roundId,
           roundType: session.roundType,
           strikes: currentStrikes,
+          strikeType: "camera",
           jobTitle: session.jobTitle,
           token: session.token,
         }),
       })
         .then((res) => res.json())
         .then((data) => {
-          if (currentStrikes >= 3 || data.round_complete || data.type === "complete") {
+          if (currentStrikes >= 5 || data.round_complete || data.type === "complete") {
             if (data.summary) {
               setCompleteSummary(data.summary)
             }
@@ -517,7 +716,7 @@ function InterviewContent() {
         })
         .catch((err) => {
           console.error("Failed to report camera strike:", err)
-          if (currentStrikes >= 3) {
+          if (currentStrikes >= 5) {
             setState("complete")
             if (timerRef.current) clearInterval(timerRef.current)
           }
@@ -593,6 +792,9 @@ function InterviewContent() {
         setState("complete")
       } else {
         // 3. Default to interview dashboard & evaluation rules
+        cameraPresence.resetStrikes()
+        lastCameraStrikesRef.current = 0
+        setBrowserStrikes(0)
         setState("dashboard")
       }
     } catch (err) {
@@ -648,8 +850,13 @@ function InterviewContent() {
         )
         setMessages(existingMessages)
         setExchangeCount(existingMessages.filter((m) => m.role === "candidate").length)
+        hasSpokenFirstRef.current = true
       } else {
-        // New round — show first question
+        // New round — show first question and allow 3s delayed speech
+        cameraPresence.resetStrikes()
+        lastCameraStrikesRef.current = 0
+        setBrowserStrikes(0)
+        hasSpokenFirstRef.current = false
         const firstMsg: ChatMessage = {
           id: "msg-0",
           role: "ai",
@@ -671,6 +878,9 @@ function InterviewContent() {
   // ── Send message ─────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (forcedText?: string) => {
+    if (voice.isListening) {
+      voice.stopListening()
+    }
     const textToSend = forcedText !== undefined ? forcedText : input
     if (forcedText === undefined && !textToSend.trim()) return
     if (!roundId || isAiTyping || !session) return
@@ -723,7 +933,9 @@ function InterviewContent() {
           message: candidateMsg.content,
           candidateName: session.candidateName,
           jobTitle: session.jobTitle,
+          is_voice: Boolean(forcedText !== undefined || session.roundType === "speaking" || voice.isListening || voiceCountdownSec !== null || speakingMetrics),
           speaking_metrics: speakingMetrics,
+          strikes: browserStrikes + (cameraPresence.cameraStrikes || 0),
           token: session.token,
         }),
       })
@@ -773,12 +985,20 @@ function InterviewContent() {
     }
   }, [input, roundId, isAiTyping, session, messages.length, speakingCountdown, microphoneFallback, voiceEnabled, voice])
 
-  // Auto-submit when countdown hits 0
+  // Auto-submit when countdown hits 0 (only if AI is not speaking or preparing)
   useEffect(() => {
-    if (session?.roundType === "speaking" && state === "ready" && speakingCountdown === 0 && !isAiTyping) {
+    if (
+      session?.roundType === "speaking" &&
+      state === "ready" &&
+      speakingCountdown === 0 &&
+      !isAiTyping &&
+      !voice.isSpeaking &&
+      !voice.isLoadingAudio &&
+      voiceCountdownSec === null
+    ) {
       sendMessage()
     }
-  }, [speakingCountdown, session?.roundType, state, isAiTyping, sendMessage])
+  }, [speakingCountdown, session?.roundType, state, isAiTyping, voice.isSpeaking, voice.isLoadingAudio, voiceCountdownSec, sendMessage])
 
   // ── Keyboard handling ────────────────────────────────────────────────────
 
@@ -803,8 +1023,26 @@ function InterviewContent() {
   }
 
   const proceedToNextRound = async () => {
+    // Safety guard: Never allow next round if strikes reached limit or score below cutoff
+    if (browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5) {
+      console.warn("proceedToNextRound blocked: Candidate disqualified due to 5 integrity strikes.")
+      return
+    }
+    const finalScore = completeSummary?.ai_score ?? 0
+    if (finalScore < 50) {
+      console.warn("proceedToNextRound blocked: Candidate score below passing threshold (50).")
+      return
+    }
+
     const nextRound = getNextRound()
     if (!nextRound || !session) return
+
+    // Clean up timers and audio from current round
+    if (firstQuestionTimerRef.current) clearTimeout(firstQuestionTimerRef.current)
+    if (voiceCountdownTimerRef.current) clearInterval(voiceCountdownTimerRef.current)
+    setVoiceCountdownSec(null)
+    hasSpokenFirstRef.current = false
+    voice.stopSpeaking()
 
     // Mark current round as completed
     setCompletedRounds((prev) => [...prev, session.roundType])
@@ -1211,8 +1449,8 @@ function InterviewContent() {
               {[
                 {
                   icon: AlertTriangle,
-                  title: "BROWSER FOCUS (3-STRIKE POLICY)",
-                  desc: "Switching windows 3 times will immediately terminate your session.",
+                  title: "BROWSER FOCUS (5-STRIKE POLICY)",
+                  desc: "Switching windows or tabs 5 times will immediately terminate your session.",
                   color: "text-amber-400",
                   borderColor: "border-amber-500/20",
                   bgColor: "bg-amber-500/5"
@@ -1220,7 +1458,7 @@ function InterviewContent() {
                 {
                   icon: Video,
                   title: "CAMERA PRESENCE & SELF-PREVIEW",
-                  desc: "PIP self-preview is active. 3 face absence strikes terminate session.",
+                  desc: "PIP self-preview is active. 5 face absence strikes terminate session.",
                   color: "text-emerald-400",
                   borderColor: "border-emerald-500/20",
                   bgColor: "bg-emerald-500/5"
@@ -1276,7 +1514,7 @@ function InterviewContent() {
                   className="mt-0.5 w-4 h-4 rounded border-white/20 bg-transparent text-signal focus:ring-signal focus:ring-offset-0"
                 />
                 <span className="text-[10px]  text-[var(--hm-text-primary)] leading-normal select-none">
-                  I confirm that I am taking this assessment independently. I have read, understood, and agree to abide by all anti-cheating, 3-strike tab-leaving, and integrity rules.
+                  I confirm that I am taking this assessment independently. I have read, understood, and agree to abide by all anti-cheating, 5-strike tab-leaving, and integrity rules.
                 </span>
               </label>
 
@@ -1362,9 +1600,13 @@ function InterviewContent() {
           canvasRef={cameraPresence.canvasRef}
           streamRef={cameraPresence.streamRef}
           onStartInterview={async () => {
+            unlockAudio()
             if (cameraPresence.readinessState.calibratedProfile) {
               cameraPresence.setCalibrationProfile(cameraPresence.readinessState.calibratedProfile)
             }
+            cameraPresence.resetStrikes()
+            lastCameraStrikesRef.current = 0
+            setBrowserStrikes(0)
             setState("loading")
             if (session) await startRound(session)
           }}
@@ -1409,6 +1651,8 @@ function InterviewContent() {
     ? "TECHNICAL ROUND"
     : session?.roundType === "hr"
     ? "HR ROUND"
+    : session?.roundType === "speaking"
+    ? "SPEAKING ROUND"
     : "BEHAVIORAL INTERVIEW"
 
   return (
@@ -1498,16 +1742,16 @@ function InterviewContent() {
               <AlertTriangle className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-red-400 tracking-wider uppercase">
-              CAMERA WARNING: FACE OUT OF FRAME (STRIKE {cameraPresence.cameraStrikes}/3)
+              CAMERA WARNING: FACE OUT OF FRAME (STRIKE {cameraPresence.cameraStrikes}/5)
             </h3>
             <p className="text-xs text-[var(--hm-text-secondary)] leading-relaxed">
               You have been out of camera frame or obscuring facial keypoints (eyes/nose) for longer than 5 seconds. Please re-center your face directly in front of the camera.
             </p>
             <p className="text-xs text-red-400 font-bold uppercase tracking-wider">
-              3 CAMERA STRIKES WILL TERMINATE YOUR ASSESSMENT.
+              5 CAMERA STRIKES WILL TERMINATE YOUR ASSESSMENT.
             </p>
             <div className="pt-4 flex flex-col gap-3">
-              {cameraPresence.cameraStrikes < 3 ? (
+              {cameraPresence.cameraStrikes < 5 ? (
                 <button
                   onClick={() => {
                     cameraPresence.acknowledgeCameraWarning()
@@ -1519,7 +1763,7 @@ function InterviewContent() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-[10px] text-red-400 font-bold">
-                    ASSESSMENT LOCKED. 3 CAMERA STRIKES EXCEEDED.
+                    ASSESSMENT LOCKED. 5 CAMERA STRIKES EXCEEDED.
                   </p>
                   {process.env.NODE_ENV === "development" && (
                     <button
@@ -1557,7 +1801,7 @@ function InterviewContent() {
           {/* Camera Status Badge */}
           <div className="flex items-center gap-1 text-green-400">
             <span className={`w-2 h-2 rounded-full ${cameraPresence.cameraResult?.payload?.faceDetected ? "bg-green-400" : "bg-amber-400 animate-ping"}`} />
-            <span>CAMERA: {cameraPresence.cameraResult?.payload?.faceDetected ? "IN FRAME" : "OUT OF FRAME"} ({cameraPresence.cameraStrikes}/3)</span>
+            <span>CAMERA: {cameraPresence.cameraResult?.payload?.faceDetected ? "IN FRAME" : "OUT OF FRAME"} ({cameraPresence.cameraStrikes}/5)</span>
           </div>
           <span>•</span>
           <div className="flex items-center gap-1 text-green-500">
@@ -1565,49 +1809,64 @@ function InterviewContent() {
             <span className="text-green-500 uppercase">SESSION ACTIVE</span>
           </div>
           <span className="mx-1">•</span>
-          <span>Q{exchangeCount}/3</span>
+          <span>Q{Math.min(exchangeCount, 6)}/6</span>
         </div>
       </div>
 
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto chat-scroll p-6 space-y-4">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            onReplay={handleReplayMessage}
+            isCurrentlySpeaking={voice.isSpeaking && currentlyReplayingText === msg.content}
+          />
         ))}
-        {isAiTyping && <TypingIndicator />}
-        {state === "complete" && browserStrikes >= 3 && (
-          <div className="bg-red-500/10 border border-red-500/30 p-6 text-center space-y-4">
-            <div className="flex items-center justify-center gap-2 text-red-500">
-              <AlertTriangle className="w-5 h-5 animate-pulse" />
-              <h3 className="text-lg font-bold  uppercase tracking-wider">
-                INTERVIEW TERMINATED
-              </h3>
-            </div>
-            <p className="text-lg text-[var(--hm-text-secondary)]  leading-relaxed max-w-lg mx-auto">
-              This session was automatically terminated because you navigated away from the interview window three times (3/3 strikes). The recruitment team has been notified.
-            </p>
-          </div>
+        {state === "complete" && (browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5) && (
+          <RoundCompleteCard
+            summary={completeSummary}
+            isDisqualified={true}
+            disqualificationReason={
+              browserStrikes >= 5
+                ? "Terminated: You navigated away from the interview tab 5 times (5/5 strikes)."
+                : "Terminated: Face or camera absence limit reached (5/5 strikes)."
+            }
+            passingScore={50}
+          />
         )}
-        {state === "complete" && browserStrikes < 3 && <RoundCompleteCard summary={completeSummary} />}
+        {state === "complete" && browserStrikes < 5 && cameraPresence.cameraStrikes < 5 && (
+          <RoundCompleteCard
+            summary={completeSummary}
+            isDisqualified={false}
+            passingScore={50}
+          />
+        )}
         <div ref={chatEndRef} />
       </div>
 
       {/* Voice/AI caption bar */}
-      {(voice.isListening || voice.isSpeaking || voice.interimTranscript) && (
-        <div className="border-t border-[var(--hm-border-subtle)] bg-[var(--hm-bg-inset)] px-6 py-2">
-          {voice.isListening && voice.interimTranscript && (
+      {(voice.isListening || voice.isSpeaking || voice.interimTranscript || voiceCountdownSec !== null) && (
+        <div className="border-t border-[var(--hm-border-subtle)] bg-[var(--hm-bg-inset)] px-6 py-2.5">
+          {voiceCountdownSec !== null && (
+            <div className="flex items-center gap-2.5 text-xs text-[var(--hm-accent)] font-semibold animate-pulse">
+              <Volume2 className="w-3.5 h-3.5 text-[var(--hm-accent)]" />
+              <span className="tracking-wide">AI INTERVIEWER AUDIO STARTING IN {voiceCountdownSec}s...</span>
+            </div>
+          )}
+          {voiceCountdownSec === null && voice.isListening && voice.interimTranscript && (
             <div className="flex items-center gap-2 text-base  text-[var(--hm-text-secondary)]">
               <Mic className="w-3 h-3 text-[var(--hm-accent)] animate-pulse" />
               <span className="opacity-70 italic">{voice.interimTranscript}</span>
             </div>
           )}
-          {voice.isListening && !voice.interimTranscript && (
+          {voiceCountdownSec === null && voice.isListening && !voice.interimTranscript && (
             <div className="flex items-center gap-2 text-base  text-[var(--hm-text-muted)]">
               <Mic className="w-3 h-3 text-[var(--hm-accent)] animate-pulse" />
               <span>LISTENING...</span>
             </div>
           )}
-          {voice.isSpeaking && voice.spokenCaption && (
+          {voiceCountdownSec === null && voice.isSpeaking && voice.spokenCaption && (
             <div className="flex items-start gap-2 text-base  text-[var(--hm-text-secondary)]">
               <Volume2 className="w-3 h-3 text-[var(--hm-accent)] shrink-0 mt-0.5" />
               <span className="line-clamp-2">{voice.spokenCaption}</span>
@@ -1620,6 +1879,39 @@ function InterviewContent() {
       <div className="border-t border-[var(--hm-border)] bg-[var(--hm-bg-card)] p-4 shrink-0">
         {state === "complete" ? (
           (() => {
+            const isDisqualified = browserStrikes >= 5 || cameraPresence.cameraStrikes >= 5
+            const finalScore = completeSummary?.ai_score ?? 0
+            const isPassed = !isDisqualified && finalScore >= 50
+
+            if (isDisqualified) {
+              return (
+                <div className="flex items-center justify-between py-2 text-red-400">
+                  <div className="flex items-center gap-2 text-sm uppercase tracking-wider font-semibold">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>INTERVIEW TERMINATED — 5 INTEGRITY STRIKES REACHED</span>
+                  </div>
+                  <span className="text-xs text-[var(--hm-text-muted)] font-mono">
+                    STATUS: DISQUALIFIED
+                  </span>
+                </div>
+              )
+            }
+
+            if (!isPassed) {
+              return (
+                <div className="flex items-center justify-between py-2 text-red-400">
+                  <div className="flex items-center gap-2 text-sm uppercase tracking-wider font-semibold">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>ROUND NOT CLEARED (SCORE: {finalScore}/100, CUTOFF: 50) — INTERVIEW CONCLUDED</span>
+                  </div>
+                  <span className="text-xs text-[var(--hm-text-muted)] font-mono">
+                    STATUS: NOT ADVANCING
+                  </span>
+                </div>
+              )
+            }
+
+            // Candidate Passed: Show Proceed button if next round exists
             const nextRound = session ? (() => {
               const order: RoundType[] = ["tech", "interview", "speaking", "hr"]
               const idx = order.indexOf(session.roundType)
@@ -1629,22 +1921,22 @@ function InterviewContent() {
 
             return nextRound ? (
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2 text-base  text-[var(--hm-text-muted)] tracking-wider uppercase">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  ROUND COMPLETE
+                <div className="flex items-center gap-2 text-base text-green-400 tracking-wider uppercase font-semibold">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  ROUND CLEARED ({finalScore}/100)
                 </div>
                 <button
                   onClick={proceedToNextRound}
-                  className="btn-primary flex items-center gap-2 px-5 py-2.5 text-white text-xs font-display font-extrabold tracking-wider uppercase transition-transform hover:-translate-y-0.5 shadow-lg shadow-signal/20 rounded-xl"
+                  className="btn-primary flex items-center gap-2 px-6 py-2.5 text-white text-xs font-display font-extrabold tracking-wider uppercase transition-transform hover:-translate-y-0.5 shadow-lg shadow-signal/20 rounded-xl"
                 >
                   PROCEED TO {nextLabel}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 py-2 text-base  text-[var(--hm-text-muted)] tracking-wider uppercase">
+              <div className="flex items-center justify-center gap-2 py-2 text-base text-green-400 tracking-wider uppercase font-semibold">
                 <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                ALL INTERVIEW ROUNDS COMPLETE — RESULTS SUBMITTED
+                ALL INTERVIEW ROUNDS COMPLETED & CLEARED — RESULTS SUBMITTED
               </div>
             )
           })()
@@ -1668,10 +1960,20 @@ function InterviewContent() {
                 </div>
                 <div>
                   <h4 className="text-lg font-bold  text-[var(--hm-text-primary)] tracking-wide uppercase">
-                    {voice.isListening ? "Listening..." : "Microphone Active"}
+                    {voiceCountdownSec !== null
+                      ? `Get Ready (${voiceCountdownSec}s)`
+                      : voice.isSpeaking
+                      ? "AI Speaking..."
+                      : voice.isListening
+                      ? "Listening..."
+                      : "Microphone Active"}
                   </h4>
                   <p className="text-base text-[var(--hm-text-muted)]  uppercase">
-                    Answer will auto-submit when timer expires
+                    {voiceCountdownSec !== null
+                      ? "Interviewer is preparing the question"
+                      : voice.isSpeaking
+                      ? "Listen to the question carefully"
+                      : "Answer will auto-submit when timer expires"}
                   </p>
                 </div>
               </div>
@@ -1785,12 +2087,13 @@ function InterviewContent() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isAiTyping || voice.isListening || state !== "ready"}
+                  disabled={isAiTyping || state !== "ready"}
                   placeholder={
-                    voice.isListening ? "LISTENING... SPEAK NOW" :
+                    voice.isListening ? (input ? "LISTENING... SPEAK TO CONTINUE OR EDIT TEXT" : "LISTENING... SPEAK NOW") :
                     isAiTyping ? "WAITING FOR AI RESPONSE..." :
+                    voiceCountdownSec !== null ? `AUDIO STARTING IN ${voiceCountdownSec}S...` :
                     voice.isSpeaking ? "AI IS SPEAKING..." :
-                    "TYPE YOUR RESPONSE... (ENTER TO SEND, SHIFT+ENTER FOR NEW LINE)"
+                    "TYPE OR SPEAK YOUR RESPONSE... (ENTER TO SEND, SHIFT+ENTER FOR NEW LINE)"
                   }
                   className="w-full bg-[var(--hm-bg-inset)] border border-[var(--hm-border)] text-lg 
                     text-[var(--hm-text-primary)] p-3.5 pr-14 resize-none min-h-[50px] max-h-[120px] rounded-radius-md
@@ -1803,7 +2106,7 @@ function InterviewContent() {
               {/* Send button */}
               <button
                 onClick={() => sendMessage()}
-                disabled={(!input.trim() && session?.roundType !== "speaking") || isAiTyping || voice.isListening || state !== "ready" || (session?.roundType === "speaking" && input.trim().length < 10)}
+                disabled={(!input.trim() && session?.roundType !== "speaking") || isAiTyping || state !== "ready" || (session?.roundType === "speaking" && input.trim().length < 10)}
                 className="h-[50px] w-[50px] rounded-radius-md flex items-center justify-center bg-[var(--hm-accent)] text-white
                   border border-[var(--hm-accent)] hover:bg-[var(--hm-accent-hover)]
                   disabled:bg-[var(--hm-bg-elevated)] disabled:border-[var(--hm-border)] disabled:text-[var(--hm-text-muted)]
@@ -1876,25 +2179,6 @@ function InterviewContent() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── Always-on WebCam Self-Preview Widget ── */}
-      {cameraPresence.isCameraActive && (
-        <CameraPreview
-          videoRef={cameraPresence.videoRef}
-          canvasRef={cameraPresence.canvasRef}
-          streamRef={cameraPresence.streamRef}
-          faceDetected={cameraPresence.cameraResult?.payload.faceDetected ?? true}
-          confidence={cameraPresence.cameraResult?.confidence ?? 0.95}
-          landmarks={cameraPresence.cameraResult?.payload.landmarksCount ?? 468}
-          hint={cameraPresence.guidance.hint}
-          faceCount={cameraPresence.cameraResult?.payload.faceCount ?? 1}
-          isLookingAway={cameraPresence.cameraResult?.payload.isLookingAway ?? false}
-          isHeadTurnedSideways={cameraPresence.cameraResult?.payload.isHeadTurnedSideways ?? false}
-          isMultipleFaces={cameraPresence.cameraResult?.payload.isMultipleFaces ?? false}
-          isFaceCovered={cameraPresence.cameraResult?.payload.isFaceCovered ?? false}
-          absenceReason={cameraPresence.cameraResult?.payload.absenceReason ?? "none"}
-        />
       )}
     </div>
   )

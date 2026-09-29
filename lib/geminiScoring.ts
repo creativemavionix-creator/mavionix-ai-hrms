@@ -40,16 +40,16 @@ export async function analyzeCandidateResume(input: CandidateScoringInput): Prom
     : input.skills || "Software Engineering, Problem Solving"
 
   if (apiKey && !apiKey.includes("YOUR_")) {
-    const modelsToTry = [
-      "gemini-flash-lite-latest",
-      "gemini-3.5-flash-lite",
+    const candidateModels = [
+      "gemini-3.6-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-latest",
-      "gemini-3.5-flash"
+      "gemini-3.7-flash",
+      "gemini-3.8-flash",
     ]
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator. 
+    const systemInstruction = `You are HireMind AI, an expert technical recruiter and system architecture evaluator.
 Your task is to analyze candidate resumes and technical evaluation responses for engineering roles.
 Compute objective 0-100 scores based strictly on the provided resume content, technical depth, and role alignment.
 Return ONLY valid JSON matching this schema:
@@ -94,18 +94,26 @@ ${input.outageLesson || "None provided."}
 
 Evaluate the candidate's resume and responses thoroughly. Return valid JSON matching the schema.`
 
-    for (const modelName of modelsToTry) {
+    for (const curModel of candidateModels) {
       try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: { responseMimeType: "application/json" },
-          systemInstruction,
-        })
+        const isGemma = curModel.startsWith("gemma")
+        const model = genAI.getGenerativeModel(
+          isGemma
+            ? { model: curModel }
+            : {
+                model: curModel,
+                generationConfig: { responseMimeType: "application/json" },
+                systemInstruction
+              }
+        )
 
-        const result = await model.generateContent(prompt)
-        const text = result.response.text()
+        const fullPrompt = isGemma ? `${systemInstruction}\n\n${prompt}` : prompt
+        const result = await model.generateContent(fullPrompt)
+        const candidate = result.response.candidates?.[0]
+        const nonThought = candidate?.content?.parts?.filter((p: any) => !p.thought && p.text)
+        const text = (nonThought && nonThought.length > 0) ? nonThought.map((p: any) => p.text).join("") : result.response.text()
         const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
-        let json: any = {}
+        let json: any = null
         try {
           json = JSON.parse(cleaned)
         } catch {
@@ -116,6 +124,8 @@ Evaluate the candidate's resume and responses thoroughly. Return valid JSON matc
             continue
           }
         }
+
+        if (!json || typeof json !== "object") continue
 
         const skill_score = clamp(json.skill_score, 82)
         const exp_score = clamp(json.exp_score, 80)
@@ -136,12 +146,12 @@ Evaluate the candidate's resume and responses thoroughly. Return valid JSON matc
           proj_score,
           confidence,
           sentiment_score,
-          insights: json.insights || `Candidate resume parsed successfully. Architectural experience verified by Gemini (${modelName}).`,
+          insights: json.insights || `Candidate resume parsed successfully. Architectural experience verified by Gemini (${curModel}).`,
           tags: Array.isArray(json.tags) && json.tags.length > 0 ? json.tags.slice(0, 6) : ["Engineering", "Backend", "Architecture"],
           verification_status: json.verification_status === "flagged" ? "flagged" : "verified"
         }
       } catch (err: any) {
-        console.warn(`Gemini (${modelName}) resume scoring error:`, err?.message || err)
+        console.warn(`Scoring model ${curModel} failed, trying next:`, err?.message || err)
       }
     }
   }

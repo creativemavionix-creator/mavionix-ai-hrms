@@ -113,29 +113,49 @@ async def start_round(application_id: str, round_type: str, candidate: Candidate
             raise HTTPException(status_code=404, detail=f"Application {application_id} not found.")
 
     # Check if round already exists and is in progress
-    existing = supabase.table("ai_interview_rounds").select("id, status").eq("application_id", application_id).eq("round_type", round_type).maybe_single().execute()
-    if existing and existing.data and existing.data["status"] == "in_progress":
+    existing = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            existing = supabase.table("ai_interview_rounds").select("id, status").eq("application_id", application_id).eq("round_type", round_type).maybe_single().execute()
+        except Exception:
+            existing = None
+
+    if existing and getattr(existing, "data", None) and existing.data.get("status") == "in_progress":
         # Return existing round
-        round_data = supabase.table("ai_interview_rounds").select("*").eq("id", existing.data["id"]).maybe_single().execute()
+        round_data = None
+        try:
+            round_data = supabase.table("ai_interview_rounds").select("*").eq("id", existing.data["id"]).maybe_single().execute()
+        except Exception:
+            round_data = None
         return {"round": round_data.data if round_data else None, "message": "Round already in progress", "resumed": True}
 
-    if existing and existing.data and existing.data["status"] == "completed":
+    if existing and getattr(existing, "data", None) and existing.data.get("status") == "completed":
         raise HTTPException(status_code=422, detail=f"The {round_type} round is already completed.")
 
     # Get job and candidate context
-    job = supabase.table("jobs").select("*").eq("id", app["job_id"]).maybe_single().execute()
-    job_data = job.data if job else None
+    job_data = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            job = supabase.table("jobs").select("*").eq("id", app["job_id"]).maybe_single().execute()
+            job_data = job.data if job else None
+        except Exception:
+            job_data = None
     if not job_data:
-        job_data = {"title": "Software Engineer", "department": "Engineering", "description": ""}
+        job_data = {"title": "Senior Backend Engineer", "department": "Engineering", "description": "Design and build distributed microservices."}
 
     round_blueprints = job_data.get("round_blueprints") or JOB_BLUEPRINTS_CACHE.get(app["job_id"], {})
     round_bp = round_blueprints.get(round_type, {})
     custom_qs = round_bp.get("custom_questions", [])
 
-    cand = supabase.table("candidates").select("name, parsed_data").eq("id", app["candidate_id"]).maybe_single().execute()
-    cand_data = cand.data if cand else None
+    cand_data = None
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            cand = supabase.table("candidates").select("name, parsed_data").eq("id", app["candidate_id"]).maybe_single().execute()
+            cand_data = cand.data if cand else None
+        except Exception:
+            cand_data = None
     if not cand_data:
-        cand_data = {"name": "Candidate", "parsed_data": None}
+        cand_data = {"name": "Priya Sharma", "parsed_data": {"skills": ["Python", "Go", "PostgreSQL", "Docker"]}}
 
     # Extract skills from parsed_data
     skills = []
@@ -268,12 +288,16 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
     require_candidate_round_type(round_data["round_type"], candidate)
 
     # Get job context for question generation
-    app_result = supabase.table("applications").select("job_id").eq("id", application_id).maybe_single().execute()
-    job_title = "Software Engineer"
-    if app_result and app_result.data:
-        job = supabase.table("jobs").select("title").eq("id", app_result.data["job_id"]).maybe_single().execute()
-        if job and job.data:
-            job_title = job.data["title"]
+    job_title = "Senior Backend Engineer"
+    if not (application_id.startswith("demo") or settings.demo_mode):
+        try:
+            app_result = supabase.table("applications").select("job_id").eq("id", application_id).maybe_single().execute()
+            if app_result and app_result.data:
+                job = supabase.table("jobs").select("title").eq("id", app_result.data["job_id"]).maybe_single().execute()
+                if job and job.data:
+                    job_title = job.data["title"]
+        except Exception:
+            pass
 
     now = datetime.now(timezone.utc).isoformat()
     transcript = round_data.get("transcript") or []
@@ -333,54 +357,76 @@ async def respond_to_round(application_id: str, round_id: str, body: RespondRequ
         )
 
         # Update round as completed
-        supabase.table("ai_interview_rounds").update({
-            "transcript": transcript,
-            "status": "completed",
-            "ai_score": summary.get("ai_score"),
-            "ai_summary": summary.get("ai_summary"),
-            "strengths": summary.get("strengths", []),
-            "concerns": summary.get("concerns", []),
-            "compact_offline_data": summary.get("compact_offline_data"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            # Reprocessing tracking fields
-            "requires_ai_reprocessing": summary.get("requires_ai_reprocessing", False),
-            "ai_review_completed": summary.get("ai_review_completed", True),
-            "evaluation_status": summary.get("evaluation_status", "verified"),
-            "evaluation_engine": summary.get("evaluation_engine", "llm"),
-            "evaluation_model": summary.get("evaluation_model", "Gemini"),
-            "evaluation_version": summary.get("evaluation_version", 2),
-            "reviewed_at": summary.get("reviewed_at"),
-        }).eq("id", round_id).execute()
-
-        # Advance stage to {round_type}_completed
-        complete_stage = ROUND_STAGE_MAP[round_data["round_type"]]["complete"]
         try:
-            await advance_stage(application_id, complete_stage, "AI System", f"{round_data['round_type']} round completed (score: {summary.get('ai_score')})")
-        except Exception as exc:
-            logger.warning("Stage advance failed: %s", exc)
+            supabase.table("ai_interview_rounds").update({
+                "transcript": transcript,
+                "status": "completed",
+                "ai_score": summary.get("ai_score"),
+                "ai_summary": summary.get("ai_summary"),
+                "strengths": summary.get("strengths", []),
+                "concerns": summary.get("concerns", []),
+                "compact_offline_data": summary.get("compact_offline_data"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                # Reprocessing tracking fields
+                "requires_ai_reprocessing": summary.get("requires_ai_reprocessing", False),
+                "ai_review_completed": summary.get("ai_review_completed", True),
+                "evaluation_status": summary.get("evaluation_status", "verified"),
+                "evaluation_engine": summary.get("evaluation_engine", "llm"),
+                "evaluation_model": summary.get("evaluation_model", "Gemini"),
+                "evaluation_version": summary.get("evaluation_version", 2),
+                "reviewed_at": summary.get("reviewed_at"),
+            }).eq("id", round_id).execute()
+        except Exception:
+            pass
+
+        score = summary.get("ai_score", 0)
+        is_cleared = score >= 50
+
+        if not is_cleared:
+            # Candidate did not clear the passing score cutoff
+            try:
+                await advance_stage(application_id, "rejected", "AI System", f"{round_data['round_type']} round not cleared (score: {score}/100, cutoff: 50)")
+                supabase.table("applications").update({
+                    "status": "rejected",
+                    "stage": "rejected",
+                    "rejection_reason": f"Did not clear {round_data['round_type']} round (Score: {score}/100, Cutoff: 50)"
+                }).eq("id", application_id).execute()
+            except Exception as exc:
+                logger.warning("Stage advance to rejected failed: %s", exc)
+        else:
+            # Advance stage to {round_type}_completed
+            complete_stage = ROUND_STAGE_MAP[round_data["round_type"]]["complete"]
+            try:
+                await advance_stage(application_id, complete_stage, "AI System", f"{round_data['round_type']} round completed (score: {score}/100)")
+            except Exception as exc:
+                logger.warning("Stage advance failed: %s", exc)
 
         # Log
-        cand = supabase.table("applications").select("candidate_id").eq("id", application_id).maybe_single().execute()
         cand_name = "Candidate"
-        if cand.data:
-            cn = supabase.table("candidates").select("name").eq("id", cand.data["candidate_id"]).maybe_single().execute()
-            if cn.data:
-                cand_name = cn.data["name"]
+        if not (application_id.startswith("demo") or settings.demo_mode):
+            try:
+                cand = supabase.table("applications").select("candidate_id").eq("id", application_id).maybe_single().execute()
+                if cand and cand.data:
+                    cn = supabase.table("candidates").select("name").eq("id", cand.data["candidate_id"]).maybe_single().execute()
+                    if cn and cn.data:
+                        cand_name = cn.data["name"]
+            except Exception:
+                pass
 
         try:
             supabase.table("activity_logs").insert({
                 "actor_name": cand_name,
-                "action": f"completed AI {round_data['round_type']} round (score: {summary.get('ai_score')}/100) for",
+                "action": f"completed AI {round_data['round_type']} round ({'cleared' if is_cleared else 'not cleared'}, score: {score}/100) for",
                 "context_label": job_title,
-                "log_type": "success",
+                "log_type": "success" if is_cleared else "warning",
             }).execute()
         except Exception:
             pass
 
-        # Auto-chain: start next round if applicable
+        # Auto-chain: start next round only if candidate cleared the round (score >= 50)
         next_round_type = NEXT_ROUND.get(round_data["round_type"])
         auto_started_next = None
-        if next_round_type and summary.get("ai_score", 0) >= 55:
+        if next_round_type and is_cleared:
             try:
                 # Create the next round automatically
                 next_stage = ROUND_STAGE_MAP[next_round_type]["start"]
@@ -481,7 +527,7 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
     except Exception:
         pass
 
-    if strikes >= 3:
+    if strikes >= 5:
         # Fetch job title
         job_title = "ML Engineer"
         try:
@@ -514,9 +560,9 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
 
         # Force termination text
         summary["concerns"] = (summary.get("concerns") or []) + [
-            "🚫 Interview terminated automatically: Candidate navigated away from the browser tab 3 times."
+            "🚫 Interview terminated automatically: Candidate navigated away from the browser tab 5 times."
         ]
-        summary["ai_summary"] = "[TERMINATED] " + summary.get("ai_summary", "")
+        summary["ai_summary"] = "[TERMINATED - 5 STRIKES] " + summary.get("ai_summary", "")
 
         # Update round status in db
         try:
@@ -531,13 +577,23 @@ async def report_strike(application_id: str, round_id: str, body: StrikeRequest,
         except Exception:
             pass
 
+        # Update application status to disqualified
+        try:
+            supabase.table("applications").update({
+                "status": "disqualified",
+                "stage": "disqualified",
+                "disqualification_reason": "Terminated: 5 browser tab switch strikes"
+            }).eq("id", application_id).execute()
+        except Exception:
+            pass
+
         round_data["status"] = "completed"
         round_data["summary"] = summary
         DEMO_ROUNDS[round_id] = round_data
 
         return {
             "type": "complete",
-            "message": "This interview has been terminated due to tab leaves.",
+            "message": "This interview has been terminated due to 5 integrity strikes.",
             "round_complete": True,
             "summary": summary,
         }

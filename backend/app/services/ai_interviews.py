@@ -75,28 +75,63 @@ def _record_fallback_metric(job_title: str, round_type: str, exchange_count: int
 
 MAX_EXCHANGES = 6  # 6 exchanges per round
 
-def _call_gemini(system_prompt: str, user_prompt: str) -> str:
+import urllib.request
+import ssl
+
+def _call_gemini(
+    system_prompt: str,
+    user_prompt: str,
+    thinking_budget: int | None = 0,
+    max_tokens: int = 800,
+) -> str:
     raw_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY", "")
     gemini_key = raw_key.strip('"\'').strip()
     if not gemini_key:
         raise RuntimeError("Gemini API key is not configured")
-    for model in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"):
+    candidate_models = (
+        "gemini-flash-latest",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it",
+    )
+    last_error: Exception | None = None
+    for model in candidate_models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+            gen_config: dict[str, Any] = {
+                "temperature": 0.7,
+                "maxOutputTokens": max_tokens,
+            }
+            if thinking_budget is not None and not model.startswith("gemma"):
+                gen_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
             resp = httpx.post(
                 url,
-                json={"contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}]},
+                json={
+                    "contents": [{"parts": [{"text": f"{system_prompt}\n\nTask:\n{user_prompt}"}]}],
+                    "generationConfig": gen_config,
+                },
                 timeout=12.0,
+                verify=False,
             )
             if resp.status_code == 200:
                 data = resp.json()
                 candidates = data.get("candidates", [])
                 if candidates and "content" in candidates[0]:
                     parts = candidates[0]["content"].get("parts", [])
+                    non_thought = [p["text"] for p in parts if not p.get("thought") and "text" in p]
+                    clean_text = "".join(non_thought).strip()
+                    if clean_text:
+                        return clean_text
                     if parts and "text" in parts[0]:
                         return parts[0]["text"]
         except Exception as exc:
+            last_error = exc
             logger.warning("Gemini (%s) failed: %s", model, exc)
+    if last_error:
+        raise last_error
     raise RuntimeError("All Gemini model endpoints failed or timed out")
 
 
@@ -691,7 +726,15 @@ Return ONLY valid JSON:
 
     try:
         try:
-            raw = _call_gemini(SYSTEM_PROMPTS.get(round_type, SYSTEM_PROMPTS["interview"]), eval_prompt)
+            is_voice_turn = bool(speaking_metrics or round_type == "speaking")
+            turn_budget = 100 if is_voice_turn else 0
+            turn_tokens = 1000 if is_voice_turn else 800
+            raw = _call_gemini(
+                SYSTEM_PROMPTS.get(round_type, SYSTEM_PROMPTS["interview"]),
+                eval_prompt,
+                thinking_budget=turn_budget,
+                max_tokens=turn_tokens,
+            )
         except Exception:
             client = _client()
             response = client.chat.completions.create(
@@ -1359,10 +1402,27 @@ Provide a comprehensive evaluation. Return ONLY valid JSON:
   "concerns": ["concern 1", "concern 2"]
 }}"""
 
-    model_used = "Gemini 1.5 Flash"
+    # Dynamic Hybrid Final Score Calculation:
+    # 1. Base Score = Mathematical average of all exchange scores (0-100)
+    compact_turns = rule_result.get("compact_offline_data", {}).get("turns", [])
+    scores = [t["score"] for t in compact_turns if isinstance(t.get("score"), (int, float))]
+    avg_score = sum(scores) / len(scores) if scores else 7.5
+    base_score = int(round(avg_score * 10))
+
+    # 2. Penalty Modifiers = Deductions for copy-paste flags (-10 pts)
+    copy_paste_penalty = 10 if any("Suspected Copy-Paste" in c for c in rule_result.get("concerns", [])) else 0
+    final_calculated_score = min(100, max(20, base_score - copy_paste_penalty))
+
+    model_used = "Gemini Flash"
     try:
         try:
-            raw = _call_gemini("You are a senior interviewer writing an evaluation report. Return only valid JSON.", summary_prompt)
+            # Round Completion & Final Summary: Allow full reasoning (thinking_budget=None)
+            raw = _call_gemini(
+                "You are a senior interviewer writing an evaluation report. Return only valid JSON.",
+                summary_prompt,
+                thinking_budget=None,
+                max_tokens=1500,
+            )
         except Exception:
             model_used = "DeepSeek-V3"
             client = _client()
@@ -1373,11 +1433,11 @@ Provide a comprehensive evaluation. Return ONLY valid JSON:
                     {"role": "user", "content": summary_prompt},
                 ],
                 temperature=0.3,
-                max_tokens=600,
+                max_tokens=800,
             )
             raw = response.choices[0].message.content or ""
         result = _extract_json(raw)
-        result.setdefault("ai_score", rule_result["ai_score"])
+        result["ai_score"] = final_calculated_score
         result.setdefault("ai_summary", rule_result["ai_summary"])
         result.setdefault("strengths", rule_result["strengths"])
         result.setdefault("concerns", [])

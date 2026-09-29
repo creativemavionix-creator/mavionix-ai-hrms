@@ -28,10 +28,20 @@ export async function generateGeminiChatResponse(payload: {
       })
     })
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.text && !data.text.includes("Gemini API Key is not configured")) {
+    const data = await res.json().catch(() => null)
+    if (res.ok && data && data.success !== false) {
+      if (!data.text?.includes("Gemini API Key is not configured")) {
         return data
+      }
+    }
+
+    if (data && (data.text || data.detail || data.error)) {
+      if (!data.text?.includes("Gemini API Key is not configured")) {
+        return {
+          text: data.text || data.detail || data.error,
+          success: false,
+          modelUsed: data.modelUsed || "error"
+        }
       }
     }
   } catch (err) {
@@ -47,11 +57,11 @@ export async function generateGeminiChatResponse(payload: {
       const genAI = new GoogleGenerativeAI(clientKey)
       const models = [
         payload.modelName,
-        "gemini-flash-lite-latest",
-        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
         "gemini-3.1-flash-lite",
         "gemini-flash-latest",
-        "gemini-3.5-flash"
+        "gemini-3.7-flash",
+        "gemini-3.8-flash"
       ].filter(Boolean) as string[]
 
       for (const m of models) {

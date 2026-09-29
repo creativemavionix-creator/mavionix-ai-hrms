@@ -70,7 +70,7 @@ export function calculateIntegrityScore(
 
   if (isLockout) {
     score = Math.min(score, 45)
-    deductions.push(`Locked out due to 3 security strikes`)
+    deductions.push(`Locked out due to 5 security strikes`)
   }
 
   // Ensure score bounds 0..100
@@ -92,8 +92,8 @@ export function calculateIntegrityScore(
   }
 
   // Calculate domain health percentages
-  const cameraHealthPct = Math.max(0, 100 - cameraStrikes * 25 - (longestAbsenceSec > 15 ? 20 : 0))
-  const browserFocusPct = Math.max(0, 100 - tabStrikes * 33)
+  const cameraHealthPct = Math.max(0, 100 - cameraStrikes * 20 - (longestAbsenceSec > 15 ? 20 : 0))
+  const browserFocusPct = Math.max(0, 100 - tabStrikes * 20)
   const microphoneHealthPct = Math.max(0, 100 - micDisconnectCount * 20)
   const networkHealthPct = Math.max(0, 100 - networkLossCount * 20)
 

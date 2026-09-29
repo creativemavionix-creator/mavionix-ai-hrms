@@ -5,7 +5,7 @@
     "grace_seconds": 1,
     "warning_after": 1,
     "strike_after": 5,
-    "max_strikes": 3,
+    "max_strikes": 5,
     "deduction_per_warning": 5,
     "deduction_per_strike": 20
   },
@@ -13,7 +13,7 @@
     "grace_seconds": 0,
     "warning_after": 0,
     "strike_after": 0,
-    "max_strikes": 3,
+    "max_strikes": 5,
     "deduction_per_tab_switch": 15
   },
   "microphone": {

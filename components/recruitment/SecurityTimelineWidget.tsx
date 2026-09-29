@@ -33,15 +33,14 @@ export default function SecurityTimelineWidget({
   let riskBadgeColor = "bg-emerald-500/10 border-emerald-500/25 text-emerald-400 font-bold"
   let riskReason = "Clean Integrity Profile — No Malicious Patterns"
 
-  const totalStrikes = tabStrikeCount + cameraStrikeCount
-  if (lockout || totalStrikes >= 3) {
+  if (lockout || tabStrikeCount >= 5 || cameraStrikeCount >= 5) {
     riskLevel = "HIGH"
     riskBadgeColor = "bg-red-500/10 border-red-500/25 text-red-400 font-bold"
-    riskReason = "Assessment Lockout Triggered — 3 Integrity Strikes"
-  } else if (totalStrikes === 2 || events.some((e) => e.duration_sec > 15)) {
+    riskReason = "Assessment Lockout Triggered — 5 Integrity Strikes Exceeded"
+  } else if (tabStrikeCount >= 3 || cameraStrikeCount >= 3 || events.some((e) => e.duration_sec > 15)) {
     riskLevel = "MEDIUM"
     riskBadgeColor = "bg-amber-500/10 border-amber-500/25 text-amber-400 font-bold"
-    riskReason = "Moderate Absence Detected — Review Transcript Timestamps"
+    riskReason = "Elevated Proctoring Warnings — Multiple Tab / Camera Absences"
   }
 
   // Default fallback events if list empty
@@ -100,7 +99,7 @@ export default function SecurityTimelineWidget({
             <Video className="w-3.5 h-3.5 text-emerald-400" />
             <span>CAMERA</span>
           </div>
-          <span className="text-[9px] text-emerald-400 font-extrabold block">🟢 ACTIVE ({cameraStrikeCount}/3)</span>
+          <span className="text-[9px] text-emerald-400 font-extrabold block">🟢 ACTIVE ({cameraStrikeCount}/5)</span>
         </div>
 
         <div className="bg-white/[0.01] dark:bg-black/25 border border-white/[0.04] p-3 rounded-radius-md">

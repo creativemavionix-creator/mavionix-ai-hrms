@@ -15,7 +15,7 @@ PATCH /api/applications/{application_id}         update stage / flagged
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel

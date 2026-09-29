@@ -108,7 +108,7 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
       const t = sessionStorage.getItem("hm_tab_strikes")
       const cs = c ? parseInt(c, 10) : 0
       const ts = t ? parseInt(t, 10) : 0
-      return cs >= 3 || ts >= 3
+      return cs >= 5 || ts >= 5
     }
     return false
   })
@@ -116,7 +116,7 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
   useEffect(() => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("hm_camera_strikes", cameraStrikes.toString())
-      if (cameraStrikes >= 3) {
+      if (cameraStrikes >= 5) {
         setIsLockout(true)
       }
     }
@@ -125,7 +125,7 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
   useEffect(() => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("hm_tab_strikes", tabStrikes.toString())
-      if (tabStrikes >= 3) {
+      if (tabStrikes >= 5) {
         setIsLockout(true)
       }
     }
@@ -210,6 +210,16 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
           }
           setRollingProfile((prev) => updateRollingProfile(prev, res.payload))
         } else {
+          // Do not track absence or issue warnings/strikes if the interview is not active
+          if (!isInterviewActive) {
+            lastAbsenceStartRef.current = null
+            setAbsenceSeconds(0)
+            if (engineState !== "NORMAL") {
+              setEngineState("NORMAL")
+            }
+            return
+          }
+
           if (!lastAbsenceStartRef.current) {
             lastAbsenceStartRef.current = Date.now()
           }
@@ -238,7 +248,7 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
           if (evalRes.isNewStrike && engineState !== "STRIKE" && engineState !== "LOCKOUT" && isInterviewActive) {
             setCameraStrikes((c) => {
               const next = c + 1
-              if (next >= 3) setIsLockout(true)
+              if (next >= 5) setIsLockout(true)
               return next
             })
 
@@ -281,7 +291,7 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
         playSynthesizedChime(880, true)
         setTabStrikes((t) => {
           const next = t + 1
-          if (next >= 3) setIsLockout(true)
+          if (next >= 5) setIsLockout(true)
           return next
         })
         const evt = createNormalizedEvent("tab_switch", "warning", duration, {
@@ -333,12 +343,14 @@ export function useIntegrityEngine(isEnabled: boolean = true, isInterviewActive:
 
   const acknowledgeCameraWarning = useCallback(() => {
     lastAbsenceStartRef.current = null
+    lastChimeTimeRef.current = Date.now() + 4000
     setAbsenceSeconds(0)
     setEngineState("NORMAL")
   }, [])
 
   const resetStrikes = useCallback(() => {
     lastAbsenceStartRef.current = null
+    lastChimeTimeRef.current = 0
     setAbsenceSeconds(0)
     setCameraStrikes(0)
     setTabStrikes(0)
